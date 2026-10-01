@@ -1,0 +1,10 @@
+# Report data -- this repo is PUBLIC, never commit financial data
+data/
+*.pdf
+*.xlsx
+*.xlsm
+*.csv
+*.db
+
+__pycache__/
+*.pyc

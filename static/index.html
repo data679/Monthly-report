@@ -1,0 +1,1820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Executive Summary Logger</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1b1f24; --muted: #5f6b7a;
+    --border: #dde2e8; --accent: #2563eb; --accent-text: #ffffff;
+    --good: #15803d; --bad: #b91c1c; --hover: #f0f3f7; --code-bg: #f3f5f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --surface: #1a1f25; --text: #e6e9ed; --muted: #97a2b0;
+      --border: #2d343c; --accent: #5b8def; --accent-text: #0b1220;
+      --good: #4ade80; --bad: #f87171; --hover: #222830; --code-bg: #14181d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 24px 0; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+               padding: 10px 14px; font: inherit; cursor: pointer; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  main { margin: 0 auto; padding: 20px 24px 48px; }
+  section { display: none; } section.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .drop { border: 2px dashed var(--border); border-radius: 10px; padding: 36px 16px; text-align: center;
+          color: var(--muted); cursor: pointer; transition: background .15s, border-color .15s; }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--hover); }
+  .drop strong { color: var(--text); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  input[type=date], input[type=search] { font: inherit; padding: 7px 9px; border: 1px solid var(--border);
+         border-radius: 7px; background: var(--surface); color: var(--text); }
+  button.btn { font: inherit; padding: 8px 16px; border-radius: 7px; border: 1px solid var(--border);
+               background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  button.danger:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+  .table-wrap { overflow-x: auto; padding-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tbody tr:hover { background: var(--hover); }
+  tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border); }
+  tfoot .hint { font-weight: 400; }
+  .msg { margin: 12px 0 0; min-height: 1.4em; }
+  .msg.ok { color: var(--good); } .msg.err { color: var(--bad); }
+  .hint { color: var(--muted); font-size: 13px; }
+  textarea { width: 100%; min-height: 120px; font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+             padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--code-bg); color: var(--text); }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .examples button { font-size: 13px; padding: 4px 10px; }
+  .spacer { flex: 1; }
+  /* Compact log table so all columns fit on a wide screen. */
+  #log table { font-size: 13px; }
+  #log th, #log td { padding: 6px 7px; }
+  #log th { white-space: normal; vertical-align: bottom; line-height: 1.25; min-width: 64px; max-width: 110px; }
+  #log th.sortable button { padding: 6px 7px; }
+  #log td.src { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+  .colmenu { left: auto; right: 0; width: 300px; max-height: 70vh; overflow-y: auto; }
+  .collist { list-style: none; margin: 0; padding: 0; }
+  .collist li { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding: 0 2px; border: 1px solid transparent; }
+  .collist li:hover { background: var(--hover); }
+  .collist li.dragging { opacity: .4; }
+  .collist li.drop-before { border-top-color: var(--accent); }
+  .collist li.drop-after { border-bottom-color: var(--accent); }
+  .collist label { flex: 1; }
+  .collist label.off { opacity: .45; }
+  .sec-tag { margin-left: auto; font-size: 10px; color: var(--sec); white-space: nowrap; }
+  .grip { cursor: grab; color: var(--muted); padding: 0 2px; user-select: none; }
+  .mv { font: inherit; font-size: 13px; width: 26px; height: 26px; border: 0; border-radius: 5px; background: none; color: var(--text); cursor: pointer; }
+  .mv:hover:not(:disabled) { background: var(--border); }
+  .mv:disabled { opacity: .25; cursor: default; }
+  .mv:focus-visible { outline: 2px solid var(--accent); }
+  .colmenu label { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; padding: 4px 2px; cursor: pointer; }
+  .colmenu .cal-foot { margin-top: 6px; }
+  :root { --sec-1: #2563eb; --sec-2: #0d9488; --sec-3: #c026d3; --sec-4: #d97706; --sec-5: #16a34a; --sec-6: #dc2626; --sec-7: #7c3aed; --sec-8: #0891b2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --sec-1: #60a5fa; --sec-2: #2dd4bf; --sec-3: #e879f9; --sec-4: #fbbf24; --sec-5: #4ade80; --sec-6: #f87171; --sec-7: #a78bfa; --sec-8: #22d3ee; }
+  }
+  .sections { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -2px 0 12px; }
+  #section-switches { display: contents; }
+  .switch { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; background: none;
+            border: 0; padding: 3px 2px; cursor: pointer; color: var(--text); }
+  .switch .track { width: 30px; height: 17px; border-radius: 999px; background: var(--border); position: relative;
+                   transition: background .15s; flex: none; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+                          border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+  .switch[aria-checked="true"] .track { background: var(--sec); }
+  .switch[aria-checked="true"] .track::after { left: 15px; }
+  .switch[aria-checked="false"] { color: var(--muted); }
+  .switch .count { color: var(--muted); font-size: 12px; }
+  .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  tr.bands th { padding: 4px 8px 2px; font-size: 11px; letter-spacing: .04em; border-bottom: 0; text-transform: uppercase; }
+  tr.bands th.band { color: var(--sec); border-top: 3px solid var(--sec); text-align: left;
+                     background: color-mix(in srgb, var(--sec) 8%, transparent); }
+  /* Keep the office name visible while scrolling the log sideways. */
+  #log table th:nth-child(2), #log table td:nth-child(2) { position: sticky; left: 0; z-index: 1;
+    background: var(--surface); box-shadow: 1px 0 0 var(--border); }
+  #log tbody tr:hover td:nth-child(2) { background: var(--hover); }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .picker { position: relative; }
+  .picker > button.trigger { font: inherit; font-size: 15px; min-width: 150px; text-align: left; padding: 7px 9px;
+       border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text);
+       cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
+  .picker > button.trigger.empty { color: var(--muted); }
+  .cal { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; background: var(--surface);
+         border: 1px solid var(--border); border-radius: 10px; padding: 10px; width: 260px;
+         box-shadow: 0 8px 24px rgba(0,0,0,.14); color: var(--text); }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-weight: 600; }
+  .cal-head button { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer;
+                     width: 30px; height: 30px; border-radius: 6px; font-size: 16px; }
+  .cal-head button:hover:not(:disabled) { background: var(--hover); }
+  .cal-head button:disabled { opacity: .25; cursor: default; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .cal-grid .dow { font-size: 11px; color: var(--muted); padding: 4px 0; }
+  .cal-grid button { font: inherit; font-size: 13px; height: 32px; border: 0; border-radius: 6px;
+                     background: none; color: var(--text); cursor: pointer; font-weight: 600; }
+  .cal-grid button:hover:not(:disabled) { background: var(--hover); }
+  .cal-grid button:disabled { color: var(--muted); opacity: .4; font-weight: 400; cursor: default; }
+  .cal-grid button.sel { background: var(--accent); color: var(--accent-text); }
+  .cal-grid button:focus-visible, .cal-head button:focus-visible, .picker > button.trigger:focus-visible
+    { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .cal-foot button { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 2px 4px; }
+  th.sortable { padding: 0; }
+  th.sortable button { all: inherit; display: flex; gap: 4px; align-items: center; width: 100%;
+                       padding: 8px 10px; cursor: pointer; box-sizing: border-box; }
+  th.num.sortable button { justify-content: flex-end; }
+  th.sortable button:hover { color: var(--text); }
+  th.sortable button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  th[aria-sort] button { color: var(--text); }
+  .arrow { width: 1em; display: inline-block; text-align: center; }
+  th:not([aria-sort]) .arrow { opacity: .35; }
+  /* Row checkboxes are hidden for now; remove the "hide-select" class on <body> to bring them back. */
+  body.hide-select .sel-col, body.hide-select #delete-selected { display: none; }
+  .card-title { font-size: 16px; margin: 0 0 8px; display: flex; gap: 10px; align-items: baseline; }
+  .steps { padding-left: 20px; line-height: 1.6; }
+  .steps li { margin: 4px 0; }
+  details summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
+  .ok-text { color: var(--good); } .err-text { color: var(--bad); }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  .monthnav { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+  .monthnav button { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer; }
+  .mn-step { padding: 0 10px; font-size: 12px; color: var(--muted) !important; }
+  .mn-step:hover:not(:disabled) { background: var(--hover); color: var(--text) !important; }
+  .mn-step:disabled { opacity: .3; cursor: default; }
+  .mn-current { font-weight: 600 !important; padding: 7px 12px; min-width: 150px; border-left: 1px solid var(--border) !important;
+                border-right: 1px solid var(--border) !important; }
+  .mn-current:hover { background: var(--hover); }
+  .monthnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .mgrid { width: 250px; left: 50%; transform: translateX(-50%); }
+  .mgrid .mg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .mgrid .mg button { font: inherit; font-size: 13px; height: 34px; border: 0; border-radius: 6px; background: none;
+                      color: var(--text); cursor: pointer; font-weight: 600; }
+  .mgrid .mg button:hover:not(:disabled) { background: var(--hover); }
+  .mgrid .mg button:disabled { color: var(--muted); opacity: .45; font-weight: 400; cursor: default; }
+  .mgrid .mg button.sel { background: var(--accent); color: var(--accent-text); }
+  .mgrid .all { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px; border: 1px solid var(--border);
+                border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+  .mgrid .all.sel { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .mgrid button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  :root { --bm-green: #dcfce7; --bm-green-ink: #166534; --bm-yellow: #fef3c7; --bm-yellow-ink: #92400e;
+          --bm-red: #fee2e2; --bm-red-ink: #991b1b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bm-green: #14532d88; --bm-green-ink: #86efac; --bm-yellow: #78350f88; --bm-yellow-ink: #fcd34d;
+            --bm-red: #7f1d1d88; --bm-red-ink: #fca5a5; }
+  }
+  td.bm-green { background: var(--bm-green); color: var(--bm-green-ink); }
+  td.bm-yellow { background: var(--bm-yellow); color: var(--bm-yellow-ink); }
+  td.bm-red { background: var(--bm-red); color: var(--bm-red-ink); }
+  td.bm-green .asof, td.bm-yellow .asof, td.bm-red .asof { color: inherit; opacity: .75; }
+  .bm-mark { font-size: 10px; margin-right: 4px; }
+  #log tbody tr:hover td.bm-green, #log tbody tr:hover td.bm-yellow, #log tbody tr:hover td.bm-red { filter: brightness(.97); }
+  th .bm-flag { color: var(--accent); margin-left: 3px; font-size: 11px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .link-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
+  .bm-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+  /* Data checks: values that look wrong (rates over 100%, more collected than approved). */
+  :root { --chk: #c2410c; --chk-ink: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --chk: #fb923c; --chk-ink: #1c1917; } }
+  .chk-flag { display: inline-block; background: var(--chk); color: var(--chk-ink); border-radius: 4px; padding: 0 4px;
+              font-size: 11px; line-height: 16px; margin-right: 4px; cursor: help; }
+  .chk-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px;
+               background: var(--chk); color: var(--chk-ink); font-size: 12px; line-height: 18px; text-align: center; }
+  .chk-group { border-top: 1px solid var(--border); padding: 10px 0 4px; }
+  .chk-group:first-of-type { border-top: 0; }
+  .chk-group h4 { margin: 0 0 6px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .chk-group h4 .hint { font-weight: 400; }
+  .chk-group ul { margin: 0 0 8px; padding-left: 18px; }
+  .chk-group li { margin: 3px 0; }
+  .chk-ok-form { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; }
+  .chk-ok-form input { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px;
+                       background: var(--surface); color: var(--text); width: min(260px, 60vw); }
+  .chk-contact input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+                       background: var(--surface); color: var(--text); width: min(320px, 70vw); }
+  .bm-table th, .bm-table td { padding: 5px 8px; }
+  .bm-table .swatch { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; }
+  .or { text-align: center; color: var(--muted); font-size: 13px; margin: -4px 0 12px; }
+  #paste-text { min-height: 110px; }
+  select { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px;
+           background: var(--surface); color: var(--text); max-width: 280px; }
+  select.needs { border-color: var(--bad); }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
+  .tag.warn { color: var(--bad); border-color: var(--bad); }
+  .asof { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+  .none { color: var(--muted); }
+  .has-detail { cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  .has-detail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #detail-tip { overscroll-behavior: contain; position: fixed; z-index: 50; max-width: min(640px, calc(100vw - 24px)); max-height: 60vh; overflow: auto;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 12px; font-size: 13px; line-height: 1.5;
+    white-space: pre-line; text-align: left; }
+  #detail-tip .tip-head { font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 12px; }
+  #detail-tip .tip-head span { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .tip-copy { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 2px; }
+  #detail-tip table { font-size: 12px; white-space: normal; }
+  #detail-tip th, #detail-tip td { padding: 3px 8px 3px 0; white-space: normal; vertical-align: top; border-bottom: 1px solid var(--border); }
+  #detail-tip th { font-size: 11px; position: sticky; top: -10px; background: var(--surface); }
+  #detail-tip td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body class="hide-select">
+<header>
+  <h1>Executive Summary Logger</h1>
+  <p class="sub">Executive Summary: total collection · insurance collection · new patients (first visit − existing-patient referrals) · total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: # of ortho referrals. New Patient Analysis: # Medi-Cal, HMO, no SSN/ITIN, financing applicants, existing finance accounts, prime applicants and approvals. From your sheet: refunds.</p>
+  <nav>
+    <button data-tab="upload" class="active">Upload</button>
+    <button data-tab="log">Log</button>
+    <button data-tab="google">Google Sheets</button>
+    <button data-tab="changes">Changes</button>
+    <button data-tab="sql">SQL</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Upload -->
+  <section id="upload" class="active">
+    <div class="card">
+      <div class="drop" id="drop">
+        <strong>Drop a report here</strong><br>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx or .xlsm
+        <input type="file" id="file" accept=".pdf,.xlsx,.xlsm" hidden>
+      </div>
+      <p class="msg" id="parse-msg"></p>
+    </div>
+
+    <div class="card" id="review" hidden>
+      <div class="row" style="margin-bottom:14px">
+        <label>Period from <input type="date" id="from"></label>
+        <label>Period thru <input type="date" id="thru"></label>
+        <span class="spacer"></span>
+        <button class="btn primary" id="save">Save to log</button>
+      </div>
+      <p class="hint" id="period-hint"></p>
+      <p class="msg err" id="review-checks" hidden></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="review-head"></tr></thead>
+          <tbody id="review-body"></tbody>
+          <tfoot id="review-foot"></tfoot>
+        </table>
+      </div>
+      <p class="hint" id="skipped"></p>
+      <p class="msg" id="save-msg"></p>
+    </div>
+
+    <p class="or">or</p>
+    <div class="card">
+      <label for="paste-text" style="color:var(--text);font-size:15px;font-weight:600;margin-bottom:6px">Paste from a spreadsheet</label>
+      <p class="hint" style="margin:0 0 8px">Copy the rows from your sheet, including the header row with <strong>Office</strong> and
+        <strong>refunds</strong>, and paste here. Only refunds are collected.</p>
+      <textarea id="paste-text" spellcheck="false" placeholder="Paste rows here (Ctrl+V)"></textarea>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="paste-read">Read pasted rows</button></div>
+      <p class="msg" id="paste-msg"></p>
+    </div>
+
+    <div class="card" id="paste-review" hidden>
+      <div class="row" style="margin-bottom:14px">
+        <label>As of (date the sheet was updated) <input type="date" id="paste-asof"></label>
+        <span class="spacer"></span>
+        <button class="btn primary" id="paste-save">Save refunds to log</button>
+      </div>
+      <p class="hint" id="paste-hint"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Sheet office</th><th>Log office</th><th class="num">Refunds</th></tr></thead>
+          <tbody id="paste-body"></tbody>
+          <tfoot id="paste-foot"></tfoot>
+        </table>
+      </div>
+      <p class="msg" id="paste-save-msg"></p>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section id="log">
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <label>Office <input type="search" id="filter" placeholder="Search offices"></label>
+        <button class="btn" id="clear-filters" hidden>Clear</button>
+        <div class="field"><span id="month-label">Month</span>
+          <div class="monthnav" role="group" aria-labelledby="month-label">
+            <button type="button" class="mn-step" id="m-prev" aria-label="Previous month with data">◀</button>
+            <div class="picker">
+              <button type="button" class="mn-current" id="m-current" aria-haspopup="dialog" aria-expanded="false"></button>
+              <div class="cal mgrid" id="m-grid" role="dialog" aria-label="Choose a month" hidden></div>
+            </div>
+            <button type="button" class="mn-step" id="m-next" aria-label="Next month with data">▶</button>
+          </div>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn danger" id="delete-selected" disabled>Delete selected</button>
+        <div class="picker">
+          <button class="btn" id="chk-btn" aria-expanded="false" aria-controls="chk-panel">Checks<span class="chk-count" id="chk-count" hidden></span></button>
+        </div>
+        <div class="picker">
+          <button class="btn" id="bm-btn" aria-expanded="false" aria-controls="bm-panel">Benchmarks</button>
+        </div>
+        <div class="picker">
+          <button class="btn" id="offices-btn" aria-haspopup="true" aria-expanded="false">Office order</button>
+          <div class="cal colmenu" id="offices-menu" hidden></div>
+        </div>
+        <div class="picker">
+          <button class="btn" id="columns-btn" aria-haspopup="true" aria-expanded="false">Columns</button>
+          <div class="cal colmenu" id="columns-menu" hidden></div>
+        </div>
+        <button class="btn" id="copy-table" title="Copy the rows and columns shown, to paste into Excel or Google Sheets">Copy</button>
+        <a href="/api/export.csv"><button class="btn">Download CSV</button></a>
+      </div>
+      <div id="bm-panel" class="bm-panel" hidden>
+        <div class="row" style="margin-bottom:8px">
+          <strong>Benchmarks</strong><span class="hint">Colors apply to every office. Changes are saved for everyone using the app.</span>
+        </div>
+        <table class="bm-table">
+          <thead><tr><th>Column</th><th>Better when</th><th>Green at</th><th>Yellow at</th><th>Red</th><th></th></tr></thead>
+          <tbody id="bm-rows"></tbody>
+        </table>
+        <div class="row" style="margin-top:10px">
+          <label>Column <select id="bm-metric"></select></label>
+          <label>Better when <select id="bm-dir"><option value="higher">higher</option><option value="lower">lower</option></select></label>
+          <label>Green at <input type="number" step="any" id="bm-green" style="width:110px"></label>
+          <label>Yellow at <input type="number" step="any" id="bm-yellow" style="width:110px"></label>
+          <button class="btn primary" id="bm-save">Save benchmark</button>
+        </div>
+        <p class="hint" id="bm-help" style="margin:6px 0 0"></p>
+        <p class="msg" id="bm-msg"></p>
+      </div>
+      <div id="chk-panel" class="bm-panel" hidden>
+        <div class="row" style="margin-bottom:4px">
+          <strong>Data checks</strong><span class="hint">Values that look wrong in the months shown: a rate over 100%, or a patient with more collected than approved. The numbers are still counted as the sheet has them.</span>
+        </div>
+        <div id="chk-list"></div>
+        <details id="chk-ok-list" style="margin-top:8px"><summary class="hint">Marked OK</summary><div id="chk-ok-rows"></div></details>
+        <p class="msg" id="chk-msg"></p>
+      </div>
+      <div class="sections" role="group" aria-labelledby="sections-label">
+        <span id="sections-label" class="hint">Sections:</span>
+        <span id="section-switches"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="log-bands" class="bands"></tr><tr id="log-head"></tr></thead>
+          <tbody id="log-body"></tbody>
+          <tfoot id="log-foot"></tfoot>
+        </table>
+      </div>
+      <p class="hint" id="log-count"></p>
+      <p class="msg ok" id="copy-msg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- Google Sheets -->
+  <section id="google">
+    <div class="card">
+      <h2 class="card-title">1. Connect to Google <span class="hint" id="g-key-state"></span></h2>
+      <p class="hint" style="margin-top:0">The app reads each office's sheet with a <strong>read-only</strong> Google service account.
+        It never changes the sheets. Patient rows stay in Google; only the counts are saved here.</p>
+      <div id="g-account"></div>
+      <details id="g-steps">
+        <summary>Setup steps (one time, about 15 minutes)</summary>
+        <ol class="steps">
+          <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>,
+            sign in with your Care Dentistry Google account, and <strong>create a project</strong> (e.g. "Monthly Report Reader").</li>
+          <li>In <strong>APIs &amp; Services → Library</strong>, search <strong>Google Sheets API</strong> and click <strong>Enable</strong>.</li>
+          <li>In <strong>APIs &amp; Services → Credentials</strong>: <strong>Create credentials → Service account</strong>,
+            name it (e.g. "report-reader"), click <strong>Create and continue</strong>, skip the optional steps, <strong>Done</strong>.</li>
+          <li>Open the new service account → <strong>Keys → Add key → Create new key → JSON</strong>. A <code>.json</code> file downloads.
+            Keep it private — it's the app's password to read the sheets.</li>
+          <li>Add that file below with <strong>Add key file</strong>. It's stored only on this computer, in the git-ignored <code>data/</code> folder.</li>
+          <li>For each office sheet: <strong>Share</strong> → paste the service account email shown above → <strong>Viewer</strong>
+            → untick "Notify" → Share. Then add its link under <strong>2. Office sheets</strong>.</li>
+        </ol>
+        <p class="hint">If Google says key creation is blocked by your organization's policy, your Workspace admin needs to allow it
+          for this project. If a file shows an <strong>.XLSM</strong> badge in Drive, it's an Excel file, not a Google Sheet:
+          open it and use <strong>File → Save as Google Sheets</strong>, and share the new sheet.</p>
+      </details>
+      <div class="row" style="margin-top:12px">
+        <label class="btn" style="flex-direction:row;cursor:pointer">Add key file (.json)
+          <input type="file" id="g-key-file" accept=".json,application/json" hidden></label>
+      </div>
+      <p class="msg" id="g-key-msg"></p>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">2. Office sheets</h2>
+      <p class="hint" style="margin-top:0">Paste the link of each office's New Patient Analysis Google Sheet. The office is read from the sheet.</p>
+      <div class="row">
+        <label style="flex:1;min-width:280px">Google Sheet link
+          <input type="search" id="g-url" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+        <button class="btn primary" id="g-add">Add sheet</button>
+      </div>
+      <p class="msg" id="g-add-msg"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Office</th><th>Sheet</th><th>Last synced</th><th>Result</th><th></th></tr></thead>
+          <tbody id="g-sources"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">3. Sync</h2>
+      <p class="hint" style="margin-top:0" id="g-sync-info"></p>
+      <div class="row"><button class="btn primary" id="g-sync">Sync now</button></div>
+      <p class="msg" id="g-sync-msg"></p>
+    </div>
+  </section>
+
+  <!-- Changes -->
+  <section id="changes">
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <label>Office <input type="search" id="ch-filter" placeholder="Search offices or numbers"></label>
+        <span class="spacer"></span>
+        <button class="btn" id="ch-copy">Copy</button>
+      </div>
+      <p class="hint" style="margin-top:0">Every time a logged number changes — from a Google Sheets sync, an upload or a paste — it's listed here, newest first.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Office</th><th>Month</th><th>Number</th><th class="num">Was</th><th class="num">Now</th><th>How</th><th>Source</th></tr></thead>
+          <tbody id="ch-body"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="ch-count"></p>
+    </div>
+  </section>
+
+  <!-- SQL -->
+  <section id="sql">
+    <div class="card">
+      <p class="hint" style="margin-top:0">Read-only queries against table <code>office_summary</code>:
+        office, period_from, period_thru, total_collection, insurance_collection, new_patients, np_first_visit,
+        existing_patient_referrals, total_production, source_file, logged_at. Dates are <code>YYYY-MM-DD</code>.
+        One row per office per month. Older versions of replaced or deleted rows are in <code>office_history</code>
+        (same columns plus action, action_at).<br>
+        Pasted sheet values (refunds), NP collection (Referral Production Listing) ortho collection (Daily Journal, Ortho) and ortho_referrals (Treatment Plan Status, ZREFORTH), medi_cal_patients, hmo_patients, no_ssn_itin_patients, financing_applicants, existing_finance_patients, prime_applicants, prime_approved, prime_apps_ran, prime_apps_approved, prime_approved_amount, prime_collected_amount, prime_funded, prime_approved_funded, subprime_applicants, subprime_approved, subprime_apps_ran, subprime_apps_approved, subprime_approved_amount, subprime_collected_amount, subprime_funded, fin_approved, fin_funded and fin_approved_funded (New Patient Analysis) are in <code>office_metrics</code> (office, period_from, as_of, metric, value), with history in
+        <code>metric_history</code>. <code>monthly_log</code> combines both, the same as the Log tab, plus calculated net_collections (total − refunds),
+        refund_rate (refunds ÷ total, a fraction), existing_pt_collection (total − NP collection) and
+        irrelevant_rate ((Medi-Cal + HMO + no SSN/ITIN) ÷ new patients, a fraction) and
+        ortho_rate (ortho referrals ÷ new patients, a fraction) financing_rate (financing applicants ÷ new patients, a fraction) prime_approval_rate (prime approved ÷ prime applicants), prime_collected_rate (prime $ collected ÷ approved), and the
+        averages avg_prime_per_approved_np, avg_prime_per_approved_app, avg_prime_per_app_ran and avg_prime_per_applicant. Sheet-name matches are in <code>office_alias</code>.</p>
+      <div class="examples" id="examples"></div>
+      <textarea id="query" spellcheck="false">SELECT office, period_thru, total_collection, insurance_collection, new_patients, total_production
+FROM office_summary
+ORDER BY period_thru DESC, office;</textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="run">Run (Ctrl+Enter)</button>
+        <button class="btn" id="sql-csv" disabled>Download results as CSV</button>
+      </div>
+      <p class="msg" id="sql-msg"></p>
+      <div class="table-wrap"><table><thead id="sql-head"></thead><tbody id="sql-body"></tbody></table></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const money = n => Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function msg(el, text, ok) { el.textContent = text; el.className = "msg " + (ok ? "ok" : "err"); }
+
+async function api(path, body, headers = {}) {
+  const res = await fetch(path, {method: body === undefined ? "GET" : "POST", body, headers});
+  const data = await res.json().catch(() => ({error: res.statusText}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+// Tabs
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(e => e.classList.remove("active"));
+  b.classList.add("active"); $(b.dataset.tab).classList.add("active");
+  if (b.dataset.tab === "log") loadLog();
+  if (b.dataset.tab === "google") loadGoogle();
+  if (b.dataset.tab === "changes") loadChanges();
+});
+
+// Upload + parse
+let parsed = null;
+const drop = $("drop"), fileInput = $("file");
+drop.onclick = () => fileInput.click();
+fileInput.onchange = () => fileInput.files[0] && handleFile(fileInput.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && handleFile(e.dataTransfer.files[0]); };
+
+async function handleFile(file) {
+  msg($("parse-msg"), `Reading ${file.name}…`, true);
+  $("review").hidden = true; $("save-msg").textContent = "";
+  try {
+    parsed = await api("/api/parse", file, {"X-Filename": encodeURIComponent(file.name)});
+    msg($("parse-msg"), parsed.report_type === "np_analysis"
+      ? `${file.name}: New Patient Analysis for ${parsed.offices[0].office} — latest sheet “${parsed.sheet}”, ${parsed.patient_rows} patient rows counted.`
+        + (parsed.empty_tabs_skipped?.length ? ` (“${parsed.empty_tabs_skipped.join("”, “")}” has no patients yet, so it was skipped.)` : "")
+      : `${file.name}: ${REPORT_NAMES[parsed.report_type]}, found ${parsed.offices.length} office(s)`
+      + (parsed.grand_total != null ? ` — matches the report's Grand Total of ${money(parsed.grand_total)}.` : ".")
+      + (parsed.filter_confirmed === false ? " This file doesn't show which proc codes it was run for — make sure it was ZREFORTH." : ""), true);
+    renderReview();
+  } catch (e) { msg($("parse-msg"), e.message, false); }
+  fileInput.value = "";
+}
+
+// Columns shown when reviewing each report type.
+const REVIEW_COLUMNS = {
+  executive_summary: [
+    ["total_collection", "Total collection", "money"], ["insurance_collection", "Insurance collection", "money"],
+    ["new_patients", "New patients", "strong"], ["np_first_visit", "NP by first visit"],
+    ["existing_patient_referrals", "Existing-patient referrals"], ["total_production", "Total production", "money"]],
+  referral: [["np_collection", "NP collection", "money"]],
+  ortho_journal: [["ortho_collection", "Ortho collection", "money"]],
+  ortho_referrals: [["ortho_referrals", "# of ortho referrals"]],
+  np_analysis: [["medi_cal_patients", "# Medi-Cal patients"], ["hmo_patients", "# HMO patients"],
+                ["no_ssn_itin_patients", "# no SSN / ITIN"], ["financing_applicants", "# applied for financing"],
+                ["existing_finance_patients", "# existing finance acct"],
+                ["prime_applicants", "# NPs applied prime"], ["prime_approved", "# NPs approved w/ prime"],
+                ["prime_apps_ran", "# prime apps ran"], ["prime_apps_approved", "# prime apps approved"],
+                ["prime_approved_amount", "Total prime approved $", "money"], ["prime_collected_amount", "Total prime collected $", "money"],
+                ["prime_funded", "# NPs funded w/ prime"], ["prime_approved_funded", "# approved NPs funded"],
+                ["subprime_applicants", "# NPs applied subprime"], ["subprime_approved", "# NPs approved w/ subprime"],
+                ["subprime_apps_ran", "# subprime apps ran"], ["subprime_apps_approved", "# subprime apps approved"],
+                ["subprime_approved_amount", "Total subprime approved $", "money"],
+                ["subprime_collected_amount", "Total subprime collected $", "money"],
+                ["subprime_funded", "# NPs funded w/ subprime"],
+                ["fin_approved", "# NPs approved (prime + subprime)"], ["fin_funded", "# NPs funded (prime + subprime)"],
+                ["np_rows", "# NPs in workbook"], ["tx_diagnosed_amount", "Amt Tx diagnosed", "money"],
+                ["np_collection_wb", "NP collection (workbook)", "money"], ["no_next_visit", "# NPs w/o next visit"],
+                ["started_tx", "# NPs started Tx (paid)"],
+                ["collected_over_approved", "⚠ # collected > approved"]],
+};
+const REPORT_NAMES = {executive_summary: "Executive Summary", referral: "Referral Production Listing",
+                      ortho_journal: "Daily Journal (Ortho)", ortho_referrals: "Treatment Plan Status (ortho referrals)",
+                      np_analysis: "New Patient Analysis"};
+const reviewCols = () => REVIEW_COLUMNS[parsed.report_type];
+const cell = (v, kind) => v == null ? '<span class="none">—</span>'
+  : kind === "money" ? money(v) : kind === "strong" ? `<strong>${v}</strong>` : v;
+// Hover text listing what a count is made of, e.g. each financing applicant's sheet row and lenders.
+// Columns shown in each count's hover list (besides the sheet row).
+const DETAIL_COLS = {
+  medi_cal_patients: [["insurance", "Insurance type"]],
+  hmo_patients: [["insurance", "Insurance type"]],
+  no_ssn_itin_patients: [["text", "Note says"], ["column", "Found in column"]],
+  financing_applicants: [["prime", "Prime"], ["subprime", "Subprime"]],
+  existing_finance_patients: [["lender", "Existing account with"], ["text", "Note says"], ["column", "Found in column"]],
+  prime_applicants: [["applied", "Applied with"]],
+  prime_approved: [["approved", "Approved"]],
+  prime_apps_ran: [["applied", "Ran with"], ["apps", "# apps"]],
+  prime_apps_approved: [["approved", "Approved by"], ["apps", "# apps"]],
+  prime_approved_amount: [["lenders", "Approved"], ["total", "Row total"]],
+  prime_collected_amount: [["lenders", "Collected"], ["total", "Row total"]],
+  prime_funded: [["lenders", "Funded by"]],
+  prime_approved_funded: [["lenders", "Funded by"]],
+  subprime_applicants: [["subprime", "Ran with"]],
+  subprime_approved: [["approved", "Approved by"], ["amount", "$ approved"]],
+  subprime_apps_ran: [["subprime", "Ran with"], ["apps", "# apps"]],
+  subprime_apps_approved: [["approved", "Approved by"], ["apps", "# apps"]],
+  subprime_approved_amount: [["lenders", "Approved by"], ["total", "$ approved"]],
+  subprime_collected_amount: [["lenders", "Approved by"], ["total", "$ collected"]],
+  subprime_funded: [["lenders", "Approved by"], ["total", "$ collected"]],
+  fin_approved: [["source", "Approved through"]],
+  fin_funded: [["source", "Funded through"]],
+  fin_approved_funded: [["source", "Funded through"]],
+  tx_diagnosed_amount: [["total", "$ diagnosed"]],
+  np_collection_wb: [["total", "Collection"]],
+  no_next_visit: [["appt", "Has an Appointment"]],
+  started_tx: [["paid", "Paid"]],
+  collected_over_approved: [["text", "Problem"]],
+};
+function detailText(key, list) {
+  if (!Array.isArray(list) || !list.length || !DETAIL_COLS[key]) return "";
+  return JSON.stringify({
+    head: `${list.length} patient${list.length > 1 ? "s" : ""} (sheet rows):`,
+    cols: DETAIL_COLS[key].map(([, label]) => label),
+    rows: list.map(d => [d.row, ...DETAIL_COLS[key].map(([k]) => [].concat(d[k] ?? []).join(", "))]),
+  });
+}
+
+function renderReview() {
+  const p = parsed.period;
+  $("review-head").innerHTML = `<th class="sel-col"><input type="checkbox" id="all" checked aria-label="Select all"></th>
+    <th>Office</th>${reviewCols().map(([, label]) => `<th class="num">${label}</th>`).join("")}`;
+  $("all").onchange = e => { document.querySelectorAll(".pick").forEach(c => c.checked = e.target.checked); updateTotals(); };
+  $("from").value = p.from || ""; $("thru").value = p.thru || "";
+  $("period-hint").textContent = p.from && p.thru
+    ? (parsed.report_type === "np_analysis"
+        ? "Thru is the latest date on the sheet. Change it if needed. Saving replaces any earlier numbers for this office and month."
+        : "Period read from the report. Saving replaces any earlier report for the same offices and month.")
+    : "This file doesn't include the report dates. Pick the Thru date; From fills in as the 1st of that month.";
+  $("review-body").innerHTML = parsed.offices.map((o, i) => `<tr>
+    <td class="sel-col"><input type="checkbox" class="pick" data-i="${i}" checked aria-label="Include ${esc(o.office)}"></td>
+    <td>${esc(o.office)}</td>
+    ${reviewCols().map(([k, , kind]) => {
+      const tip = detailText(k, o.details?.[k]);
+      return `<td class="num${tip ? " has-detail" : ""}" ${tip ? `data-detail="${esc(tip)}" tabindex="0"` : ""}>${cell(o[k], kind)}</td>`;
+    }).join("")}</tr>`).join("");
+  const warn = parsed.report_type === "np_analysis" ? parsed.offices.flatMap(o => reviewChecks(o)) : [];
+  $("review-checks").hidden = !warn.length;
+  $("review-checks").textContent = warn.length
+    ? `⚠ ${warn.length} value${warn.length > 1 ? "s look" : " looks"} wrong (you can still save; they'll be flagged in the log): ${warn.join(" · ")}` : "";
+  $("skipped").textContent = parsed.skipped.length
+    ? `Skipped (no data in report): ${parsed.skipped.join(", ")}` : "";
+  $("all").checked = true;
+  document.querySelectorAll(".pick").forEach(c => c.onchange = updateTotals);
+  updateTotals();
+  $("review").hidden = false;
+}
+
+function selected() {
+  return [...document.querySelectorAll(".pick:checked")].map(c => parsed.offices[c.dataset.i]);
+}
+function updateTotals() {
+  const s = selected(), sum = k => s.reduce((a, o) => a + o[k], 0);
+  $("review-foot").innerHTML = s.length > 1 ? `<tr><td class="sel-col"></td><td>Total (${s.length} offices)</td>
+    ${reviewCols().map(([k, , kind]) => `<td class="num">${kind === "money" ? money(sum(k)) : sum(k)}</td>`).join("")}</tr>` : "";
+  $("save").disabled = !s.length;
+}
+// Reports are month-to-date, so From is always the 1st of Thru's month.
+$("thru").onchange = () => { if ($("thru").value) $("from").value = $("thru").value.slice(0, 8) + "01"; };
+
+$("save").onclick = async () => {
+  const from = $("from").value, thru = $("thru").value;
+  if (!from || !thru) return msg($("save-msg"), "Enter the period dates first.", false);
+  try {
+    // Reports other than the Executive Summary each add one number per office.
+    const metrics = parsed.report_type === "executive_summary" ? null : reviewCols().map(([k]) => k);
+    const r = metrics
+      ? await api("/api/save-metrics", JSON.stringify({
+          as_of: thru, period_from: from, source: parsed.source_file, from_report: true,
+          rows: selected().map(o => ({sheet_office: o.office, office: o.office,
+                                      values: Object.fromEntries(metrics.map(k => [k, o[k]])),
+                                      details: o.details}))}),
+          {"Content-Type": "application/json"})
+      : await api("/api/save", JSON.stringify({
+          period_from: from, period_thru: thru, source_file: parsed.source_file, offices: selected()}),
+          {"Content-Type": "application/json"});
+    const parts = [];
+    if (r.added) parts.push(`added ${r.added}`);
+    if (r.replaced) parts.push(`updated ${r.replaced} (earlier version kept in history)`);
+    if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
+    let text = `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
+    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}.`;
+    msg($("save-msg"), text, !r.skipped.length || parts.length > 0);
+  } catch (e) { msg($("save-msg"), e.message, false); }
+};
+
+// Paste from a spreadsheet
+let pasted = null;
+$("paste-read").onclick = async () => {
+  const text = $("paste-text").value;
+  if (!text.trim()) return msg($("paste-msg"), "Paste some rows first.", false);
+  $("paste-review").hidden = true; $("paste-save-msg").textContent = "";
+  try {
+    pasted = await api("/api/parse-paste", JSON.stringify({text}), {"Content-Type": "application/json"});
+    msg($("paste-msg"), `Found ${pasted.rows.length} office(s).`, true);
+    renderPaste();
+  } catch (e) { msg($("paste-msg"), e.message, false); }
+};
+
+function renderPaste() {
+  $("paste-asof").value = pasted.as_of || "";
+  $("paste-hint").textContent = (pasted.as_of
+    ? "As-of date read from “Updated …” in the sheet. "
+    : "No “Updated” date found in the paste. Enter the date the sheet was updated. ")
+    + "Refunds are logged to that month; a later paste for the same month replaces them.";
+  const opt = (v, label, sel) => `<option value="${esc(v)}" ${sel ? "selected" : ""}>${esc(label)}</option>`;
+  $("paste-body").innerHTML = pasted.rows.map((r, i) => {
+    const others = pasted.known_offices.filter(o => !r.candidates.includes(o));
+    const isNew = r.match && !pasted.known_offices.includes(r.match);
+    const tag = r.how === "remembered" ? '<span class="tag">remembered</span>'
+      : r.how === "auto" ? '<span class="tag">matched</span>'
+      : `<span class="tag warn">${r.how === "ambiguous" ? "choose one" : "no match"}</span>`;
+    return `<tr>
+      <td>${esc(r.sheet_office)}${tag}</td>
+      <td><select class="paste-office" data-i="${i}" aria-label="Log office for ${esc(r.sheet_office)}">
+        ${r.match ? "" : opt("", "Choose an office…", true)}
+        ${r.candidates.length ? `<optgroup label="Likely matches">${r.candidates.map(o => opt(o, o, o === r.match)).join("")}</optgroup>` : ""}
+        ${others.length ? `<optgroup label="All offices">${others.map(o => opt(o, o, o === r.match)).join("")}</optgroup>` : ""}
+        <optgroup label="Not in the log yet">${opt("new:" + r.new_name, `New office: ${r.new_name}`, isNew)}</optgroup>
+      </select></td>
+      <td class="num">${r.values.refunds == null ? '<span class="none">—</span>' : money(r.values.refunds)}</td></tr>`;
+  }).join("");
+  const total = pasted.rows.reduce((a, r) => a + (r.values.refunds || 0), 0);
+  $("paste-foot").innerHTML = `<tr><td colspan="2">Total <span class="hint">· ${pasted.rows.length} offices</span></td><td class="num">${money(total)}</td></tr>`;
+  document.querySelectorAll(".paste-office").forEach(s => s.onchange = updatePasteSave);
+  updatePasteSave();
+  $("paste-review").hidden = false;
+}
+function pasteOffice(sel) { return sel.value.startsWith("new:") ? sel.value.slice(4) : sel.value; }
+function updatePasteSave() {
+  const sels = [...document.querySelectorAll(".paste-office")];
+  sels.forEach(s => s.classList.toggle("needs", !s.value));
+  const missing = sels.filter(s => !s.value).length;
+  const chosen = sels.map(pasteOffice).filter(Boolean);
+  const dupes = [...new Set(chosen.filter((o, i) => chosen.indexOf(o) !== i))];
+  $("paste-save").disabled = missing > 0 || dupes.length > 0;
+  if (missing) msg($("paste-save-msg"), `Choose the log office for ${missing} highlighted row(s). Your choices are remembered next time.`, false);
+  else if (dupes.length) msg($("paste-save-msg"), `Two sheet rows point to the same office: ${dupes.join(", ")}.`, false);
+  else $("paste-save-msg").textContent = "";
+}
+$("paste-save").onclick = async () => {
+  const as_of = $("paste-asof").value;
+  if (!as_of) return msg($("paste-save-msg"), "Enter the as-of date first.", false);
+  const rows = [...document.querySelectorAll(".paste-office")].map(s => {
+    const r = pasted.rows[s.dataset.i];
+    return {sheet_office: r.sheet_office, office: pasteOffice(s), values: r.values};
+  });
+  try {
+    const r = await api("/api/save-metrics", JSON.stringify({as_of, source: "pasted sheet", rows}),
+                        {"Content-Type": "application/json"});
+    const parts = [];
+    if (r.added) parts.push(`added ${r.added}`);
+    if (r.replaced) parts.push(`updated ${r.replaced} (earlier values kept in history)`);
+    if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
+    let text = `Refunds as of ${as_of}: ${parts.join(", ") || "nothing changed"}.`;
+    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later sheet for this month: ${r.skipped.join("; ")}.`;
+    msg($("paste-save-msg"), text, !r.skipped.length || parts.length > 0);
+  } catch (e) { msg($("paste-save-msg"), e.message, false); }
+};
+
+
+// Log
+let logRows = [];
+// Sort state; remembered in this browser between visits.
+let logSort = {key: "period_thru", dir: "desc"};
+try { Object.assign(logSort, JSON.parse(localStorage.getItem("logSort")) || {}); } catch {}
+const collator = new Intl.Collator(undefined, {numeric: true, sensitivity: "base"});
+// Custom office order (saved in this browser); offices not in the list go last, A–Z.
+let officeOrder = [];
+try { officeOrder = JSON.parse(localStorage.getItem("officeOrder")) || []; } catch {}
+const officeRank = o => { const i = officeOrder.indexOf(o); return i < 0 ? officeOrder.length : i; };
+function compareRows(a, b) {
+  if (logSort.key === "custom") {
+    return officeRank(a.office) - officeRank(b.office) || collator.compare(a.office, b.office)
+      || collator.compare(b.period_thru, a.period_thru);
+  }
+  const {key, dir} = logSort, x = a[key], y = b[key];
+  let c = typeof x === "number" && typeof y === "number" ? x - y : collator.compare(x ?? "", y ?? "");
+  if (dir === "desc") c = -c;
+  // Ties: newest period first, then office A–Z.
+  return c || collator.compare(b.period_thru, a.period_thru) || collator.compare(a.office, b.office);
+}
+// Data checks: values that look wrong. They're flagged, never changed; someone can mark one OK with a note,
+// or email the office a list of what to fix (a draft in their own email app).
+let checkInfo = {ok: []}, rowChecks = new Map();
+const JSON_OR = (s, d) => { try { return JSON.parse(s) ?? d; } catch { return d; } };
+const pctText = v => `${+(v * 100).toFixed(1)}%`;
+function checksFor(r) {
+  const out = [], base = {office: r.office, period_from: r.period_from};
+  for (const c of LOG_COLS) {
+    if (!c.max || r[c.key] == null || r[c.key] <= c.max + 1e-9) continue;
+    const name = k => labelOf(k).replace(/\s*\$(?=\s|$)/g, "");   // "Total prime collected $" -> "Total prime collected"
+    const parts = c.ratio ? `${c.ratio.num.map(k => `${name(k)} ${fmtVal(r[k], kindOf(k))}`).join(" + ")} ÷ ${name(c.ratio.den)} ${fmtVal(r[c.ratio.den], kindOf(c.ratio.den))}` : "";
+    // Point at the biggest amounts behind the numerator, so the office knows where to look.
+    const top = (c.ratio?.num || []).flatMap(k => JSON_OR(r[k + "_detail"], []).filter(d => d.total)
+      .map(d => ({row: d.row, v: parseFloat(String(d.total).replace(/[^\d.]/g, "")) || 0, t: d.total})))
+      .sort((a, b) => b.v - a.v).slice(0, 3);
+    out.push({...base, check_key: `rate:${c.key}`, value_sig: String(r[c.key]), col: c.key,
+      problem: `${c.label} is ${pctText(r[c.key])}, over 100%${parts ? ` (${parts})` : ""}.` +
+        (top.length ? ` Largest amounts: ${top.map(t => `row ${t.row} (${t.t})`).join(", ")}.` : "")});
+  }
+  for (const d of JSON_OR(r.collected_over_approved_detail, []))
+    for (const i of d.issues || [])
+      out.push({...base, check_key: `row:${d.row}:${i.kind}:${i.lender}`, value_sig: `${i.collected}>${i.approved}`,
+        col: i.kind === "Prime" ? "prime_collected_amount" : "subprime_collected_amount",
+        problem: `Row ${d.row}: ${i.kind} ${i.lender} collected ${i.collected}, more than the ${i.approved} approved.`});
+  return out;
+}
+const fmtVal = (v, kind) => v == null ? "—" : kind === "money" ? `$${money(v)}` : kind === "pct" ? pctText(v) : v;
+const sameCheck = (a, b) => a.office === b.office && a.period_from === b.period_from && a.check_key === b.check_key;
+const okFor = k => (checkInfo.ok || []).find(o => sameCheck(o, k) && o.value_sig === k.value_sig);
+const notifiedFor = k => (checkInfo.notified || []).find(o => sameCheck(o, k) && o.value_sig === k.value_sig);
+const openChecks = r => checksFor(r).filter(k => !okFor(k));
+// The upload review: per-patient problems and the workbook-only rates.
+function reviewChecks(o) {
+  const out = (o.details?.collected_over_approved || []).flatMap(d => d.text || []).map(t => `${o.office}: ${t}`);
+  for (const [k, a, b] of [["% of prime collected", "prime_collected_amount", "prime_approved_amount"],
+                           ["% of subprime collected", "subprime_collected_amount", "subprime_approved_amount"]])
+    if (o[b] > 0 && o[a] > o[b]) out.push(`${o.office}: ${k} is ${pctText(o[a] / o[b])}`);
+  return out;
+}
+function checkEmail(group) {
+  const src = (checkInfo.sources || {})[`${group.office}|${group.period_from}`] || {};
+  const month = monthName(group.period_from.slice(0, 7));
+  const subject = `Please check your New Patient Analysis – ${month}${src.tab && src.tab !== month ? ` (${src.tab})` : ""}`;
+  const body = [`Hi,`, ``,
+    `A few numbers in the ${group.office} New Patient Analysis for ${month}` +
+    `${src.tab ? ` (Google Sheet, tab "${src.tab}")` : src.file ? ` (file "${src.file}")` : ""} look off. ` +
+    `Could you check these and correct them if needed?`, ``,
+    ...group.checks.map(k => `- ${k.problem}`), ``,
+    ...(src.url ? [`Sheet: ${src.url}`, ``] : []), `Thank you!`].join("\n");
+  return {subject, body};
+}
+function renderChecks() {
+  const groups = new Map();
+  for (const [r, list] of rowChecks)
+    for (const k of list) {
+      const id = `${r.office}|${r.period_from}`;
+      if (!groups.has(id)) groups.set(id, {office: r.office, period_from: r.period_from, checks: []});
+      groups.get(id).checks.push(k);
+    }
+  const total = [...groups.values()].reduce((a, g) => a + g.checks.length, 0);
+  $("chk-count").hidden = !total; $("chk-count").textContent = total;
+  $("chk-btn").setAttribute("aria-label", `Checks: ${total} value${total === 1 ? "" : "s"} to look at`);
+  if ($("chk-panel").hidden) return;
+  const contacts = checkInfo.contacts || {};
+  $("chk-list").innerHTML = total ? [...groups.values()].map((g, gi) => {
+    const sent = g.checks.map(notifiedFor).filter(Boolean).map(n => n.notified_at).sort().pop();
+    const emails = contacts[g.office] || "";
+    return `<div class="chk-group" data-g="${gi}">
+      <h4>${esc(g.office)} <span class="hint">${monthName(g.period_from.slice(0, 7))}${sent ? ` · email drafted ${when(sent)}` : ""}</span></h4>
+      <ul>${g.checks.map((k, ki) => `<li>${esc(k.problem)}
+        <span class="chk-act"><button class="link-btn" data-ok="${gi}:${ki}">Mark OK</button></span></li>`).join("")}</ul>
+      <div class="row chk-act chk-contact">
+        <label>Office email <input type="text" data-email="${gi}" value="${esc(emails)}" placeholder="name@example.com, …"></label>
+        <button class="btn primary" data-notify="${gi}">Email office</button>
+        <button class="btn" data-copymsg="${gi}">Copy message</button>
+      </div></div>`;
+  }).join("") : `<p class="hint">Nothing looks wrong in the months shown.</p>`;
+  const shownMonths = new Set(shownRows.map(r => `${r.office}|${r.period_from}`));
+  const oks = (checkInfo.ok || []).filter(o => shownMonths.has(`${o.office}|${o.period_from}`));
+  $("chk-ok-rows").innerHTML = oks.length ? `<ul>${oks.map((o, i) => `<li>${esc(o.office)} · ${monthName(o.period_from.slice(0, 7))} ·
+      ${esc(checkLabel("check: " + o.check_key))} — “${esc(o.note)}” <span class="hint">${when(o.marked_at)}</span>
+      <span class="chk-act"><button class="link-btn" data-unok="${i}">Undo</button></span></li>`).join("")}</ul>`
+    : `<p class="hint">None in the months shown.</p>`;
+  const list = [...groups.values()];
+  const post = (path, body) => api(path, JSON.stringify(body), {"Content-Type": "application/json"});
+  const done = async text => { checkInfo = await api("/api/checks").catch(() => checkInfo); renderLog(); msg($("chk-msg"), text, true); };
+  document.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => {
+    const [gi, ki] = b.dataset.ok.split(":").map(Number), k = list[gi].checks[ki];
+    const form = Object.assign(document.createElement("span"), {className: "chk-ok-form",
+      innerHTML: `<input type="text" placeholder="Why it's OK (required)" aria-label="Why it's OK"><button class="btn">Save</button>`});
+    b.replaceWith(form); const input = form.querySelector("input"); input.focus();
+    const save = async () => {
+      try { await post("/api/checks/ok", {...k, note: input.value}); await done("Marked OK. It stays hidden unless the value changes."); }
+      catch (e) { msg($("chk-msg"), e.message, false); }
+    };
+    form.querySelector("button").onclick = save;
+    input.onkeydown = e => { if (e.key === "Enter") save(); };
+  });
+  document.querySelectorAll("[data-unok]").forEach(b => b.onclick = async () => {
+    try { await post("/api/checks/ok/delete", oks[+b.dataset.unok]); await done("Flag is back."); }
+    catch (e) { msg($("chk-msg"), e.message, false); }
+  });
+  document.querySelectorAll("[data-copymsg]").forEach(b => b.onclick = async () => {
+    const {subject, body} = checkEmail(list[+b.dataset.copymsg]);
+    await navigator.clipboard.writeText(`${subject}\n\n${body}`);
+    msg($("chk-msg"), "Message copied. Paste it into an email, Teams or Chat.", true);
+  });
+  document.querySelectorAll("[data-notify]").forEach(b => b.onclick = async () => {
+    const g = list[+b.dataset.notify], input = document.querySelector(`[data-email="${b.dataset.notify}"]`);
+    const emails = (input.value.match(/[^@\s,;]+@[^@\s,;]+\.[A-Za-z]{2,}/g) || []).join(", ");
+    if (!emails) return msg($("chk-msg"), `Enter ${g.office}'s email address (name@example.com) first.`, false);
+    // Open the draft straight from the click (browsers may block it after waiting on the server).
+    const {subject, body} = checkEmail(g);
+    const to = emails.split(", ").map(encodeURIComponent).join(",");
+    let href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, note = "";
+    if (href.length > 1800) {   // too long for some email apps: open the draft and copy the message
+      navigator.clipboard.writeText(body).catch(() => {});
+      href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("(Paste the copied message here: Ctrl+V)")}`;
+      note = " The message was long, so it's copied: paste it into the email.";
+    }
+    Object.assign(document.createElement("a"), {href}).click();
+    try {
+      if (emails !== (contacts[g.office] || "")) {
+        (checkInfo.contacts ||= {})[g.office] = (await post("/api/office-contacts", {office: g.office, emails})).emails;
+      }
+      await post("/api/checks/notified", {checks: g.checks, to: emails});
+      await done(`Opened an email draft to ${emails} in your email app. Review it and press Send.${note}`);
+    } catch (e) { msg($("chk-msg"), e.message, false); }
+  });
+}
+$("chk-btn").onclick = () => {
+  const open = $("chk-panel").hidden;
+  $("chk-panel").hidden = !open; $("chk-btn").setAttribute("aria-expanded", open);
+  if (open) renderChecks();
+};
+// Benchmarks: color a column's values green / yellow / red against cut-offs set in the app.
+let benchmarks = [];
+const BENCH_MARK = {green: "●", yellow: "▲", red: "▼"};
+const BENCH_WORD = {green: "on target", yellow: "close to target", red: "below target"};
+const benchFor = key => benchmarks.find(b => b.metric === key);
+function benchLevel(key, v) {
+  const b = benchFor(key);
+  if (!b || v == null) return null;
+  const good = (x, cut) => b.direction === "higher" ? x >= cut : x <= cut;
+  return good(v, b.green) ? "green" : good(v, b.yellow) ? "yellow" : "red";
+}
+const colOf = key => LOG_COLS.find(c => c.key === key);
+// Show a cut-off in the column's own units: 0.25 -> "25%", 1500 -> "1,500.00".
+const benchShow = (key, v) => colOf(key)?.kind === "pct" ? `${+(v * 100).toFixed(2)}%` : colOf(key)?.kind === "money" ? money(v) : `${v}`;
+function benchText(key, level) {
+  const b = benchFor(key); if (!b) return "";
+  const cmp = b.direction === "higher" ? "≥" : "≤", flip = b.direction === "higher" ? "<" : ">";
+  const rule = `Green ${cmp} ${benchShow(key, b.green)}, yellow ${cmp} ${benchShow(key, b.yellow)}, red ${flip} ${benchShow(key, b.yellow)}`;
+  return level ? `${BENCH_WORD[level][0].toUpperCase()}${BENCH_WORD[level].slice(1)}. ${rule}` : `Benchmark: ${rule}`;
+}
+function renderBenchPanel() {
+  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind));
+  $("bm-rows").innerHTML = benchmarks.length ? benchmarks.map(b => {
+    const cmp = b.direction === "higher" ? "≥" : "≤", flip = b.direction === "higher" ? "<" : ">";
+    return `<tr><td>${esc(colOf(b.metric)?.label || b.metric)}</td><td>${b.direction}</td>
+      <td><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink)">${cmp} ${benchShow(b.metric, b.green)}</span></td>
+      <td><span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink)">${cmp} ${benchShow(b.metric, b.yellow)}</span></td>
+      <td><span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink)">${flip} ${benchShow(b.metric, b.yellow)}</span></td>
+      <td><button class="link-btn" data-bm-edit="${b.metric}">Edit</button> · <button class="link-btn" data-bm-del="${b.metric}">Remove</button></td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="hint">No benchmarks yet.</td></tr>`;
+  const current = $("bm-metric").value;
+  $("bm-metric").innerHTML = numeric.map(c => `<option value="${c.key}">${esc(c.label)}${benchFor(c.key) ? " ✓" : ""}</option>`).join("");
+  if (current) $("bm-metric").value = current;
+  document.querySelectorAll("[data-bm-edit]").forEach(b => b.onclick = () => fillBenchForm(b.dataset.bmEdit));
+  document.querySelectorAll("[data-bm-del]").forEach(b => b.onclick = async () => {
+    const label = colOf(b.dataset.bmDel)?.label || b.dataset.bmDel;
+    if (!confirm(`Remove the benchmark for ${label}? Its colors disappear for everyone.`)) return;
+    await api("/api/benchmarks/delete", JSON.stringify({metric: b.dataset.bmDel}), {"Content-Type": "application/json"});
+    await reloadBenchmarks(); msg($("bm-msg"), `Removed the benchmark for ${label}.`, true);
+  });
+  updateBenchHelp();
+}
+function fillBenchForm(key) {
+  $("bm-metric").value = key;
+  const b = benchFor(key), pct = colOf(key)?.kind === "pct";
+  $("bm-dir").value = b?.direction || "higher";
+  $("bm-green").value = b ? +(pct ? b.green * 100 : b.green).toFixed(4) : "";
+  $("bm-yellow").value = b ? +(pct ? b.yellow * 100 : b.yellow).toFixed(4) : "";
+  updateBenchHelp(); $("bm-green").focus();
+}
+function updateBenchHelp() {
+  const c = colOf($("bm-metric").value); if (!c) return;
+  const unit = c.kind === "pct" ? "percent (type 25 for 25%)" : c.kind === "money" ? "dollars" : "a count";
+  const hi = $("bm-dir").value === "higher";
+  $("bm-help").textContent = `Enter ${unit}. ${hi ? "Values at or above Green are green; at or above Yellow are yellow; lower is red."
+    : "Values at or below Green are green; at or below Yellow are yellow; higher is red."}`;
+}
+$("bm-metric").onchange = () => fillBenchForm($("bm-metric").value);
+$("bm-dir").onchange = updateBenchHelp;
+$("bm-save").onclick = async () => {
+  const key = $("bm-metric").value, pct = colOf(key)?.kind === "pct";
+  const g = parseFloat($("bm-green").value), y = parseFloat($("bm-yellow").value);
+  if (Number.isNaN(g) || Number.isNaN(y)) return msg($("bm-msg"), "Enter both the green and yellow cut-offs.", false);
+  try {
+    await api("/api/benchmarks", JSON.stringify({metric: key, direction: $("bm-dir").value,
+      green: pct ? g / 100 : g, yellow: pct ? y / 100 : y}), {"Content-Type": "application/json"});
+    await reloadBenchmarks();
+    msg($("bm-msg"), `Saved. ${benchText(key)}.`, true);
+  } catch (e) { msg($("bm-msg"), e.message, false); }
+};
+async function reloadBenchmarks() {
+  benchmarks = await api("/api/benchmarks").catch(() => []);
+  buildLogHead(); renderLog(); renderBenchPanel();
+}
+$("bm-btn").onclick = () => {
+  const open = $("bm-panel").hidden;
+  $("bm-panel").hidden = !open; $("bm-btn").setAttribute("aria-expanded", open);
+  if (open) { renderBenchPanel(); if (!$("bm-green").value) fillBenchForm($("bm-metric").value || "ortho_rate"); }
+};
+
+// Detail box for counts that carry a list (hover to preview, click to pin, Esc to close).
+const tipBox = Object.assign(document.createElement("div"), {id: "detail-tip", hidden: true});
+tipBox.setAttribute("role", "tooltip");
+document.body.appendChild(tipBox);
+let tipFor = null, tipPinned = false, tipSkipFocus = false;
+function showTip(td, pin) {
+  const {head, cols, rows} = JSON.parse(td.dataset.detail);
+  const body = `<table><thead><tr><th>Row</th>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`
+    + rows.map(([row, ...vals]) => `<tr><td>${row}</td>${vals.map(v =>
+        `<td>${v ? esc(v) : '<span class="none">—</span>'}</td>`).join("")}</tr>`).join("") + "</tbody></table>";
+  tipBox.innerHTML = `<div class="tip-head">${esc(head)}<span>${pin
+      ? '<button type="button" class="tip-copy">Copy</button> · Esc or click outside to close' : "Click to keep open"}</span></div>` + body;
+  tipBox.querySelector(".tip-copy")?.addEventListener("click", e => {
+    e.stopPropagation();
+    const office = td.closest("tr")?.children[1]?.textContent?.trim();
+    copyGrid([["Row", ...cols], ...rows.map(r => r.map(String))], office ? `${head} ${office}` : head,
+             e.currentTarget, "Copied");
+  });
+  tipBox.hidden = false; tipFor = td; tipPinned = !!pin;
+  td.setAttribute("aria-describedby", "detail-tip");
+  tipBox.scrollTop = 0;
+  placeTip(td);
+}
+// Place the box below or above the number, never over it; shrink (and scroll) if neither side has room.
+function placeTip(td) {
+  const r = td.getBoundingClientRect();
+  const spaceBelow = innerHeight - r.bottom - 18, spaceAbove = r.top - 18;
+  const keepScroll = tipBox.scrollTop;
+  tipBox.style.maxHeight = "";
+  const natural = tipBox.offsetHeight;
+  const below = natural <= spaceBelow || (natural > spaceAbove && spaceBelow >= spaceAbove);
+  tipBox.style.maxHeight = Math.max(80, Math.min(natural, below ? spaceBelow : spaceAbove)) + "px";
+  const w = tipBox.offsetWidth, h = tipBox.offsetHeight;
+  tipBox.style.left = Math.max(12, Math.min(r.right - w, innerWidth - w - 12)) + "px";
+  tipBox.style.top = (below ? r.bottom + 6 : r.top - h - 6) + "px";
+  tipBox.scrollTop = keepScroll;
+}
+function hideTip() {
+  tipBox.hidden = true; tipFor?.removeAttribute("aria-describedby"); tipFor = null; tipPinned = false;
+}
+document.addEventListener("mouseover", e => {
+  const td = e.target.closest?.(".has-detail");
+  if (td && td !== tipFor && !tipPinned) showTip(td, false);
+});
+document.addEventListener("mouseout", e => {
+  const td = e.target.closest?.(".has-detail");
+  if (td && !tipPinned && !td.contains(e.relatedTarget) && !tipBox.contains(e.relatedTarget)) hideTip();
+});
+tipBox.addEventListener("mouseleave", e => { if (!tipPinned && !tipFor?.contains(e.relatedTarget)) hideTip(); });
+document.addEventListener("click", e => {
+  const td = e.target.closest(".has-detail");
+  if (td) { tipPinned && tipFor === td ? hideTip() : showTip(td, true); return; }
+  if (tipPinned && !tipBox.contains(e.target)) hideTip();
+});
+document.addEventListener("focusin", e => {
+  const td = e.target.closest?.(".has-detail");
+  if (tipSkipFocus) { tipSkipFocus = false; return; }   // focus returning after Esc
+  if (td && !tipPinned) showTip(td, false);
+});
+document.addEventListener("focusout", e => { if (e.target.closest?.(".has-detail") && !tipPinned) hideTip(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !tipBox.hidden) {
+    const td = tipFor; hideTip();
+    if (td && document.activeElement !== td) { tipSkipFocus = true; td.focus(); }
+  }
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("has-detail")) { e.preventDefault(); showTip(e.target, true); }
+});
+// Scrolling inside the box just scrolls the list; scrolling the page moves (or closes) the box.
+addEventListener("scroll", e => {
+  if (tipBox.hidden || tipBox.contains(e.target)) return;
+  if (!tipPinned) hideTip(); else if (tipFor) placeTip(tipFor);
+}, true);
+
+// Log columns. kind: money | count | pct | text | period. asOf: show "as of" when that value's date differs.
+const LOG_COLS = [
+  {key: "office", label: "Office", kind: "text", fixed: true},
+  {key: "period_thru", label: "Period", kind: "period", title: "Report period (month-to-date)"},
+  {key: "total_collection", label: "Total collection", kind: "money"},
+  {key: "insurance_collection", label: "Insurance collection", kind: "money"},
+  {key: "new_patients", label: "New patients", kind: "count"},
+  {key: "total_production", label: "Total production", kind: "money"},
+  {key: "refunds", label: "Refunds", kind: "money", asOf: true},
+  {key: "np_collection", label: "NP collection", kind: "money", asOf: true},
+  {key: "ortho_collection", label: "Ortho collection", kind: "money", asOf: true},
+  {key: "ortho_referrals", label: "# of ortho referrals", kind: "count", asOf: true},
+  {key: "medi_cal_patients", label: "# Medi-Cal patients", kind: "count", asOf: true},
+  {key: "hmo_patients", label: "# HMO patients", kind: "count", asOf: true},
+  {key: "no_ssn_itin_patients", label: "# no SSN / ITIN", kind: "count", asOf: true,
+   title: "Patients whose notes say no SSN/social or no ITIN (including \"ITIN only\")"},
+  {key: "financing_applicants", label: "# applied for financing", kind: "count", asOf: true,
+   title: "New patients who applied with any prime lender (Alphaeon, Care Credit, Patient FI, Proceed) or a subprime lender; each patient counted once"},
+  {key: "existing_finance_patients", label: "# existing finance acct", kind: "count", asOf: true,
+   title: "New patients whose notes say they already have a financing account (Care Credit, Alphaeon, Cherry, …)"},
+  {key: "prime_applicants", label: "# NPs applied prime", kind: "count", asOf: true,
+   title: "New patients who applied with a prime lender (Alphaeon, Care Credit, Patient FI, Proceed)"},
+  {key: "prime_approved", label: "# NPs approved w/ prime", kind: "count", asOf: true,
+   title: "New patients approved by a prime lender (an approved or collected amount)"},
+  {key: "prime_apps_ran", label: "# prime apps ran", kind: "count", asOf: true,
+   title: "Prime applications: each lender a patient ran counts (Alphaeon, Care Credit, Patient FI, Proceed)"},
+  {key: "prime_apps_approved", label: "# prime apps approved", kind: "count", asOf: true,
+   title: "Prime applications approved: each lender that approved an application it ran counts (approved or collected amount)"},
+  {key: "prime_approved_amount", label: "Total prime approved $", kind: "money", asOf: true,
+   title: "Sum of $ approved by Alphaeon, Care Credit, Patient FI and Proceed"},
+  {key: "prime_collected_amount", label: "Total prime collected $", kind: "money", asOf: true,
+   title: "Sum of $ collected through Alphaeon, Care Credit, Patient FI and Proceed (including existing accounts)"},
+  {key: "prime_funded", label: "# NPs funded w/ prime", kind: "count", asOf: true,
+   title: "New patients with money collected through a prime lender (Alphaeon, Care Credit, Patient FI, Proceed), including existing accounts"},
+  {key: "prime_approved_funded", label: "# approved NPs funded", kind: "count", asOf: true,
+   title: "NPs approved w/ prime who were also funded (money collected through a prime lender)"},
+  {key: "prime_approval_rate", label: "Prime approval rate", kind: "pct",
+   title: "# NPs approved w/ prime ÷ # NPs applied prime",
+   ratio: {num: ["prime_approved"], den: "prime_applicants"}},
+  {key: "prime_funded_rate", label: "% of approved NPs funded", kind: "pct",
+   title: "# approved NPs funded ÷ # NPs approved w/ prime",
+   ratio: {num: ["prime_approved_funded"], den: "prime_approved"}},
+  {key: "prime_collected_rate", label: "% of prime collected", kind: "pct",
+   title: "Total prime collected $ ÷ Total prime approved $",
+   ratio: {num: ["prime_collected_amount"], den: "prime_approved_amount"}},
+  {key: "avg_prime_per_approved_np", label: "Avg prime $ per approved NP", kind: "money",
+   title: "Total prime approved $ ÷ # NPs approved w/ prime",
+   ratio: {num: ["prime_approved_amount"], den: "prime_approved"}},
+  {key: "avg_prime_per_approved_app", label: "Avg prime $ per approved app", kind: "money",
+   title: "Total prime approved $ ÷ # prime apps approved",
+   ratio: {num: ["prime_approved_amount"], den: "prime_apps_approved"}},
+  {key: "avg_prime_per_app_ran", label: "Avg prime $ per app ran", kind: "money",
+   title: "Total prime approved $ ÷ # prime apps ran (approved or not)",
+   ratio: {num: ["prime_approved_amount"], den: "prime_apps_ran"}},
+  {key: "avg_prime_per_applicant", label: "Avg prime $ per NP applied", kind: "money",
+   title: "Total prime approved $ ÷ # NPs applied prime (approved or not)",
+   ratio: {num: ["prime_approved_amount"], den: "prime_applicants"}},
+  {key: "subprime_applicants", label: "# NPs applied subprime", kind: "count", asOf: true,
+   title: "New patients with a lender named under \"Subprime Co. Ran\" (Cherry, Sunbit, Covered Care, …)"},
+  {key: "subprime_approved", label: "# NPs approved w/ subprime", kind: "count", asOf: true,
+   title: "Applied subprime, and a lender named under \"Subprime Co. Approved\" or an approved/collected amount"},
+  {key: "subprime_approval_rate", label: "Subprime approval rate", kind: "pct",
+   title: "# NPs approved w/ subprime ÷ # NPs applied subprime",
+   ratio: {num: ["subprime_approved"], den: "subprime_applicants"}},
+  {key: "subprime_apps_ran", label: "# subprime apps ran", kind: "count", asOf: true,
+   title: "Subprime applications: each lender a patient was run with counts"},
+  {key: "subprime_apps_approved", label: "# subprime apps approved", kind: "count", asOf: true,
+   title: "Subprime applications approved: each lender named under \"Subprime Co. Approved\" counts"},
+  {key: "subprime_approved_amount", label: "Total subprime approved $", kind: "money", asOf: true,
+   title: "Sum of \"Subprime $Amt Approved\""},
+  {key: "subprime_collected_amount", label: "Total subprime collected $", kind: "money", asOf: true,
+   title: "Sum of \"Subprime $Amt Coll\""},
+  {key: "subprime_collected_rate", label: "% of subprime collected", kind: "pct",
+   title: "Total subprime collected $ ÷ Total subprime approved $",
+   ratio: {num: ["subprime_collected_amount"], den: "subprime_approved_amount"}},
+  {key: "subprime_funded", label: "# NPs funded w/ subprime", kind: "count", asOf: true,
+   title: "New patients with money collected through a subprime lender"},
+  {key: "fin_approved", label: "# NPs approved (prime + sub)", kind: "count", asOf: true,
+   title: "New patients approved by a prime or subprime lender; a patient approved by both counts once"},
+  {key: "fin_approval_rate", label: "Approval rate (prime + sub)", kind: "pct",
+   title: "# NPs approved (prime + sub) ÷ # applied for financing",
+   ratio: {num: ["fin_approved"], den: "financing_applicants"}},
+  {key: "fin_apps_ran", label: "# apps ran (prime + sub)", kind: "count",
+   title: "# prime apps ran + # subprime apps ran"},
+  {key: "fin_apps_approved", label: "# apps approved (prime + sub)", kind: "count",
+   title: "# prime apps approved + # subprime apps approved"},
+  {key: "fin_app_approval_rate", label: "App approval rate (prime + sub)", kind: "pct",
+   title: "# apps approved ÷ # apps ran (prime + subprime)",
+   ratio: {num: ["fin_apps_approved"], den: "fin_apps_ran"}},
+  {key: "fin_approved_amount", label: "Total approved $ (prime + sub)", kind: "money",
+   title: "Total prime approved $ + Total subprime approved $"},
+  {key: "fin_collected_amount", label: "Total collected $ (prime + sub)", kind: "money",
+   title: "Total prime collected $ + Total subprime collected $"},
+  {key: "fin_collected_rate", label: "% collected (prime + sub)", kind: "pct",
+   title: "Total collected $ ÷ Total approved $ (prime + subprime)",
+   ratio: {num: ["fin_collected_amount"], den: "fin_approved_amount"}},
+  {key: "fin_funded", label: "# NPs funded (prime + sub)", kind: "count", asOf: true,
+   title: "New patients with money collected through a prime or subprime lender; each patient once"},
+  {key: "fin_approved_funded", label: "# approved NPs funded (prime + sub)", kind: "count", asOf: true,
+   title: "NPs approved (prime + sub) who were also funded"},
+  {key: "fin_funded_rate", label: "% of approved NPs funded (prime + sub)", kind: "pct",
+   title: "# approved NPs funded ÷ # NPs approved (prime + sub)",
+   ratio: {num: ["fin_approved_funded"], den: "fin_approved"}},
+  {key: "np_rows", label: "# NPs in workbook", kind: "count", asOf: true,
+   title: "New patient rows in the New Patient Analysis sheet (the \"per NP\" denominator in this section)"},
+  {key: "tx_diagnosed_amount", label: "Amt Tx diagnosed", kind: "money", asOf: true,
+   title: "Sum of \"$ Treatment Diagnosed\""},
+  {key: "avg_tx_dx_per_np", label: "Avg Tx diagnosed / NP", kind: "money",
+   title: "Amt Tx diagnosed ÷ # NPs in workbook", ratio: {num: ["tx_diagnosed_amount"], den: "np_rows"}},
+  {key: "np_collection_wb", label: "NP collection (workbook)", kind: "money", asOf: true,
+   title: "Sum of the Denticon \"Collection\" column for the workbook's new patients"},
+  {key: "collection_per_np", label: "Collection / NP", kind: "money",
+   title: "NP collection (workbook) ÷ # NPs in workbook", ratio: {num: ["np_collection_wb"], den: "np_rows"}},
+  {key: "collection_per_dx", label: "Collection / diagnosis", kind: "pct",
+   title: "NP collection (workbook) ÷ Amt Tx diagnosed", ratio: {num: ["np_collection_wb"], den: "tx_diagnosed_amount"}},
+  {key: "no_next_visit", label: "# NPs w/o next visit", kind: "count", asOf: true,
+   title: "\"Has an Appointment\" = No"},
+  {key: "np_loss_rate", label: "NP loss rate", kind: "pct",
+   title: "# NPs w/o next visit ÷ # NPs in workbook", ratio: {num: ["no_next_visit"], den: "np_rows"}},
+  {key: "started_tx", label: "# NPs started Tx (paid)", kind: "count", asOf: true,
+   title: "Paid anything: a Denticon collection, money collected through financing, or another form of payment"},
+  {key: "start_tx_rate", label: "% of NPs starting Tx", kind: "pct",
+   title: "# NPs started Tx ÷ # NPs in workbook", ratio: {num: ["started_tx"], den: "np_rows"}},
+  {key: "irrelevant_rate", label: "% irrelevant patients", kind: "pct",
+   title: "(# Medi-Cal + # HMO + # no SSN/ITIN) ÷ New patients",
+   ratio: {num: ["medi_cal_patients", "hmo_patients", "no_ssn_itin_patients"], den: "new_patients"}},
+  {key: "ortho_rate", label: "% to ortho", kind: "pct", title: "# of ortho referrals ÷ New patients",
+   ratio: {num: ["ortho_referrals"], den: "new_patients"}},
+  {key: "financing_rate", label: "% of NPs applying", kind: "pct",
+   title: "# applied for financing (prime + subprime) ÷ New patients",
+   ratio: {num: ["financing_applicants"], den: "new_patients"}},
+  {key: "net_collections", label: "Net collections", kind: "money", title: "Total collection − Refunds"},
+  {key: "refund_rate", label: "Refund %", kind: "pct", title: "Refunds ÷ Total collection",
+   ratio: {num: ["refunds"], den: "total_collection"}},
+  {key: "existing_pt_collection", label: "Existing Pt collection", kind: "money", title: "Total collection − NP collection"},
+  {key: "collected_over_approved", label: "# collected > approved", kind: "count", asOf: true,
+   title: "Patients with more collected than approved (prime, per lender; or subprime). Often a typo in the sheet."},
+  {key: "source_file", label: "Source", kind: "text"},
+];
+// Rates that can't be over 100%; a higher value is flagged as a data check.
+const RATE_MAX = ["prime_approval_rate", "prime_collected_rate", "prime_funded_rate", "subprime_approval_rate",
+  "subprime_collected_rate", "fin_approval_rate", "fin_app_approval_rate", "fin_collected_rate", "fin_funded_rate",
+  "start_tx_rate", "np_loss_rate", "financing_rate", "ortho_rate", "irrelevant_rate", "refund_rate"];
+LOG_COLS.forEach(c => { if (RATE_MAX.includes(c.key)) c.max = 1; });
+// Sections: groups of columns that can be switched on and off together. Office, Period and Source
+// aren't in a section and always show.
+const SECTIONS = [
+  {id: "exec", label: "Executive Summary", color: "var(--sec-1)",
+   keys: ["total_collection", "insurance_collection", "new_patients", "total_production"]},
+  {id: "collections", label: "Collections", color: "var(--sec-2)",
+   keys: ["refunds", "net_collections", "refund_rate", "np_collection", "existing_pt_collection"]},
+  {id: "ortho", label: "Ortho", color: "var(--sec-3)",
+   keys: ["ortho_collection", "ortho_referrals", "ortho_rate"]},
+  {id: "np", label: "New patients", color: "var(--sec-4)",
+   keys: ["medi_cal_patients", "hmo_patients", "no_ssn_itin_patients", "irrelevant_rate", "existing_finance_patients"]},
+  {id: "prime", label: "Prime", color: "var(--sec-5)",
+   keys: ["prime_applicants", "prime_approved", "prime_approval_rate", "prime_apps_ran", "prime_apps_approved",
+          "prime_approved_amount", "prime_collected_amount", "prime_collected_rate", "prime_funded",
+          "prime_approved_funded", "prime_funded_rate", "avg_prime_per_approved_np", "avg_prime_per_approved_app",
+          "avg_prime_per_app_ran", "avg_prime_per_applicant"]},
+  {id: "subprime", label: "Subprime", color: "var(--sec-6)",
+   keys: ["subprime_applicants", "subprime_approved", "subprime_approval_rate", "subprime_apps_ran",
+          "subprime_apps_approved", "subprime_approved_amount", "subprime_collected_amount", "subprime_collected_rate",
+          "subprime_funded"]},
+  {id: "combined", label: "Prime + Subprime", color: "var(--sec-7)",
+   keys: ["financing_applicants", "financing_rate", "fin_approved", "fin_approval_rate", "fin_apps_ran",
+          "fin_apps_approved", "fin_app_approval_rate", "fin_approved_amount", "fin_collected_amount",
+          "fin_collected_rate", "fin_funded", "fin_approved_funded", "fin_funded_rate"]},
+  {id: "tx", label: "Treatment", color: "var(--sec-8)",
+   keys: ["np_rows", "tx_diagnosed_amount", "avg_tx_dx_per_np", "np_collection_wb", "collection_per_np",
+          "collection_per_dx", "no_next_visit", "np_loss_rate", "started_tx", "start_tx_rate"]},
+  {id: "checks", label: "Data checks", color: "var(--chk)", keys: ["collected_over_approved"]},
+];
+const sectionOf = Object.fromEntries(SECTIONS.flatMap(sec => sec.keys.map(k => [k, sec])));
+// Default column order: Office, Period, then each section in turn, then anything else (Source).
+{
+  const rank = c => c.fixed ? -2 : c.key === "period_thru" ? -1
+    : sectionOf[c.key] ? 1000 * SECTIONS.indexOf(sectionOf[c.key]) + sectionOf[c.key].keys.indexOf(c.key) : 1e6;
+  LOG_COLS.sort((a, b) => rank(a) - rank(b));
+}
+let hiddenSections = new Set();
+try { hiddenSections = new Set(JSON.parse(localStorage.getItem("hiddenSections")) || []); } catch {}
+const colShown = c => !hiddenCols.has(c.key) && !hiddenSections.has(sectionOf[c.key]?.id);
+
+function renderSectionSwitches() {
+  $("section-switches").innerHTML = SECTIONS.map(sec => {
+    const on = !hiddenSections.has(sec.id);
+    return `<button type="button" class="switch" role="switch" aria-checked="${on}" data-section="${sec.id}"
+      style="--sec:${sec.color}" title="${on ? "Hide" : "Show"} the ${esc(sec.label)} columns">
+      <span class="track" aria-hidden="true"></span>${esc(sec.label)}<span class="count">${sec.keys.length}</span></button>`;
+  }).join("");
+  document.querySelectorAll("#section-switches .switch").forEach(b => b.onclick = () => {
+    const id = b.dataset.section;
+    hiddenSections.has(id) ? hiddenSections.delete(id) : hiddenSections.add(id);
+    try { localStorage.setItem("hiddenSections", JSON.stringify([...hiddenSections])); } catch {}
+    saveLayout();
+    $("section-switches").querySelector(`[data-section="${id}"]`)?.focus();
+  });
+}
+
+// Column layout (which columns show, and their order) is saved in this browser.
+let hiddenCols = new Set(), colOrder = [];
+try { hiddenCols = new Set(JSON.parse(localStorage.getItem("hiddenCols")) || []); } catch {}
+try { colOrder = JSON.parse(localStorage.getItem("colOrder")) || []; } catch {}
+const colByKey = Object.fromEntries(LOG_COLS.map(c => [c.key, c]));
+// Office first, then the saved order; columns added later go in at their default spot.
+function orderedCols() {
+  const movable = LOG_COLS.filter(c => !c.fixed).map(c => c.key);
+  const order = colOrder.filter(k => movable.includes(k));
+  movable.forEach((k, i) => {
+    if (order.includes(k)) return;
+    const prev = movable.slice(0, i).reverse().find(x => order.includes(x));
+    order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, k);
+  });
+  return [...LOG_COLS.filter(c => c.fixed), ...order.map(k => colByKey[k])];
+}
+function buildLogHead() {
+  const shown = orderedCols().filter(colShown);
+  let bands = `<th class="sel-col"></th>`;
+  for (let i = 0; i < shown.length;) {
+    const sec = sectionOf[shown[i].key];
+    if (!sec) { bands += "<th></th>"; i++; continue; }
+    let j = i;
+    while (j < shown.length && sectionOf[shown[j].key] === sec) j++;
+    bands += `<th class="band" colspan="${j - i}" style="--sec:${sec.color}" scope="colgroup">${esc(sec.label)}</th>`;
+    i = j;
+  }
+  $("log-bands").innerHTML = bands;
+  $("log-head").innerHTML = `<th class="sel-col"><input type="checkbox" id="log-all" aria-label="Select all shown"></th>`
+    + orderedCols().map(c => {
+      const bench = benchFor(c.key), title = [c.title, bench && benchText(c.key)].filter(Boolean).join(" — ");
+      return `<th class="sortable${c.kind === "text" || c.kind === "period" ? "" : " num"}" data-key="${c.key}" data-col="${c.key}"
+        ${title ? `title="${esc(title)}"` : ""}><button type="button">${c.label}${bench ? '<span class="bm-flag" aria-hidden="true">◎</span>' : ""}<span class="arrow" aria-hidden="true"></span></button></th>`;
+    }).join("");
+  document.querySelectorAll("#log th.sortable").forEach(th => th.querySelector("button").onclick = () => {
+    const key = th.dataset.key;
+    // Numbers and dates start high→low; text starts A→Z.
+    const firstDir = th.classList.contains("num") || key.startsWith("period") ? "desc" : "asc";
+    logSort = logSort.key === key ? {key, dir: logSort.dir === "asc" ? "desc" : "asc"} : {key, dir: firstDir};
+    try { localStorage.setItem("logSort", JSON.stringify(logSort)); } catch {}
+    renderLog();
+  });
+  $("log-all").onchange = e => { document.querySelectorAll(".log-pick").forEach(c => c.checked = e.target.checked); updateDeleteButton(); };
+  updateSortHeaders();
+}
+function applyHiddenCols() {
+  let st = $("col-style");
+  if (!st) { st = document.createElement("style"); st.id = "col-style"; document.head.appendChild(st); }
+  st.textContent = LOG_COLS.filter(c => !colShown(c)).map(c => `#log [data-col="${c.key}"] { display: none; }`).join("\n");
+}
+function renderColumnsMenu() {
+  const cols = orderedCols().filter(c => !c.fixed);
+  $("columns-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Tick to show · drag ⠿ or use ↑ ↓ to reorder</p>
+    <ul class="collist">${cols.map((c, i) => `<li draggable="true" data-key="${c.key}">
+      <span class="grip" aria-hidden="true">⠿</span>
+      <label ${hiddenSections.has(sectionOf[c.key]?.id) ? 'class="off" title="This column\'s section is switched off"' : ""}>
+        <input type="checkbox" data-col-toggle="${c.key}" ${hiddenCols.has(c.key) ? "" : "checked"}
+          ${hiddenSections.has(sectionOf[c.key]?.id) ? "disabled" : ""}> ${c.label}
+        ${sectionOf[c.key] ? `<span class="sec-tag" style="--sec:${sectionOf[c.key].color}">${esc(sectionOf[c.key].label)}</span>` : ""}</label>
+      <button type="button" class="mv" data-move="-1" ${i === 0 ? "disabled" : ""} aria-label="Move ${c.label} left">↑</button>
+      <button type="button" class="mv" data-move="1" ${i === cols.length - 1 ? "disabled" : ""} aria-label="Move ${c.label} right">↓</button>
+    </li>`).join("")}</ul>
+    <div class="cal-foot"><span>${cols.filter(c => !hiddenCols.has(c.key)).length} of ${cols.length} shown</span>
+      <span><button type="button" id="cols-all">Show all</button><button type="button" id="cols-reset">Reset</button></span></div>`;
+  const menu = $("columns-menu");
+  menu.querySelectorAll("[data-col-toggle]").forEach(cb => cb.onchange = () => {
+    cb.checked ? hiddenCols.delete(cb.dataset.colToggle) : hiddenCols.add(cb.dataset.colToggle);
+    saveLayout(`[data-col-toggle="${cb.dataset.colToggle}"]`);
+  });
+  menu.querySelectorAll("[data-move]").forEach(b => b.onclick = () => {
+    const key = b.closest("li").dataset.key, dir = Number(b.dataset.move);
+    moveCol(key, cols[cols.findIndex(c => c.key === key) + dir].key, dir > 0);
+    const again = menu.querySelector(`li[data-key="${key}"] [data-move="${dir}"]`);
+    (again && !again.disabled ? again : menu.querySelector(`li[data-key="${key}"] [data-move="${-dir}"]`))?.focus();
+  });
+  let dragKey = null;
+  menu.querySelectorAll(".collist li").forEach(li => {
+    li.ondragstart = e => { dragKey = li.dataset.key; li.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; };
+    li.ondragend = () => { dragKey = null; menu.querySelectorAll("li").forEach(x => x.classList.remove("dragging", "drop-before", "drop-after")); };
+    li.ondragover = e => {
+      if (!dragKey || dragKey === li.dataset.key) return;
+      e.preventDefault();
+      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+      menu.querySelectorAll("li").forEach(x => x.classList.remove("drop-before", "drop-after"));
+      li.classList.add(after ? "drop-after" : "drop-before");
+    };
+    li.ondrop = e => {
+      e.preventDefault();
+      if (dragKey && dragKey !== li.dataset.key) moveCol(dragKey, li.dataset.key, li.classList.contains("drop-after"));
+    };
+  });
+  $("cols-all").onclick = () => { hiddenCols.clear(); saveLayout("#cols-all"); };
+  $("cols-reset").onclick = () => { hiddenCols.clear(); colOrder = []; saveLayout("#cols-reset"); };
+}
+// Move column `key` to just before (or after) column `target`.
+function moveCol(key, target, after) {
+  const order = orderedCols().filter(c => !c.fixed).map(c => c.key).filter(k => k !== key);
+  order.splice(order.indexOf(target) + (after ? 1 : 0), 0, key);
+  colOrder = order;
+  saveLayout();
+}
+function saveLayout(focusSelector) {
+  try {
+    localStorage.setItem("hiddenCols", JSON.stringify([...hiddenCols]));
+    localStorage.setItem("colOrder", JSON.stringify(colOrder));
+  } catch {}
+  applyHiddenCols(); buildLogHead(); renderLog(); renderColumnsMenu(); renderSectionSwitches();
+  if (focusSelector) $("columns-menu").querySelector(focusSelector)?.focus();
+}
+function closeColumnsMenu(focus) {
+  $("columns-menu").hidden = true; $("columns-btn").setAttribute("aria-expanded", "false");
+  if (focus) $("columns-btn").focus();
+}
+$("columns-btn").onclick = () => {
+  if (!$("columns-menu").hidden) return closeColumnsMenu(false);
+  $("columns-menu").hidden = false; $("columns-btn").setAttribute("aria-expanded", "true");
+  renderColumnsMenu(); $("columns-menu").querySelector("input")?.focus();
+};
+document.addEventListener("mousedown", e => {
+  if (!$("columns-menu").hidden && !e.target.closest("#columns-menu, #columns-btn")) closeColumnsMenu(false);
+});
+$("columns-menu").onkeydown = e => { if (e.key === "Escape") closeColumnsMenu(true); };
+
+// Office order menu: drag ⠿ or use ↑ ↓; the Log then lists offices in this order.
+function allOffices() {
+  const seen = [...new Set(logRows.map(r => r.office))];
+  return [...officeOrder.filter(o => seen.includes(o)), ...seen.filter(o => !officeOrder.includes(o)).sort(collator.compare)];
+}
+function renderOfficesMenu() {
+  const offices = allOffices(), custom = logSort.key === "custom";
+  $("offices-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Drag ⠿ or use ↑ ↓ to set the order offices are listed in.</p>
+    <ul class="collist">${offices.map((o, i) => `<li draggable="true" data-office="${esc(o)}">
+      <span class="grip" aria-hidden="true">⠿</span><label style="cursor:grab">${esc(o)}</label>
+      <button type="button" class="mv" data-move="-1" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(o)} up">↑</button>
+      <button type="button" class="mv" data-move="1" ${i === offices.length - 1 ? "disabled" : ""} aria-label="Move ${esc(o)} down">↓</button>
+    </li>`).join("")}</ul>
+    <div class="cal-foot"><span>${custom ? "Log is using this order" : "Log is sorted by a column"}</span>
+      <span>${custom ? "" : '<button type="button" id="offices-use">Use this order</button>'}<button type="button" id="offices-reset">A–Z</button></span></div>`;
+  const menu = $("offices-menu");
+  const move = (office, target, after) => {
+    const order = allOffices().filter(o => o !== office);
+    order.splice(order.indexOf(target) + (after ? 1 : 0), 0, office);
+    saveOfficeOrder(order);
+  };
+  menu.querySelectorAll("[data-move]").forEach(b => b.onclick = () => {
+    const office = b.closest("li").dataset.office, dir = Number(b.dataset.move), list = allOffices();
+    move(office, list[list.indexOf(office) + dir], dir > 0);
+    const li = [...menu.querySelectorAll("li")].find(x => x.dataset.office === office);
+    const again = li?.querySelector(`[data-move="${dir}"]`);
+    (again && !again.disabled ? again : li?.querySelector(`[data-move="${-dir}"]`))?.focus();
+  });
+  let dragOffice = null;
+  menu.querySelectorAll(".collist li").forEach(li => {
+    li.ondragstart = e => { dragOffice = li.dataset.office; li.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; };
+    li.ondragend = () => { dragOffice = null; menu.querySelectorAll("li").forEach(x => x.classList.remove("dragging", "drop-before", "drop-after")); };
+    li.ondragover = e => {
+      if (!dragOffice || dragOffice === li.dataset.office) return;
+      e.preventDefault();
+      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+      menu.querySelectorAll("li").forEach(x => x.classList.remove("drop-before", "drop-after"));
+      li.classList.add(after ? "drop-after" : "drop-before");
+    };
+    li.ondrop = e => {
+      e.preventDefault();
+      if (dragOffice && dragOffice !== li.dataset.office) move(dragOffice, li.dataset.office, li.classList.contains("drop-after"));
+    };
+  });
+  $("offices-use")?.addEventListener("click", () => { useOfficeOrder(); $("offices-reset").focus(); });
+  $("offices-reset").onclick = () => saveOfficeOrder([...new Set(logRows.map(r => r.office))].sort(collator.compare));
+}
+// Changing the order also switches the Log to it.
+function saveOfficeOrder(order) {
+  officeOrder = order;
+  try { localStorage.setItem("officeOrder", JSON.stringify(order)); } catch {}
+  useOfficeOrder();
+}
+function useOfficeOrder() {
+  logSort = {key: "custom", dir: "asc"};
+  try { localStorage.setItem("logSort", JSON.stringify(logSort)); } catch {}
+  renderLog(); renderOfficesMenu();
+}
+function closeOfficesMenu(focus) {
+  $("offices-menu").hidden = true; $("offices-btn").setAttribute("aria-expanded", "false");
+  if (focus) $("offices-btn").focus();
+}
+$("offices-btn").onclick = () => {
+  if (!$("offices-menu").hidden) return closeOfficesMenu(false);
+  $("offices-menu").hidden = false; $("offices-btn").setAttribute("aria-expanded", "true");
+  renderOfficesMenu(); $("offices-menu").querySelector("button")?.focus();
+};
+document.addEventListener("mousedown", e => {
+  if (!$("offices-menu").hidden && !e.target.closest("#offices-menu, #offices-btn")) closeOfficesMenu(false);
+});
+$("offices-menu").onkeydown = e => { if (e.key === "Escape") closeOfficesMenu(true); };
+renderSectionSwitches();
+applyHiddenCols();
+
+function updateSortHeaders() {
+  document.querySelectorAll("#log th.sortable").forEach(th => {
+    const on = th.dataset.key === logSort.key;
+    if (on) th.setAttribute("aria-sort", logSort.dir === "asc" ? "ascending" : "descending");
+    else th.removeAttribute("aria-sort");
+    th.querySelector(".arrow").textContent = on ? (logSort.dir === "asc" ? "▲" : "▼") : "↕";
+  });
+}
+buildLogHead();
+async function loadLog() {
+  try {
+    [logRows, benchmarks, checkInfo] = await Promise.all([api("/api/log"), api("/api/benchmarks").catch(() => []),
+      api("/api/checks").catch(() => ({ok: []}))]);
+    buildLogHead();
+    // Open on the latest month with data (unless a month was already picked this visit).
+    const months = dataMonths();
+    if (!logMonth || (logMonth !== "all" && !months.includes(logMonth))) logMonth = months[months.length - 1] || "all";
+    renderLog();
+  }
+  catch (e) { $("log-count").textContent = e.message; }
+}
+function renderLog() {
+  const f = $("filter").value.toLowerCase();
+  $("clear-filters").hidden = !f;
+  renderMonthNav();
+  const rows = logRows.filter(r => (!f || r.office.toLowerCase().includes(f))
+                                && (logMonth === "all" || r.period_from.slice(0, 7) === logMonth))
+                     .sort(compareRows);
+  updateSortHeaders();
+  shownRows = rows;
+  rowChecks = new Map(rows.map(r => [r, openChecks(r)]));
+  renderChecks();
+  const dash = '<span class="none">—</span>';
+  const fmt = (v, kind) => v == null ? dash : kind === "money" ? money(v) : kind === "pct" ? pct(v) : v;
+  const mmdd = iso => iso.slice(5).replace("-", "/");
+  const bodyCell = (r, c) => {
+    if (c.key === "office") return `<td data-col="office">${esc(r.office)}</td>`;
+    if (c.kind === "period") return `<td data-col="${c.key}" title="${r.period_from} → ${r.period_thru}">${periodLabel(r)}</td>`;
+    if (c.key === "source_file") return `<td data-col="source_file" class="hint src" title="${esc(r.source_file || "")}">${esc(r.source_file || (r.refunds != null ? "pasted sheet" : ""))}</td>`;
+    const asOf = c.asOf && r[c.key] != null && r[c.key + "_as_of"] !== r.period_thru
+      ? `<span class="asof">as of ${mmdd(r[c.key + "_as_of"])}</span>` : "";
+    let tip = "";
+    try { tip = r[c.key + "_detail"] ? detailText(c.key, JSON.parse(r[c.key + "_detail"])) : ""; } catch {}
+    const flags = (rowChecks.get(r) || []).filter(k => k.col === c.key);
+    const flag = flags.length ? `<span class="chk-flag" title="${esc(flags.map(k => k.problem).join("\n"))}">⚠</span><span class="sr">(looks wrong)</span>` : "";
+    const level = benchLevel(c.key, r[c.key]);
+    const mark = level ? `<span class="bm-mark" aria-hidden="true">${BENCH_MARK[level]}</span>` : "";
+    const note = level ? `<span class="sr">(${BENCH_WORD[level]})</span>` : "";
+    return `<td data-col="${c.key}" class="num${tip ? " has-detail" : ""}${level ? " bm-" + level : ""}"
+      ${tip ? `data-detail="${esc(tip)}" tabindex="0"` : level ? `title="${esc(benchText(c.key, level))}"` : ""}>${flag}${mark}${fmt(r[c.key], c.kind)}${note}${asOf}</td>`;
+  };
+  $("log-body").innerHTML = rows.map((r, i) => `<tr>
+    <td class="sel-col"><input type="checkbox" class="log-pick" value="${i}" aria-label="Select ${esc(r.office)} ${r.period_thru}"></td>
+    ${orderedCols().map(c => bodyCell(r, c)).join("")}</tr>`).join("");
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  const monthsShown = new Set(rows.map(r => r.period_from.slice(0, 7))).size;
+  const footCell = c => {
+    if (c.key === "office") return `<td data-col="office">Total <span class="hint">· ${rows.length} row${rows.length > 1 ? "s" : ""}${monthsShown > 1 ? ` across ${monthsShown} months` : ""}</span></td>`;
+    if (c.kind === "text" || c.kind === "period") return `<td data-col="${c.key}"></td>`;
+    // No office has this number yet: leave the total blank rather than showing 0.
+    const v = c.ratio ? totalRatio(rows, c.ratio) : rows.some(r => r[c.key] != null) ? sum(c.key) : null;
+    return `<td data-col="${c.key}" class="num">${fmt(v, c.kind)}</td>`;
+  };
+  $("log-foot").innerHTML = rows.length ? `<tr><td class="sel-col"></td>${orderedCols().map(footCell).join("")}</tr>` : "";
+  $("log-count").textContent = logRows.length ? `${rows.length} of ${logRows.length} rows` : "The log is empty. Upload a report to start.";
+  $("log-all").checked = false;
+  document.querySelectorAll(".log-pick").forEach(c => c.onchange = updateDeleteButton);
+  updateDeleteButton();
+}
+let shownRows = [];
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// "Sep 1–20, 2026"
+function periodLabel(r) {
+  const [y, m, d1] = r.period_from.split("-").map(Number), d2 = Number(r.period_thru.slice(8));
+  return `${MON[m - 1]} ${d1}–${d2}, ${y}`;
+}
+const pct = v => v == null ? '<span class="none">—</span>' : (v * 100).toFixed(2) + "%";
+
+// Copy a grid of cells so it pastes into Excel / Google Sheets as rows and columns
+// (tab-separated text, plus an HTML table for apps that prefer it).
+async function copyGrid(grid, caption, button, doneText) {
+  const clean = v => String(v ?? "").replace(/[\t\r\n]+/g, " ");
+  const tsv = grid.map(r => r.map(clean).join("\t")).join("\n");
+  const html = `<table>${grid.map((r, i) => `<tr>${r.map(v => i ? `<td>${esc(v)}</td>` : `<th>${esc(v)}</th>`).join("")}</tr>`).join("")}</table>`;
+  try {
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/plain": new Blob([tsv], {type: "text/plain"}), "text/html": new Blob([html], {type: "text/html"})})]);
+    } else {
+      await navigator.clipboard.writeText(tsv);
+    }
+  } catch {
+    const ta = Object.assign(document.createElement("textarea"), {value: tsv});
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  if (button) { const t = button.textContent; button.textContent = doneText || "Copied ✓"; setTimeout(() => button.textContent = t, 1500); }
+  return grid.length - 1;
+}
+// Plain values for spreadsheets: numbers without thousands separators, percentages as "7.22%".
+function copyValue(r, c) {
+  const v = r[c.key];
+  if (c.kind === "period") return `${r.period_from} to ${r.period_thru}`;
+  if (v == null) return "";
+  if (c.kind === "pct") return (v * 100).toFixed(2) + "%";
+  if (c.kind === "money") return Number(v).toFixed(2);
+  return v;
+}
+$("copy-table").onclick = async () => {
+  const cols = orderedCols().filter(colShown);
+  const rows = shownRows;
+  if (!rows.length) return msg($("copy-msg"), "Nothing to copy — no rows are shown.", false);
+  const grid = [cols.map(c => c.label), ...rows.map(r => cols.map(c => copyValue(r, c)))];
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  grid.push(cols.map(c => c.key === "office" ? "Total" : c.kind === "text" || c.kind === "period" ? ""
+    : copyValue({[c.key]: c.ratio ? totalRatio(rows, c.ratio) : rows.some(r => r[c.key] != null) ? sum(c.key) : null}, c)));
+  await copyGrid(grid, "Log", $("copy-table"));
+  msg($("copy-msg"), `Copied ${rows.length} row${rows.length > 1 ? "s" : ""} + total × ${cols.length} columns. Paste into Excel or Google Sheets.`, true);
+  setTimeout(() => $("copy-msg").textContent = "", 5000);
+};
+// Sum of the parts ÷ sum of the base, over rows that have every input (not an average of percentages).
+function totalRatio(rows, {num, den}) {
+  const full = rows.filter(r => r[den] && num.every(k => r[k] != null));
+  const base = full.reduce((a, r) => a + r[den], 0);
+  return base ? full.reduce((a, r) => a + num.reduce((b, k) => b + r[k], 0), 0) / base : null;
+}
+function pickedRows() { return [...document.querySelectorAll(".log-pick:checked")].map(c => shownRows[c.value]); }
+function updateDeleteButton() {
+  const n = pickedRows().length;
+  $("delete-selected").disabled = !n;
+  $("delete-selected").textContent = n ? `Delete selected (${n})` : "Delete selected";
+}
+$("delete-selected").onclick = async () => {
+  const picked = pickedRows();
+  const names = picked.map(r => `• ${r.office} (${r.period_from} → ${r.period_thru})`);
+  const list = names.length > 10 ? [...names.slice(0, 10), `…and ${names.length - 10} more`] : names;
+  if (!confirm(`Delete ${picked.length} row(s) from the log? This removes both the Executive Summary numbers and the refunds for that month. Copies are kept in history.\n\n${list.join("\n")}`)) return;
+  try {
+    const keys = picked.map(r => ({office: r.office, period_from: r.period_from}));
+    await api("/api/delete", JSON.stringify({keys}), {"Content-Type": "application/json"});
+    loadLog();
+  } catch (e) { $("log-count").textContent = e.message; }
+};
+$("filter").oninput = renderLog;
+// Month navigator: the Log shows one month at a time ("YYYY-MM"), or "all".
+let logMonth = null;
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+                     "October", "November", "December"];
+const monthName = ym => ym === "all" ? "All months" : `${MONTH_NAMES[Number(ym.slice(5)) - 1]} ${ym.slice(0, 4)}`;
+const dataMonths = () => [...new Set(logRows.map(r => r.period_from.slice(0, 7)))].sort();
+let gridYear = null;
+function setMonth(ym) { logMonth = ym; closeMonthGrid(false); renderLog(); }
+function renderMonthNav() {
+  const months = dataMonths(), i = months.indexOf(logMonth);
+  $("m-current").textContent = monthName(logMonth || "all");
+  // In "All months", the arrows jump back to the latest / earliest month.
+  $("m-prev").disabled = logMonth === "all" ? !months.length : i <= 0;
+  $("m-next").disabled = logMonth === "all" ? !months.length : i < 0 || i >= months.length - 1;
+}
+$("m-prev").onclick = () => { const m = dataMonths(), i = m.indexOf(logMonth); setMonth(logMonth === "all" ? m[m.length - 1] : m[i - 1]); };
+$("m-next").onclick = () => { const m = dataMonths(), i = m.indexOf(logMonth); setMonth(logMonth === "all" ? m[0] : m[i + 1]); };
+function renderMonthGrid(focusSel) {
+  const months = dataMonths(), years = [...new Set(months.map(m => m.slice(0, 4)))];
+  if (!gridYear) gridYear = logMonth && logMonth !== "all" ? logMonth.slice(0, 4) : years[years.length - 1] || String(new Date().getFullYear());
+  const yi = years.indexOf(gridYear);
+  $("m-grid").innerHTML = `<div class="cal-head">
+      <button type="button" data-year="${years[yi - 1] || ""}" ${yi > 0 ? "" : "disabled"} aria-label="Previous year with data">‹</button>
+      <span>${gridYear}</span>
+      <button type="button" data-year="${years[yi + 1] || ""}" ${yi >= 0 && yi < years.length - 1 ? "" : "disabled"} aria-label="Next year with data">›</button>
+    </div>
+    <div class="mg">${MONTH_NAMES.map((name, k) => {
+      const ym = `${gridYear}-${String(k + 1).padStart(2, "0")}`, has = months.includes(ym);
+      return `<button type="button" data-month="${ym}" ${has ? "" : "disabled"} class="${ym === logMonth ? "sel" : ""}"
+        aria-label="${name} ${gridYear}${has ? "" : " (no data)"}" ${ym === logMonth ? 'aria-pressed="true"' : ""}>${name.slice(0, 3)}</button>`;
+    }).join("")}</div>
+    <button type="button" class="all ${logMonth === "all" ? "sel" : ""}" data-month="all">All months</button>`;
+  $("m-grid").querySelectorAll("[data-year]").forEach(b => b.onclick = () => { gridYear = b.dataset.year; renderMonthGrid(`[data-year="${b.dataset.year}"]`); });
+  $("m-grid").querySelectorAll("[data-month]:not(:disabled)").forEach(b => b.onclick = () => { setMonth(b.dataset.month); $("m-current").focus(); });
+  ($("m-grid").querySelector(focusSel || ".sel") || $("m-grid").querySelector("[data-month]:not(:disabled)"))?.focus();
+}
+function closeMonthGrid(focus) {
+  $("m-grid").hidden = true; $("m-current").setAttribute("aria-expanded", "false");
+  if (focus) $("m-current").focus();
+}
+$("m-current").onclick = () => {
+  if (!$("m-grid").hidden) return closeMonthGrid(false);
+  gridYear = null; $("m-grid").hidden = false; $("m-current").setAttribute("aria-expanded", "true"); renderMonthGrid();
+};
+document.addEventListener("mousedown", e => {
+  if (!$("m-grid").hidden && !e.target.closest("#m-grid, #m-current")) closeMonthGrid(false);
+});
+$("m-grid").onkeydown = e => { if (e.key === "Escape") closeMonthGrid(true); };
+$("clear-filters").onclick = () => { $("filter").value = ""; renderLog(); };
+
+// Google Sheets sync
+const when = iso => iso ? new Date(iso).toLocaleString(undefined, {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}) : "—";
+async function loadGoogle() {
+  let st;
+  try { st = await api("/api/google/status"); } catch (e) { return msg($("g-sync-msg"), e.message, false); }
+  $("g-key-state").innerHTML = st.key_present ? '<span class="ok-text">● connected</span>' : '<span class="err-text">● not set up yet</span>';
+  $("g-account").innerHTML = st.key_present
+    ? `<p style="margin:4px 0">Share each office sheet (as <strong>Viewer</strong>) with:<br>
+       <code id="g-email">${esc(st.service_account)}</code> <button class="btn" id="g-copy-email" style="padding:2px 10px;font-size:13px">Copy</button></p>`
+    : "";
+  $("g-steps").open = !st.key_present;
+  $("g-copy-email")?.addEventListener("click", e => copyGrid([[st.service_account]], "", e.currentTarget, "Copied ✓"));
+  $("g-sources").innerHTML = st.sources.length ? st.sources.map(s => `<tr>
+      <td>${esc(s.office || "—")}</td>
+      <td><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></td>
+      <td>${when(s.last_sync_at)}</td>
+      <td class="${(s.last_status || "").startsWith("error") ? "err-text" : ""}" style="white-space:normal;max-width:420px">${esc(s.last_status || "not synced yet")}</td>
+      <td><button class="btn danger" data-remove="${s.id}" style="padding:2px 10px;font-size:13px"
+        title="Stop syncing this sheet and undo the numbers it brought in">Remove</button></td></tr>`).join("")
+    : `<tr><td colspan="5" class="hint">No sheets added yet.</td></tr>`;
+  document.querySelectorAll("[data-remove]").forEach(b => b.onclick = async () => {
+    const row = st.sources.find(s => s.id == b.dataset.remove);
+    if (!confirm(`Remove “${row.title}” (${row.office || "office"})?\n\n`
+      + `This stops syncing it and undoes the numbers it brought into the log: each goes back to its value from before `
+      + `this sheet was added (e.g. your last upload), or is removed if it didn't exist before. `
+      + `Numbers from other uploads or sheets aren't touched. Every change is listed in the Changes tab.\n\n`
+      + `The Google Sheet itself isn't changed.`)) return;
+    try {
+      const r = await api("/api/google/sources/delete", JSON.stringify({id: row.id}), {"Content-Type": "application/json"});
+      msg($("g-add-msg"), `Removed “${r.title}”. ${r.restored} number(s) restored to their earlier values, ${r.removed} removed`
+        + ` (${r.changed} actually changed — see the Changes tab).`, true);
+    } catch (e) { msg($("g-add-msg"), e.message, false); }
+    loadGoogle();
+  });
+  $("g-sync-info").textContent = `Checks every office sheet (latest and previous month tabs) every ${st.every_minutes} minutes while the app runs.`
+    + (st.last_run ? ` Last sync: ${when(st.last_run)}.` : "") + (st.next_run && st.key_present && st.sources.length ? ` Next: ${when(st.next_run)}.` : "");
+  $("g-sync").disabled = !st.key_present || !st.sources.length || st.running;
+}
+$("g-key-file").onchange = async () => {
+  const f = $("g-key-file").files[0]; if (!f) return;
+  try {
+    const r = await api("/api/google/key", f, {"Content-Type": "application/json"});
+    msg($("g-key-msg"), `Key added for ${r.service_account}. Now share each office sheet with that email.`, true);
+    loadGoogle();
+  } catch (e) { msg($("g-key-msg"), e.message, false); }
+  $("g-key-file").value = "";
+};
+$("g-add").onclick = async () => {
+  const url = $("g-url").value.trim();
+  if (!url) return msg($("g-add-msg"), "Paste a Google Sheet link first.", false);
+  msg($("g-add-msg"), "Checking the sheet…", true);
+  try {
+    const r = await api("/api/google/sources", JSON.stringify({url}), {"Content-Type": "application/json"});
+    msg($("g-add-msg"), `Added “${r.title}” for ${r.office} (latest tab: ${r.latest_tab}). Click Sync now to read it.`, true);
+    $("g-url").value = ""; loadGoogle();
+  } catch (e) { msg($("g-add-msg"), e.message, false); }
+};
+$("g-sync").onclick = async () => {
+  $("g-sync").disabled = true; msg($("g-sync-msg"), "Syncing…", true);
+  try {
+    const r = await api("/api/google/sync", "{}", {"Content-Type": "application/json"});
+    if (r.error) throw new Error(r.error);
+    const total = r.results.reduce((a, x) => a + x.changes, 0), failed = r.results.filter(x => x.error);
+    msg($("g-sync-msg"), `Synced ${r.results.length} sheet(s): ${total} number(s) changed.`
+      + (failed.length ? ` Problems: ${failed.map(x => `${x.office || x.title}: ${x.error}`).join("; ")}` : "")
+      + (total ? " See the Changes tab." : ""), !failed.length);
+  } catch (e) { msg($("g-sync-msg"), e.message, false); }
+  loadGoogle();
+};
+
+// Changes
+let changeRows = [];
+// Data check entries (marked OK, email drafted) and office email changes carry a note instead of numbers.
+const isNote = k => k.startsWith("check: ") || k === "office emails";
+const checkLabel = k => k.startsWith("check: rate:") ? `Data check: ${labelOf(k.slice(12))} over 100%`
+  : k.startsWith("check: row:") ? `Data check: row ${k.slice(11).split(":").join(" · ")}` : k;
+const labelOf = k => k.startsWith("check: ") ? checkLabel(k) : LOG_COLS.find(c => c.key === k)?.label || k;
+const kindOf = k => LOG_COLS.find(c => c.key === k)?.kind;
+async function loadChanges() {
+  try { changeRows = await api("/api/changes"); renderChanges(); }
+  catch (e) { $("ch-count").textContent = e.message; }
+}
+function shownChanges() {
+  const f = $("ch-filter").value.toLowerCase();
+  return changeRows.filter(c => !f || [c.office, labelOf(c.metric), c.via, c.period_from].join(" ").toLowerCase().includes(f));
+}
+function renderChanges() {
+  const rows = shownChanges();
+  const val = (v, k) => v == null ? (isNote(k) ? "" : '<span class="none">new</span>') : kindOf(k) === "money" ? money(v) : Number.isInteger(v) ? v : v;
+  $("ch-body").innerHTML = rows.map(c => `<tr>
+    <td>${when(c.changed_at)}</td><td>${esc(c.office)}</td><td>${(c.period_from || "").slice(0, 7)}</td><td>${esc(labelOf(c.metric))}</td>
+    <td class="num">${val(c.old_value, c.metric)}</td>
+    <td class="num ${c.old_value == null ? "" : c.new_value > c.old_value ? "up" : "down"}">${val(c.new_value, c.metric)}</td>
+    <td>${esc(c.via || "")}</td><td class="hint src" title="${esc(c.source || "")}">${esc(c.source || "")}</td></tr>`).join("");
+  $("ch-count").textContent = changeRows.length ? `${rows.length} of ${changeRows.length} changes` : "No changes recorded yet.";
+}
+$("ch-filter").oninput = renderChanges;
+$("ch-copy").onclick = e => copyGrid([["When", "Office", "Month", "Number", "Was", "Now", "How", "Source"],
+  ...shownChanges().map(c => [c.changed_at.replace("T", " "), c.office, (c.period_from || "").slice(0, 7), labelOf(c.metric),
+                              c.old_value ?? "", c.new_value ?? "", c.via || "", c.source || ""])], "Changes", e.currentTarget);
+
+// SQL
+const EXAMPLES = {
+  "Log with refunds": `SELECT office, period_thru, total_collection, insurance_collection,
+       new_patients, total_production, refunds, refunds_as_of, np_collection, np_collection_as_of,
+       ortho_collection, ortho_collection_as_of, ortho_referrals, medi_cal_patients, hmo_patients, no_ssn_itin_patients, financing_applicants, existing_finance_patients, prime_applicants, prime_approved, prime_apps_ran, prime_apps_approved, prime_approved_amount, prime_collected_amount, prime_funded, prime_approved_funded, subprime_applicants, subprime_approved, subprime_apps_ran, subprime_apps_approved, subprime_approved_amount, subprime_collected_amount, subprime_funded,
+       net_collections, refund_rate, existing_pt_collection, irrelevant_rate, ortho_rate, financing_rate, prime_approval_rate, prime_funded_rate, subprime_approval_rate, subprime_collected_rate,
+       prime_collected_rate, avg_prime_per_approved_np, avg_prime_per_approved_app, avg_prime_per_app_ran,
+       avg_prime_per_applicant
+FROM monthly_log
+ORDER BY period_thru DESC, office;`,
+  "Change history": `SELECT action, action_at, office, period_from, period_thru,
+       total_collection, insurance_collection, new_patients, total_production, source_file
+FROM office_history
+ORDER BY action_at DESC;`,
+  "Latest period": `SELECT office, total_collection, insurance_collection, new_patients, total_production
+FROM office_summary
+WHERE period_thru = (SELECT MAX(period_thru) FROM office_summary)
+ORDER BY total_production DESC;`,
+  "Group totals by period": `SELECT period_from, period_thru,
+       COUNT(*) AS offices,
+       ROUND(SUM(total_collection), 2) AS total_collection,
+       ROUND(SUM(insurance_collection), 2) AS insurance_collection,
+       SUM(new_patients) AS new_patients,
+       ROUND(SUM(total_production), 2) AS total_production
+FROM office_summary
+GROUP BY period_from, period_thru
+ORDER BY period_thru DESC;`,
+  "Monthly trend per office": `SELECT office, substr(period_thru, 1, 7) AS month,
+       total_collection, insurance_collection, new_patients, total_production
+FROM office_summary
+ORDER BY office, month;`,
+  "Year to date by office": `SELECT office,
+       ROUND(SUM(total_collection), 2) AS total_collection,
+       ROUND(SUM(insurance_collection), 2) AS insurance_collection,
+       SUM(new_patients) AS new_patients,
+       ROUND(SUM(total_production), 2) AS total_production
+FROM office_summary
+WHERE period_thru >= strftime('%Y-01-01', 'now')
+GROUP BY office
+ORDER BY total_production DESC;`,
+};
+$("examples").innerHTML = Object.keys(EXAMPLES).map(k => `<button class="btn">${k}</button>`).join("");
+$("examples").querySelectorAll("button").forEach(b => b.onclick = () => { $("query").value = EXAMPLES[b.textContent]; runSql(); });
+
+let lastResult = null;
+async function runSql() {
+  $("sql-csv").disabled = true;
+  try {
+    const r = await api("/api/sql", JSON.stringify({query: $("query").value}), {"Content-Type": "application/json"});
+    lastResult = r;
+    $("sql-head").innerHTML = `<tr>${r.columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr>`;
+    $("sql-body").innerHTML = r.rows.map(row => `<tr>${row.map(v =>
+      `<td class="${typeof v === "number" ? "num" : ""}">${v === null ? "" : typeof v === "number" && !Number.isInteger(v) ? money(v) : esc(v)}</td>`).join("")}</tr>`).join("");
+    msg($("sql-msg"), `${r.rows.length} row(s)${r.truncated ? " (showing first 5,000)" : ""}`, true);
+    $("sql-csv").disabled = !r.columns.length;
+  } catch (e) {
+    msg($("sql-msg"), e.message, false); $("sql-head").innerHTML = $("sql-body").innerHTML = "";
+  }
+}
+$("run").onclick = runSql;
+$("query").onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") runSql(); };
+$("sql-csv").onclick = () => {
+  const q = v => v === null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const text = [lastResult.columns, ...lastResult.rows].map(r => r.map(q).join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([text], {type: "text/csv"})), download: "query_results.csv"});
+  a.click(); URL.revokeObjectURL(a.href);
+};
+</script>
+</body>
+</html>
