@@ -244,7 +244,18 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   A full load from Jan 2026 takes ~3–6 minutes. Tabs for months that haven't started are skipped.
 - Tab names: `APR'26` style years are read; a tab with **no year** ("October 🎃", "Feburary 💟") is taken as the
   latest such month up to today unless a tab with a year already covers it (Cerritos' old 2023 "SEPTEMBER" etc.).
-- Tab order in the UI: Log (opens first), Changes, Upload, Google Sheets, SQL.
+- Tab order in the UI: Log (opens first), Charts, Changes, Upload, Google Sheets, SQL.
+- **Charts tab** (index.html `renderTrend`): "Trend over months" for any number column, plain SVG (no library).
+  Company total (rates from summed parts via `totalRatio`, sums otherwise, tooltip notes "n of 15 offices") + up
+  to 3 offices; fixed series colors `--tr-s1..4` (first 4 slots of a CVD-checked palette, separate dark steps);
+  benchmark bands behind the lines; crosshair readout (hover or ←/→ keys); legend; "Show as a table". Selection is
+  remembered per browser (`trendSel`). Shared filters on top: Number + Month.
+  - **Office ranking** (`renderRanking`): horizontal bars for the chosen month, best first by the benchmark's
+    direction, status fills with ● ▲ ▼ + value at the tip, cut-off lines, company line only for rates/averages
+    (sums go in the note), offices without a number listed.
+  - **Heatmap** (`renderHeatmap`): HTML table, offices (Log's Office order) × months + Company total row; benchmark
+    washes with marks, or a 5-step blue scale when there's no benchmark; click a cell to rank that month.
+  - Suggested, not built: financing funnel, refunds by month.
 
 ## 11. Known office/data quirks
 

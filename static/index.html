@@ -186,6 +186,61 @@
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .link-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
   .bm-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+  /* Charts: trend over months. Series colors are the first four slots of a CVD-checked categorical
+     palette, in fixed order (total, office 1, 2, 3); dark mode has its own steps. */
+  #charts { --tr-s1: #2a78d6; --tr-s2: #eb6834; --tr-s3: #1baf7a; --tr-s4: #eda100;
+            --tr-grid: #e1e0d9; --tr-axis: #c3c2b7; --tr-muted: #6f6d68; }
+  @media (prefers-color-scheme: dark) {
+    #charts { --tr-s1: #3987e5; --tr-s2: #d95926; --tr-s3: #199e70; --tr-s4: #c98500;
+              --tr-grid: #2c2c2a; --tr-axis: #383835; --tr-muted: #a3a29b; }
+  }
+  .tr-controls { gap: 10px 16px; margin-bottom: 14px; }
+  .tr-controls select { max-width: 260px; }
+  .tr-check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; align-self: flex-end; padding-bottom: 8px; }
+  .tr-title { font-size: 17px; margin: 0; }
+  .tr-sub { margin: 2px 0 8px; }
+  .tr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text); margin-bottom: 6px; min-height: 18px; }
+  .tr-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .tr-legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
+  .tr-wrap { position: relative; }
+  .tr-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tr-wrap svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .tr-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.12); min-width: 150px; z-index: 5; }
+  .tr-tip .tr-tip-head { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .tr-tip .tr-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .tr-tip .tr-row i { display: inline-block; width: 12px; height: 2px; border-radius: 1px; flex: none; }
+  .tr-tip .tr-row b { font-variant-numeric: tabular-nums; }
+  .tr-tip .tr-row span { color: var(--muted); }
+  .tr-table { margin-top: 6px; }
+  .tr-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  #charts > .tr-controls { margin: 0 0 12px; }
+  #charts > .card + .card { margin-top: 16px; }
+  .tr-series { gap: 8px 16px; margin: 6px 0 10px; }
+  /* Status fills for bars (good / warning / critical); always shown with ● ▲ ▼ and a word. */
+  #charts { --st-good: #0ca30c; --st-warn: #fab219; --st-crit: #d03b3b; }
+  .hm-wrap table { border-collapse: separate; border-spacing: 2px; width: auto; }
+  .hm-wrap th, .hm-wrap td { padding: 0; }
+  .hm-wrap thead th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; padding: 2px 4px 4px;
+                      text-transform: none; letter-spacing: 0; white-space: nowrap; }
+  .hm-wrap thead th.sel { color: var(--text); font-weight: 700; }
+  .hm-wrap tbody th { position: sticky; left: 0; background: var(--surface); text-align: left; font-weight: 400;
+                      font-size: 13px; padding-right: 10px; white-space: nowrap; z-index: 1;
+                      text-transform: none; letter-spacing: 0; color: var(--text); }
+  .hm-cell { min-width: 62px; height: 30px; border-radius: 4px; text-align: center; font-size: 12px;
+             font-variant-numeric: tabular-nums; cursor: default; outline-offset: -2px; }
+  .hm-cell:hover, .hm-cell:focus { outline: 2px solid var(--text); }
+  .hm-cell.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+  .hm-empty { color: var(--muted); background: var(--bg); }
+  .hm-tip { position: fixed; }
+  .bm-green-key { background: var(--bm-green); } .bm-yellow-key { background: var(--bm-yellow); } .bm-red-key { background: var(--bm-red); }
+  .hm-s1 { background: #cde2fb; color: #0b0b0b; } .hm-s2 { background: #9ec5f4; color: #0b0b0b; }
+  .hm-s3 { background: #6da7ec; color: #0b0b0b; } .hm-s4 { background: #2a78d6; color: #fff; } .hm-s5 { background: #184f95; color: #fff; }
+  @media (prefers-color-scheme: dark) {
+    .hm-s1 { background: #104281; color: #fff; } .hm-s2 { background: #1c5cab; color: #fff; }
+    .hm-s3 { background: #2a78d6; color: #fff; } .hm-s4 { background: #6da7ec; color: #0b0b0b; } .hm-s5 { background: #b7d3f6; color: #0b0b0b; }
+  }
+  .hm-key { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
   /* Help: the ? button and the step-by-step guide. */
   .help-btn { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 44px; height: 44px; border-radius: 50%;
               border: 0; background: var(--accent); color: var(--accent-text); font: 700 22px/1 system-ui, sans-serif;
@@ -277,6 +332,7 @@
   <p class="sub">Executive Summary: total collection · insurance collection · new patients (first visit − existing-patient referrals) · total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: # of ortho referrals. New Patient Analysis: # Medi-Cal, HMO, no SSN/ITIN, financing applicants, existing finance accounts, prime applicants and approvals. From your sheet: refunds.</p>
   <nav>
     <button data-tab="log" class="active">Log</button>
+    <button data-tab="charts">Charts</button>
     <button data-tab="changes">Changes</button>
     <button data-tab="upload">Upload</button>
     <button data-tab="google">Google Sheets</button>
@@ -488,6 +544,44 @@
   </section>
 
   <!-- Changes -->
+  <!-- Charts -->
+  <section id="charts">
+    <div class="row tr-controls" role="group" aria-label="Chart filters (apply to every chart below)">
+      <label>Number <select id="tr-metric"></select></label>
+      <label>Month <select id="tr-month"></select></label>
+    </div>
+
+    <div class="card">
+      <h2 class="tr-title" id="rk-title"></h2>
+      <p class="hint tr-sub" id="rk-sub"></p>
+      <div class="tr-wrap" id="rk-wrap"><div class="tr-tip" id="rk-tip" hidden></div></div>
+      <p class="hint" id="rk-note"></p>
+    </div>
+
+    <div class="card">
+      <h2 class="tr-title" id="tr-title"></h2>
+      <p class="hint tr-sub" id="tr-sub"></p>
+      <div class="row tr-series" role="group" aria-label="Lines to show">
+        <label class="tr-check"><input type="checkbox" id="tr-total" checked> Company total</label>
+        <label>Compare <select class="tr-office" aria-label="Office 1 to compare"></select></label>
+        <label><select class="tr-office" aria-label="Office 2 to compare"></select></label>
+        <label><select class="tr-office" aria-label="Office 3 to compare"></select></label>
+      </div>
+      <div class="tr-legend" id="tr-legend"></div>
+      <div class="tr-wrap" id="tr-wrap"><div class="tr-tip" id="tr-tip" hidden></div></div>
+      <p class="hint" id="tr-bench"></p>
+      <details class="tr-table"><summary>Show as a table</summary><div class="table-wrap" id="tr-table"></div></details>
+    </div>
+
+    <div class="card">
+      <h2 class="tr-title" id="hm-title"></h2>
+      <p class="hint tr-sub" id="hm-sub"></p>
+      <div class="tr-legend" id="hm-legend"></div>
+      <div class="table-wrap hm-wrap" id="hm-wrap"></div>
+      <div class="tr-tip hm-tip" id="hm-tip" hidden></div>
+    </div>
+  </section>
+
   <section id="changes">
     <div class="card">
       <div class="row" style="margin-bottom:12px">
@@ -616,6 +710,9 @@ ORDER BY period_thru DESC, office;</textarea>
           calculated from the totals, not averaged).</li>
         <li>Hover or click a dotted number to see the sheet rows behind it. <em>“as of 09/28”</em> is the date that number was last updated.</li>
         <li><strong>Copy</strong> puts the rows and columns shown on your clipboard for Excel or Google Sheets.</li>
+        <li>The <strong>Charts</strong> tab, for the <em>Number</em> and <em>Month</em> you pick: an <strong>office ranking</strong> (best
+          first, benchmark colors), the <strong>trend over months</strong> (company total plus up to three offices), and a
+          <strong>heatmap</strong> of every office by month (click a cell to rank that month). Hover any bar, point or cell for the exact number.</li>
         <li>The <strong>Changes</strong> tab lists every number that was added or changed, when, and from which report.</li>
       </ul>
     </div>
@@ -665,6 +762,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button, section").forEach(e => e.classList.remove("active"));
   b.classList.add("active"); $(b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "log") loadLog();
+  if (b.dataset.tab === "charts") loadCharts();
   if (b.dataset.tab === "google") loadGoogle();
   if (b.dataset.tab === "changes") loadChanges();
 });
@@ -2071,6 +2169,344 @@ $("sql-csv").onclick = () => {
     href: URL.createObjectURL(new Blob([text], {type: "text/csv"})), download: "query_results.csv"});
   a.click(); URL.revokeObjectURL(a.href);
 };
+
+// Charts: one number over the months, as the company total and up to three offices to compare.
+// Drawn as plain SVG. Company totals of rates are calculated from the summed parts, as in the Log's Total row.
+const TR_COLORS = ["var(--tr-s1)", "var(--tr-s2)", "var(--tr-s3)", "var(--tr-s4)"];
+let trSel = {metric: "start_tx_rate", total: true, offices: ["", "", ""]};
+try { Object.assign(trSel, JSON.parse(localStorage.getItem("trendSel")) || {}); } catch {}
+const saveTrSel = () => { try { localStorage.setItem("trendSel", JSON.stringify(trSel)); } catch {} };
+async function loadCharts() {
+  if (!logRows.length) await loadLog();
+  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind));
+  if (!numeric.some(c => c.key === trSel.metric)) trSel.metric = "start_tx_rate";
+  $("tr-metric").innerHTML = SECTIONS.map(sec => `<optgroup label="${esc(sec.label)}">${sec.keys.filter(k => numeric.some(c => c.key === k))
+    .map(k => `<option value="${k}">${esc(labelOf(k))}</option>`).join("")}</optgroup>`).join("")
+    + `<optgroup label="Other">${numeric.filter(c => !sectionOf[c.key]).map(c => `<option value="${c.key}">${esc(c.label)}</option>`).join("")}</optgroup>`;
+  $("tr-metric").value = trSel.metric;
+  const offices = [...new Set(logRows.map(r => r.office))].sort();
+  document.querySelectorAll(".tr-office").forEach((sel, i) => {
+    sel.innerHTML = `<option value="">${i === 0 ? "— office —" : "— none —"}</option>` + offices.map(o => `<option>${esc(o)}</option>`).join("");
+    sel.value = offices.includes(trSel.offices[i]) ? trSel.offices[i] : "";
+    sel.onchange = () => { trSel.offices[i] = sel.value; saveTrSel(); renderTrend(); };
+  });
+  $("tr-total").checked = trSel.total;
+  const months = dataMonths();
+  if (!months.includes(trSel.month)) trSel.month = months[months.length - 1] || "";
+  $("tr-month").innerHTML = months.slice().reverse().map(ym => `<option value="${ym}">${monthName(ym)}</option>`).join("");
+  $("tr-month").value = trSel.month;
+  renderCharts();
+}
+function renderCharts() { renderRanking(); renderTrend(); renderHeatmap(); }
+$("tr-metric").onchange = () => { trSel.metric = $("tr-metric").value; saveTrSel(); renderCharts(); };
+$("tr-month").onchange = () => { trSel.month = $("tr-month").value; saveTrSel(); renderRanking(); renderHeatmap(); };
+$("tr-total").onchange = () => { trSel.total = $("tr-total").checked; saveTrSel(); renderTrend(); };
+// Axis numbers: short and round ($120k, 25%, 1,200).
+function trTick(v, kind) {
+  if (kind === "pct") return `${+(v * 100).toFixed(Math.abs(v) < 0.1 && v ? 1 : 0)}%`;
+  if (kind === "money") {
+    const a = Math.abs(v), sign = v < 0 ? "-" : "";
+    return a >= 1e6 ? `${sign}$${+(a / 1e6).toFixed(1)}M` : a >= 1e3 ? `${sign}$${+(a / 1e3).toFixed(0)}k` : `${sign}$${+a.toFixed(0)}`;
+  }
+  return Number(v).toLocaleString();
+}
+function niceTicks(lo, hi, count = 5) {
+  if (lo === hi) { hi = lo + (lo ? Math.abs(lo) : 1); }
+  const raw = (hi - lo) / count, pow = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(f => f * pow).find(st => raw <= st);
+  const start = Math.floor(lo / step) * step, ticks = [];
+  for (let t = start; t <= hi + step * 1e-9; t += step) ticks.push(+t.toFixed(10));
+  if (ticks[ticks.length - 1] < hi) ticks.push(+(ticks[ticks.length - 1] + step).toFixed(10));
+  return ticks;
+}
+function trendSeries(col, months) {
+  const k = col.key, out = [];
+  if (trSel.total) {
+    out.push({name: "Company total", values: months.map(ym => {
+      const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym && r[k] != null);
+      if (!rows.length) return {v: null, n: 0};
+      const v = col.ratio ? totalRatio(logRows.filter(r => r.period_from.slice(0, 7) === ym), col.ratio)
+                          : rows.reduce((a, r) => a + r[k], 0);
+      return {v, n: rows.length};
+    })});
+  }
+  trSel.offices.filter(Boolean).forEach(o => out.push({name: o, values: months.map(ym => {
+    const r = logRows.find(x => x.office === o && x.period_from.slice(0, 7) === ym);
+    return {v: r?.[k] ?? null};
+  })}));
+  return out.map((s, i) => ({...s, color: TR_COLORS[i]}));
+}
+function renderTrend() {
+  const col = colOf(trSel.metric); if (!col) return;
+  const months = dataMonths(), series = trendSeries(col, months);
+  const offCount = new Set(logRows.map(r => r.office)).size;
+  $("tr-title").textContent = `${col.label} by month`;
+  $("tr-sub").textContent = (col.title ? col.title + ". " : "") + (trSel.total ? (col.ratio
+    ? "Company total is calculated from the offices' combined numbers, not an average of their rates."
+    : "Company total adds up the offices that have this number for the month.") : "");
+  const legend = $("tr-legend"); legend.textContent = "";
+  if (series.length > 1) series.forEach(s => {
+    const item = document.createElement("span"), key = document.createElement("i");
+    key.style.background = s.color; item.append(key, document.createTextNode(s.name)); legend.append(item);
+  });
+  const wrap = $("tr-wrap"), tip = $("tr-tip");
+  wrap.querySelector("svg")?.remove();
+  const all = series.flatMap(s => s.values.map(p => p.v)).filter(v => v != null);
+  if (!series.length || !all.length) {
+    wrap.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 600 60" role="img"><text x="0" y="30" fill="var(--muted)" font-size="14">${
+      series.length ? "No data for this number yet." : "Turn on Company total or pick an office to compare."}</text></svg>`);
+    $("tr-table").innerHTML = ""; $("tr-bench").textContent = ""; return;
+  }
+  // Scale: include zero for amounts and counts; include the benchmark cut-offs so the bands show.
+  const b = benchFor(col.key);
+  let lo = Math.min(...all, ...(b ? [b.green, b.yellow] : [])), hi = Math.max(...all, ...(b ? [b.green, b.yellow] : []));
+  if (lo > 0) lo = 0;
+  const ticks = niceTicks(lo, hi), y0 = ticks[0], y1 = ticks[ticks.length - 1];
+  const W = Math.max(320, wrap.clientWidth || 800), H = W < 560 ? 260 : 320, m = {l: 58, r: 20, t: 10, b: 30};
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const x = i => m.l + (months.length === 1 ? pw / 2 : (i * pw) / (months.length - 1));
+  const y = v => m.t + ph - ((v - y0) / (y1 - y0)) * ph;
+  const ns = "http://www.w3.org/2000/svg", el = (tag, attrs, parent) => {
+    const e = document.createElementNS(ns, tag); for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, v); parent?.append(e); return e;
+  };
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", tabindex: "0",
+    "aria-label": `${col.label} by month, ${months.length} months. Use the left and right arrow keys to read each month; the table below has every value.`});
+  // Benchmark bands behind everything (washes; the rule is also written out under the chart).
+  if (b) {
+    const hiGood = b.direction === "higher";
+    const bands = hiGood ? [[b.green, y1, "--bm-green"], [b.yellow, b.green, "--bm-yellow"], [y0, b.yellow, "--bm-red"]]
+                         : [[y0, b.green, "--bm-green"], [b.green, b.yellow, "--bm-yellow"], [b.yellow, y1, "--bm-red"]];
+    bands.forEach(([a, z, c]) => {
+      const top = y(Math.min(Math.max(a, z), y1)), bot = y(Math.max(Math.min(a, z), y0));
+      if (bot > top) el("rect", {x: m.l, y: top, width: pw, height: bot - top, fill: `var(${c})`, opacity: 0.55}, svg);
+    });
+    $("tr-bench").textContent = `Background: ${benchText(col.key)}.`;
+  } else $("tr-bench").textContent = "";
+  // Gridlines and y labels.
+  ticks.forEach(t => {
+    el("line", {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--tr-axis)" : "var(--tr-grid)", "stroke-width": 1}, svg);
+    const lab = el("text", {x: m.l - 8, y: y(t) + 4, "text-anchor": "end", "font-size": 12, fill: "var(--tr-muted)",
+      style: "font-variant-numeric: tabular-nums"}, svg);
+    lab.textContent = trTick(t, col.kind);
+  });
+  // Month labels: short names; the year where it starts or changes.
+  const every = Math.ceil(months.length / Math.max(1, Math.floor(pw / 56)));
+  months.forEach((ym, i) => {
+    if (i % every) return;
+    const edge = months.length > 1 && i === months.length - 1 ? "end" : months.length > 1 && i === 0 ? "start" : "middle";
+    const t = el("text", {x: x(i), y: H - 8, "text-anchor": edge, "font-size": 12, fill: "var(--tr-muted)"}, svg);
+    const yr = i === 0 || ym.slice(0, 4) !== months[i - every]?.slice(0, 4);
+    t.textContent = MONTH_NAMES[+ym.slice(5) - 1].slice(0, 3) + (yr ? ` ${ym.slice(2, 4)}` : "");
+  });
+  // Lines (a gap where a month has no number), with an end dot.
+  series.forEach(s => {
+    let d = "", pen = false;
+    s.values.forEach((p, i) => {
+      if (p.v == null) { pen = false; return; }
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`; pen = true;
+    });
+    el("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}, svg);
+    s.values.forEach((p, i) => {   // a lone month (no neighbours) still needs a visible dot
+      const alone = p.v != null && s.values[i - 1]?.v == null && s.values[i + 1]?.v == null;
+      const last = p.v != null && s.values.slice(i + 1).every(q => q.v == null);
+      if (alone || last) el("circle", {cx: x(i), cy: y(p.v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2}, svg);
+    });
+  });
+  // Hover / keyboard: a crosshair snaps to the nearest month; one readout lists every series.
+  const hair = el("line", {y1: m.t, y2: m.t + ph, stroke: "var(--tr-muted)", "stroke-width": 1, visibility: "hidden"}, svg);
+  const dots = series.map(s => el("circle", {r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden"}, svg));
+  const hit = el("rect", {x: m.l - 12, y: m.t, width: pw + 24, height: ph, fill: "transparent"}, svg);
+  let at = -1;
+  const show = i => {
+    at = i; const xi = x(i);
+    hair.setAttribute("x1", xi); hair.setAttribute("x2", xi); hair.setAttribute("visibility", "visible");
+    series.forEach((s, j) => {
+      const v = s.values[i].v;
+      dots[j].setAttribute("visibility", v == null ? "hidden" : "visible");
+      if (v != null) { dots[j].setAttribute("cx", xi); dots[j].setAttribute("cy", y(v)); }
+    });
+    tip.textContent = "";
+    const head = document.createElement("div"); head.className = "tr-tip-head"; head.textContent = monthName(months[i]); tip.append(head);
+    series.forEach(s => {
+      const p = s.values[i], row = document.createElement("div"), key = document.createElement("i"),
+            val = document.createElement("b"), name = document.createElement("span");
+      row.className = "tr-row"; key.style.background = s.color;
+      val.textContent = p.v == null ? "—" : fmtVal(p.v, col.kind);
+      name.textContent = s.name + (p.n != null && p.v != null && p.n < offCount ? ` (${p.n} of ${offCount} offices)` : "");
+      row.append(key, val, name); tip.append(row);
+    });
+    tip.hidden = false;
+    const scale = wrap.clientWidth / W, left = xi * scale;
+    tip.style.left = `${Math.min(Math.max(0, left + 14), wrap.clientWidth - tip.offsetWidth)}px`;
+    if (left + 14 + tip.offsetWidth > wrap.clientWidth) tip.style.left = `${Math.max(0, left - tip.offsetWidth - 14)}px`;
+  };
+  const hide = () => { at = -1; hair.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.hidden = true; };
+  hit.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+    let best = 0; months.forEach((_, i) => { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
+    show(best);
+  });
+  hit.addEventListener("pointerleave", hide);
+  svg.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      show(Math.max(0, Math.min(months.length - 1, (at < 0 ? months.length - 1 : at + (e.key === "ArrowRight" ? 1 : -1)))));
+    } else if (e.key === "Escape") hide();
+  });
+  svg.addEventListener("blur", hide);
+  wrap.prepend(svg);
+  // Table view: every value without hovering.
+  $("tr-table").innerHTML = `<table><thead><tr><th>Month</th>${series.map(s => `<th class="num">${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${
+    months.map((ym, i) => `<tr><td>${monthName(ym)}</td>${series.map(s => `<td class="num">${s.values[i].v == null ? "—" : fmtVal(s.values[i].v, col.kind)}</td>`).join("")}</tr>`).join("")
+  }</tbody></table>`;
+}
+let trResize;
+window.addEventListener("resize", () => { clearTimeout(trResize); trResize = setTimeout(() => {
+  if ($("charts").classList.contains("active")) { renderRanking(); renderTrend(); } }, 150); });
+
+// A number short enough for a heatmap cell or an axis.
+const shortVal = (v, kind) => kind === "pct" ? `${+(v * 100).toFixed(Math.abs(v) < 0.1 ? 1 : 0)}%` : trTick(v, kind);
+// Company total for a month: rates from the offices' combined parts, amounts and counts added up.
+function companyValue(col, ym) {
+  const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym), have = rows.filter(r => r[col.key] != null);
+  if (!have.length) return null;
+  return col.ratio ? totalRatio(rows, col.ratio) : have.reduce((a, r) => a + r[col.key], 0);
+}
+const ST_FILL = {green: "var(--st-good)", yellow: "var(--st-warn)", red: "var(--st-crit)"};
+function showTip(tip, lines) {   // lines: [[strong value, label], ...]; first entry may be a heading string
+  tip.textContent = "";
+  lines.forEach(l => {
+    if (typeof l === "string") { const h = document.createElement("div"); h.className = "tr-tip-head"; h.textContent = l; tip.append(h); return; }
+    const row = document.createElement("div"), b = document.createElement("b"), sp = document.createElement("span");
+    row.className = "tr-row"; b.textContent = l[0]; sp.textContent = l[1]; row.append(b, sp); tip.append(row);
+  });
+  tip.hidden = false;
+}
+
+// Office ranking: one month, offices sorted best first (by the benchmark's direction, else highest first).
+function renderRanking() {
+  const col = colOf(trSel.metric), ym = trSel.month; if (!col || !ym) return;
+  const k = col.key, b = benchFor(k), lowGood = b?.direction === "lower";
+  const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym && r[k] != null)
+    .sort((a, z) => (lowGood ? a[k] - z[k] : z[k] - a[k]) || collator.compare(a.office, z.office));
+  const missing = allOffices().filter(o => !rows.some(r => r.office === o));
+  // The company line only makes sense next to one office for rates and averages; a sum goes in the note.
+  const company = companyValue(col, ym), total = col.ratio ? company : null;
+  $("rk-title").textContent = `Office ranking · ${col.label} · ${monthName(ym)}`;
+  $("rk-sub").textContent = b ? `Best first (${lowGood ? "lower" : "higher"} is better). Colors follow the benchmark; the lines mark its cut-offs.`
+                              : "Highest first. This number has no benchmark, so all bars are one color.";
+  $("rk-note").textContent = (company != null && !col.ratio ? `Company total: ${fmtVal(company, col.kind)}. ` : "")
+    + (missing.length ? `No number for ${monthName(ym)} yet: ${missing.join(", ")}.` : "");
+  const wrap = $("rk-wrap"), tip = $("rk-tip");
+  wrap.querySelector("svg")?.remove(); tip.hidden = true;
+  if (!rows.length) {
+    wrap.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 600 40" role="img"><text x="0" y="24" fill="var(--muted)" font-size="14">No offices have this number for ${monthName(ym)}.</text></svg>`);
+    return;
+  }
+  const W = Math.max(320, wrap.clientWidth || 800), narrow = W < 560;
+  const labelW = narrow ? 0 : Math.min(220, W * 0.3), valueW = 92, band = narrow ? 44 : 30, top = 22, bottom = 20;
+  const H = top + rows.length * band + bottom;
+  const vals = rows.map(r => r[k]).concat(b ? [b.green, b.yellow] : [], total != null ? [total] : []);
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals) || 1;
+  const x0 = labelW + 4, x1 = W - valueW, x = v => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
+  const ns = "http://www.w3.org/2000/svg", el = (tag, attrs, parent) => {
+    const e = document.createElementNS(ns, tag); for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, v); parent?.append(e); return e;
+  };
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `${col.label}, ${monthName(ym)}: ${rows.length} offices ranked. Tab to each bar to read it.`});
+  // Reference lines: benchmark cut-offs (labelled at the top) and the company total (labelled at the bottom).
+  const vline = (v, label, y, anchor) => {
+    el("line", {x1: x(v), x2: x(v), y1: top - 4, y2: H - bottom + 4, stroke: "var(--tr-muted)", "stroke-width": 1, opacity: 0.7}, svg);
+    const t = el("text", {x: x(v), y, "text-anchor": anchor, "font-size": 11, fill: "var(--tr-muted)"}, svg); t.textContent = label;
+  };
+  if (lo < 0) el("line", {x1: x(0), x2: x(0), y1: top - 4, y2: H - bottom, stroke: "var(--tr-axis)", "stroke-width": 1}, svg);
+  if (b) {
+    const far = Math.abs(x(b.green) - x(b.yellow)) < 70;
+    vline(b.green, `${BENCH_MARK.green} ${benchShow(k, b.green)}`, 12, far ? (lowGood ? "end" : "start") : "middle");
+    vline(b.yellow, `${BENCH_MARK.yellow} ${benchShow(k, b.yellow)}`, 12, far ? (lowGood ? "start" : "end") : "middle");
+  }
+  if (total != null) vline(total, `Company ${shortVal(total, col.kind)}`, H - 4, x(total) > W - 120 ? "end" : "middle");
+  rows.forEach((r, i) => {
+    const v = r[k], level = benchLevel(k, v), yTop = top + i * band, barT = 16;
+    const by = narrow ? yTop + 20 : yTop + (band - barT) / 2;
+    const g = el("g", {tabindex: "0", role: "img",
+      "aria-label": `${i + 1}. ${r.office}: ${fmtVal(v, col.kind)}${level ? `, ${BENCH_WORD[level]}` : ""}`}, svg);
+    el("rect", {x: 0, y: yTop, width: W, height: band, fill: "transparent"}, g);   // hit area: the whole row
+    const name = el("text", narrow ? {x: x0, y: yTop + 14, "font-size": 12, fill: "var(--text)"}
+                                   : {x: labelW - 8, y: by + barT / 2 + 4, "text-anchor": "end", "font-size": 13, fill: "var(--text)"}, g);
+    name.textContent = r.office;
+    // Bar from zero with a 4px rounded data end (square at the baseline).
+    const a = x(Math.min(0, v)), z = x(Math.max(0, v)), w = Math.max(z - a, 1), rr = Math.min(4, w);
+    const d = v >= 0
+      ? `M${a},${by}H${z - rr}Q${z},${by} ${z},${by + rr}V${by + barT - rr}Q${z},${by + barT} ${z - rr},${by + barT}H${a}Z`
+      : `M${z},${by}H${a + rr}Q${a},${by} ${a},${by + rr}V${by + barT - rr}Q${a},${by + barT} ${a + rr},${by + barT}H${z}Z`;
+    el("path", {d, fill: level ? ST_FILL[level] : "var(--tr-s1)"}, g);
+    const lab = el("text", {x: (v >= 0 ? z : a) + (v >= 0 ? 6 : -6), y: by + barT / 2 + 4, "text-anchor": v >= 0 ? "start" : "end",
+      "font-size": 12, fill: "var(--text)", style: "font-variant-numeric: tabular-nums"}, g);
+    lab.textContent = `${level ? BENCH_MARK[level] + " " : ""}${fmtVal(v, col.kind)}`;
+    const show = () => {
+      showTip(tip, [`#${i + 1} of ${rows.length} · ${monthName(ym)}`, [fmtVal(v, col.kind), r.office],
+        ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : []),
+        ...(total != null ? [[fmtVal(total, col.kind), "Company total"]] : [])]);
+      const scale = wrap.clientWidth / W;
+      tip.style.top = `${(yTop + band) * scale + 4}px`;
+      tip.style.left = `${Math.min(Math.max(0, x0 * scale), wrap.clientWidth - tip.offsetWidth)}px`;
+    };
+    g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
+    g.addEventListener("pointerleave", () => tip.hidden = true); g.addEventListener("blur", () => tip.hidden = true);
+  });
+  wrap.prepend(svg);
+}
+
+// Heatmap: every office (in the Log's office order) by every month, colored by benchmark, or by size when
+// the number has no benchmark. Click a cell to rank that month.
+function renderHeatmap() {
+  const col = colOf(trSel.metric); if (!col) return;
+  const k = col.key, b = benchFor(k), months = dataMonths(), offices = allOffices();
+  const cell = (o, ym) => logRows.find(r => r.office === o && r.period_from.slice(0, 7) === ym)?.[k] ?? null;
+  const grid = offices.map(o => months.map(ym => cell(o, ym)));
+  const company = months.map(ym => companyValue(col, ym));
+  $("hm-title").textContent = `Every office by month · ${col.label}`;
+  $("hm-sub").textContent = "Hover a cell for the exact number; click one to rank that month above. Offices follow the Log's Office order.";
+  // Size steps (no benchmark): 5 equal steps between the smallest and largest office value.
+  const vals = grid.flat().filter(v => v != null), lo = Math.min(...vals), hi = Math.max(...vals);
+  const step = v => hi > lo ? Math.min(5, 1 + Math.floor(((v - lo) / (hi - lo)) * 5)) : 3;
+  const legend = $("hm-legend");
+  legend.innerHTML = b
+    ? ["green", "yellow", "red"].map(l => `<span><span class="hm-key bm-${l}-key"></span>${BENCH_MARK[l]} ${BENCH_WORD[l]}</span>`).join("")
+      + `<span class="hint">${esc(benchText(k))}</span>`
+    : vals.length ? `<span>Lower</span>${[1, 2, 3, 4, 5].map(i => `<span class="hm-key hm-s${i}"></span>`).join("")}<span>Higher</span>`
+      + `<span class="hint">${esc(shortVal(lo, col.kind))} to ${esc(shortVal(hi, col.kind))}</span>` : "";
+  const td = (v, o, ym, j) => {
+    const sel = ym === trSel.month ? " sel" : "";
+    if (v == null) return `<td class="hm-cell hm-empty${sel}" tabindex="0" data-o="${esc(o)}" data-m="${ym}">—</td>`;
+    const level = benchLevel(k, v);
+    const cls = level ? `bm-${level}` : b ? "" : `hm-s${step(v)}`;
+    return `<td class="hm-cell ${cls}${sel}" tabindex="0" data-o="${esc(o)}" data-m="${ym}" data-v="${v}">${level ? `<span aria-hidden="true">${BENCH_MARK[level]}</span> ` : ""}${esc(shortVal(v, col.kind))}</td>`;
+  };
+  $("hm-wrap").innerHTML = vals.length ? `<table><thead><tr><th></th>${months.map(ym =>
+      `<th class="${ym === trSel.month ? "sel" : ""}" scope="col">${MONTH_NAMES[+ym.slice(5) - 1].slice(0, 3)}${ym.endsWith("-01") || ym === months[0] ? ` ${ym.slice(2, 4)}` : ""}</th>`).join("")}</tr></thead>
+    <tbody>${offices.map((o, i) => `<tr><th scope="row">${esc(o)}</th>${grid[i].map((v, j) => td(v, o, months[j], j)).join("")}</tr>`).join("")}
+    <tr><th scope="row"><strong>Company total</strong></th>${company.map((v, j) => {
+      const level = v == null ? null : benchLevel(k, v);
+      return v == null ? `<td class="hm-cell hm-empty">—</td>`
+        : `<td class="hm-cell ${level ? `bm-${level}` : ""}${months[j] === trSel.month ? " sel" : ""}" tabindex="0" data-o="Company total" data-m="${months[j]}" data-v="${v}"><strong>${level ? BENCH_MARK[level] + " " : ""}${esc(shortVal(v, col.kind))}</strong></td>`;
+    }).join("")}</tr></tbody></table>` : `<p class="hint">No data for this number yet.</p>`;
+  const tip = $("hm-tip");
+  $("hm-wrap").querySelectorAll(".hm-cell[data-m]").forEach(c => {
+    const show = () => {
+      const v = c.dataset.v === undefined ? null : +c.dataset.v, level = v == null ? null : benchLevel(k, v);
+      showTip(tip, [`${c.dataset.o} · ${monthName(c.dataset.m)}`, [v == null ? "—" : fmtVal(v, col.kind), v == null ? "no number yet" : col.label],
+        ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : [])]);
+      const r = c.getBoundingClientRect();
+      tip.style.left = `${Math.min(r.left, window.innerWidth - tip.offsetWidth - 8)}px`;
+      tip.style.top = `${r.bottom + 6 + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 6 : r.bottom + 6}px`;
+    };
+    c.addEventListener("pointerenter", show); c.addEventListener("focus", show);
+    c.addEventListener("pointerleave", () => tip.hidden = true); c.addEventListener("blur", () => tip.hidden = true);
+    c.addEventListener("click", () => { trSel.month = c.dataset.m; $("tr-month").value = trSel.month; saveTrSel(); renderRanking(); renderHeatmap(); });
+  });
+}
 loadLog();   // the Log tab opens first
 </script>
 </body>
