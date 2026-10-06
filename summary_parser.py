@@ -9,6 +9,7 @@ row just above it.
 import re
 import subprocess
 import zipfile
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import np_analysis
@@ -32,6 +33,55 @@ def to_number(token):
 
 def clean_label(text):
     return re.sub(r"\s+", " ", text).strip().rstrip(":").strip()
+
+
+# ---------------------------------------------------------------- Word (.doc / .docx)
+
+def _rows_from_tokens(tokens):
+    """(label, numbers) rows from a report's text pieces in reading order: a text piece starts a row and
+    the numbers after it belong to it. "Patient Type :" + "Ortho" become one label, as in the PDF."""
+    rows = []
+    for t in tokens:
+        words = t.split()
+        if rows and words and all(NUM_RE.match(w) for w in words):
+            rows[-1][1].extend(to_number(w) for w in words)
+        elif rows and rows[-1][0].endswith(":") and not rows[-1][1]:
+            rows[-1][0] += " " + t
+        else:
+            rows.append([t, []])
+    return [(clean_label(label), nums) for label, nums in rows]
+
+
+def doc_rows(path):
+    """Rows and period from a Denticon report saved as Word. A .doc (Word 97) keeps its text as UTF-16
+    with \r between paragraphs and \x07 between table cells; a .docx is zipped XML. Nothing is executed."""
+    raw = Path(path).read_bytes()
+    if raw[:4] == b"PK\x03\x04":
+        try:
+            with zipfile.ZipFile(path) as z:
+                xml = z.read("word/document.xml")
+        except (zipfile.BadZipFile, KeyError):
+            raise ParseError("Could not read this Word file")
+        w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        tokens = ["".join(t.text or "" for t in p.iter(w + "t")).strip() for p in ET.fromstring(xml).iter(w + "p")]
+    elif raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        text = "".join(m.decode("utf-16-le") for m in
+                       re.findall(rb"(?:[\x07\x09\x0b\x0d\x20-\x7e\xa0-\xff]\x00){6,}", raw))
+        tokens = [t.strip() for t in re.split(r"[\r\x07\x0b]+", text)]
+    else:
+        raise ParseError("This doesn't look like a Word document (.doc or .docx)")
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        raise ParseError("No text found in this Word file")
+    joined = " ".join(tokens)
+    period = {}
+    m = re.search(r"From\s*:\s*" + DATE_RE, joined)
+    if m:
+        period["from"] = m.group(1)
+    m = re.search(r"Thru\s*:\s*" + DATE_RE, joined)
+    if m:
+        period["thru"] = m.group(1)
+    return _rows_from_tokens(tokens), period
 
 
 # ---------------------------------------------------------------- PDF
@@ -337,8 +387,10 @@ def parse_report(path, filename=None):
         rows, period = pdf_rows(path)
     elif name.endswith((".xlsx", ".xlsm")):
         rows, period = xlsx_rows(path)
+    elif name.endswith((".doc", ".docx")):
+        rows, period = doc_rows(path)
     else:
-        raise ParseError("Upload a .pdf or .xlsx report")
+        raise ParseError("Upload a .pdf, .xlsx or Word (.doc, .docx) report")
 
     heading = [label for label, _ in rows[:20]]
     if "Referral Production Listing" in heading:

@@ -23,8 +23,8 @@
   header { padding: 20px 24px 0; margin: 0 auto; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 16px; }
-  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
-  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  nav button { flex: none; white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
                padding: 10px 14px; font: inherit; cursor: pointer; }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
   main { margin: 0 auto; padding: 20px 24px 48px; }
@@ -182,9 +182,44 @@
   .bm-mark { font-size: 10px; margin-right: 4px; }
   #log tbody tr:hover td.bm-green, #log tbody tr:hover td.bm-yellow, #log tbody tr:hover td.bm-red { filter: brightness(.97); }
   th .bm-flag { color: var(--accent); margin-left: 3px; font-size: 11px; }
+  .table-wrap { position: relative; }   /* keeps .sr labels inside the scroll box (else they widen the page) */
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .link-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
   .bm-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+  /* Help: the ? button and the step-by-step guide. */
+  .help-btn { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 44px; height: 44px; border-radius: 50%;
+              border: 0; background: var(--accent); color: var(--accent-text); font: 700 22px/1 system-ui, sans-serif;
+              cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .help-btn:hover { filter: brightness(1.08); }
+  .help-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 1px solid var(--border);
+          border-radius: 12px; background: var(--surface); color: var(--text); }
+  #help[open] { display: flex; flex-direction: column; }
+  #help::backdrop { background: rgba(0,0,0,.45); }
+  .help-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  .help-head h2 { margin: 0; font-size: 19px; flex: 1; }
+  .help-x { font: inherit; font-size: 24px; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer;
+            width: 36px; height: 36px; border-radius: 8px; }
+  .help-x:hover { background: var(--border); color: var(--text); }
+  .help-steps { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .help-steps button { font: inherit; font-size: 13px; border: 1px solid var(--border); background: none; color: var(--text);
+                       border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .help-steps button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .help-body { overflow: auto; padding: 4px 20px 8px; overscroll-behavior: contain; }
+  .help-body h3 { font-size: 16px; margin: 14px 0 6px; }
+  .help-body p, .help-body li { font-size: 14px; line-height: 1.55; }
+  .help-body ol, .help-body ul { padding-left: 22px; margin: 6px 0 10px; }
+  .help-body li { margin: 4px 0; }
+  .help-body .swatch { white-space: nowrap; }
+  .help-report { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+  .help-report h4 { margin: 0 0 4px; font-size: 14px; }
+  .help-report .gives { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+  .path { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 13px; }
+  .path span { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+  .path i { color: var(--muted); font-style: normal; }
+  .help-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
+  .help-foot .hint { flex: 1; margin: 0; }
+  @media (max-width: 600px) { .help-head, .help-steps, .help-body, .help-foot { padding-left: 16px; padding-right: 16px; } }
   /* Data checks: values that look wrong (rates over 100%, more collected than approved). */
   :root { --chk: #c2410c; --chk-ink: #ffffff; }
   @media (prefers-color-scheme: dark) { :root { --chk: #fb923c; --chk-ink: #1c1917; } }
@@ -192,6 +227,12 @@
               font-size: 11px; line-height: 16px; margin-right: 4px; cursor: help; }
   .chk-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px;
                background: var(--chk); color: var(--chk-ink); font-size: 12px; line-height: 18px; text-align: center; }
+  .chk-count[hidden] { display: none; }
+  .confirm-box { border: 1px solid var(--chk); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+  .confirm-box[hidden] { display: none; }
+  .confirm-box p { margin: 0 0 8px; }
+  .confirm-box .table-wrap { max-height: 260px; overflow: auto; }
+  .confirm-box td, .confirm-box th { padding: 4px 8px; }
   .chk-group { border-top: 1px solid var(--border); padding: 10px 0 4px; }
   .chk-group:first-of-type { border-top: 0; }
   .chk-group h4 { margin: 0 0 6px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
@@ -235,21 +276,21 @@
   <h1>Executive Summary Logger</h1>
   <p class="sub">Executive Summary: total collection · insurance collection · new patients (first visit − existing-patient referrals) · total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: # of ortho referrals. New Patient Analysis: # Medi-Cal, HMO, no SSN/ITIN, financing applicants, existing finance accounts, prime applicants and approvals. From your sheet: refunds.</p>
   <nav>
-    <button data-tab="upload" class="active">Upload</button>
-    <button data-tab="log">Log</button>
-    <button data-tab="google">Google Sheets</button>
+    <button data-tab="log" class="active">Log</button>
     <button data-tab="changes">Changes</button>
+    <button data-tab="upload">Upload</button>
+    <button data-tab="google">Google Sheets</button>
     <button data-tab="sql">SQL</button>
   </nav>
 </header>
 
 <main>
   <!-- Upload -->
-  <section id="upload" class="active">
+  <section id="upload">
     <div class="card">
       <div class="drop" id="drop">
-        <strong>Drop a report here</strong><br>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx or .xlsm
-        <input type="file" id="file" accept=".pdf,.xlsx,.xlsm" hidden>
+        <strong>Drop a report here</strong><br>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx, .xlsm, or Word (.doc, .docx)
+        <input type="file" id="file" accept=".pdf,.xlsx,.xlsm,.doc,.docx" hidden>
       </div>
       <p class="msg" id="parse-msg"></p>
     </div>
@@ -263,6 +304,7 @@
       </div>
       <p class="hint" id="period-hint"></p>
       <p class="msg err" id="review-checks" hidden></p>
+      <div class="confirm-box" id="save-confirm" hidden></div>
       <div class="table-wrap">
         <table>
           <thead><tr id="review-head"></tr></thead>
@@ -277,8 +319,8 @@
     <p class="or">or</p>
     <div class="card">
       <label for="paste-text" style="color:var(--text);font-size:15px;font-weight:600;margin-bottom:6px">Paste from a spreadsheet</label>
-      <p class="hint" style="margin:0 0 8px">Copy the rows from your sheet, including the header row with <strong>Office</strong> and
-        <strong>refunds</strong>, and paste here. Only refunds are collected.</p>
+      <p class="hint" style="margin:0 0 8px">Copy the rows from your sheet, including the header row with
+        <strong>refunds</strong> (office names in the first column), and paste here. Only refunds are collected.</p>
       <textarea id="paste-text" spellcheck="false" placeholder="Paste rows here (Ctrl+V)"></textarea>
       <div class="row" style="margin-top:10px"><button class="btn primary" id="paste-read">Read pasted rows</button></div>
       <p class="msg" id="paste-msg"></p>
@@ -290,7 +332,9 @@
         <span class="spacer"></span>
         <button class="btn primary" id="paste-save">Save refunds to log</button>
       </div>
+      <div class="confirm-box" id="paste-confirm" hidden></div>
       <p class="hint" id="paste-hint"></p>
+      <p class="hint" id="paste-month"></p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Sheet office</th><th>Log office</th><th class="num">Refunds</th></tr></thead>
@@ -303,7 +347,7 @@
   </section>
 
   <!-- Log -->
-  <section id="log">
+  <section id="log" class="active">
     <div class="card">
       <div class="row" style="margin-bottom:12px">
         <label>Office <input type="search" id="filter" placeholder="Search offices"></label>
@@ -433,6 +477,13 @@
       <p class="hint" style="margin-top:0" id="g-sync-info"></p>
       <div class="row"><button class="btn primary" id="g-sync">Sync now</button></div>
       <p class="msg" id="g-sync-msg"></p>
+      <h3 style="font-size:15px;margin:16px 0 4px">Load past months</h3>
+      <p class="hint" style="margin-top:0">The regular sync reads each sheet's newest 2 month tabs. To fill in older months, load every
+        month tab from a start month on (New Patient Analysis and refunds). Past months only get the sheets' numbers; collections,
+        new patients and the rates that use them need those months' Denticon reports uploaded. This can take a few minutes.</p>
+      <div class="row"><label>From <input type="month" id="g-since" value="2026-01"></label>
+        <button class="btn" id="g-backfill">Load past months</button></div>
+      <p class="msg" id="g-backfill-msg"></p>
     </div>
   </section>
 
@@ -482,6 +533,119 @@ ORDER BY period_thru DESC, office;</textarea>
     </div>
   </section>
 </main>
+
+<button type="button" class="help-btn" id="help-btn" aria-haspopup="dialog" aria-controls="help" title="Help: how to use this platform" aria-label="Help: how to use this platform">?</button>
+<dialog id="help" aria-labelledby="help-title">
+  <div class="help-head">
+    <h2 id="help-title">How to use the Monthly Report platform</h2>
+    <button type="button" class="help-x" id="help-close" aria-label="Close help">×</button>
+  </div>
+  <div class="help-steps" role="tablist" aria-label="Steps"></div>
+  <div class="help-body">
+    <div class="help-step help-edit" data-title="1. Get the reports" role="tabpanel">
+      <h3>Step 1 · Pull the reports from Denticon</h3>
+      <p>Each month, run these reports in Denticon for the month you're logging (set the dates to that month) and save them as
+        <strong>PDF</strong> or <strong>Excel</strong>. Then upload them in Step 2.</p>
+      <div class="help-report">
+        <h4>Executive Summary</h4>
+        <p class="gives">Gives: total collection, insurance collection, new patients (new patients by first visit date − existing-patient referrals), total production.</p>
+        <span class="path"><span>Reports</span><i>›</i><span>Reports (Old)</span><i>›</i><span>Group Reports</span><i>›</i><span>Daily Report</span></span>
+      </div>
+      <div class="help-report">
+        <h4>Refunds</h4>
+        <p class="gives">Gives: refunds for each office.</p>
+        <p style="margin:0">Nothing to pull: refunds come from the <strong>% TO GOAL</strong> Google Sheet, which is connected and
+          updates by itself every 15 minutes (each month tab counts for its own month).</p>
+      </div>
+      <div class="help-report">
+        <h4>NP collection · Referral Production Listing</h4>
+        <p class="gives">Gives: new patient collection for each office.</p>
+        <span class="path"><span>Reports</span><i>›</i><span>Referral Reports</span><i>›</i><span>Referral Production List</span></span>
+        <ul><li>Select <strong>all offices</strong>, click <strong>Group by Zip Code</strong> and set the dates.</li></ul>
+      </div>
+      <div class="help-report">
+        <h4>Ortho collection · Daily Journal</h4>
+        <p class="gives">Gives: ortho collection for each office.</p>
+        <span class="path"><span>Daily Report</span><i>›</i><span>Daily Journal</span></span>
+        <ul><li>Select <strong>all Ortho</strong>, then <strong>Pay to Adjustment</strong>.</li>
+          <li>Make sure <strong>Patient Type</strong> is <strong>Ortho</strong> (not <em>Both</em>); the app refuses a journal that
+            includes general patients. Save it as PDF or Word (.doc).</li></ul>
+      </div>
+      <div class="help-report">
+        <h4># of ortho referrals · Treatment Plan Status</h4>
+        <p class="gives">Gives: number of ortho referrals for each office.</p>
+        <span class="path"><span>Reports</span><i>›</i><span>TP Report</span><i>›</i><span>Treatment Plan Status</span></span>
+        <ul><li>Select <strong>all of the offices</strong> and choose <strong>Other → Ortho Referral</strong>.</li></ul>
+      </div>
+      <div class="help-report">
+        <h4>New Patient Analysis</h4>
+        <p class="gives">Gives: Medi-Cal / HMO / no SSN-ITIN patients, financing (prime and subprime), treatment diagnosed and started.</p>
+        <p style="margin:0">Each office keeps its own workbook. Offices with a connected <strong>Google Sheet</strong> update by themselves every
+          15 minutes; for the others, upload the office's workbook (.xlsx or .xlsm).</p>
+      </div>
+    </div>
+
+    <div class="help-step help-edit" data-title="2. Upload" role="tabpanel">
+      <h3>Step 2 · Upload the reports</h3>
+      <ol>
+        <li>Open the <strong>Upload</strong> tab and drag the report onto the box, or click the box to choose the file
+          (.pdf, .xlsx, .xlsm, or Word .doc / .docx). The app recognizes which report it is.</li>
+        <li>Check the review table. Numbers with a <span style="text-decoration:underline dotted">dotted underline</span> can be
+          hovered or clicked to see exactly what was counted (sheet rows, never patient names).</li>
+        <li>Check <strong>Period from</strong> and <strong>Period thru</strong>. PDFs fill them in; Excel exports don't include
+          dates, so pick the <em>Thru</em> date and <em>From</em> becomes the 1st of that month.</li>
+        <li>Untick any office you don't want, then click <strong>Save to log</strong>. Uploading the same report again for the same
+          month replaces the older numbers (the old ones are kept in history).</li>
+      </ol>
+      <p><strong>Date rules:</strong> the Thru date can't be in the future. If the log already has a <em>later</em> report for
+        that month, the older one is skipped. If any number is <em>lower</em> than what the log has (month-to-date numbers usually
+        only go up), or a same-date report changes a number, you'll see a <strong>Check before saving</strong> list: check the
+        report and its dates, then click <strong>Save anyway</strong> or <strong>Cancel</strong>.</p>
+      <p>⚠ If a warning appears above <em>Save</em>, a value looks wrong (see Step 4). You can still save; it will be flagged in the log.</p>
+      <p>Don't upload a New Patient Analysis for an office whose Google Sheet is connected; the sync keeps it up to date.</p>
+    </div>
+
+    <div class="help-step" data-title="3. Read the log" role="tabpanel">
+      <h3>Step 3 · Read the log</h3>
+      <ul>
+        <li>The <strong>Log</strong> tab has one row per office per month. Use <strong>◀ Month ▶</strong> to change the month,
+          or pick <em>All months</em>.</li>
+        <li><strong>Sections</strong> switches show or hide groups of columns (Executive Summary, Collections, Ortho, Prime…).
+          <strong>Columns</strong> and <strong>Office order</strong> let you rearrange them; your layout is remembered in this browser.</li>
+        <li>Click a column header to sort. The <strong>Total</strong> row at the bottom adds up the offices shown (rates are
+          calculated from the totals, not averaged).</li>
+        <li>Hover or click a dotted number to see the sheet rows behind it. <em>“as of 09/28”</em> is the date that number was last updated.</li>
+        <li><strong>Copy</strong> puts the rows and columns shown on your clipboard for Excel or Google Sheets.</li>
+        <li>The <strong>Changes</strong> tab lists every number that was added or changed, when, and from which report.</li>
+      </ul>
+    </div>
+
+    <div class="help-step" data-title="4. Benchmarks &amp; checks" role="tabpanel">
+      <h3>Step 4 · Benchmarks and data checks</h3>
+      <h4 style="margin:10px 0 4px">Benchmark colors</h4>
+      <ul>
+        <li><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink);padding:0 6px;border-radius:4px">● green</span> on target,
+          <span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink);padding:0 6px;border-radius:4px">▲ yellow</span> close,
+          <span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink);padding:0 6px;border-radius:4px">▼ red</span> below target.</li>
+        <li>A <strong>◎</strong> in a column header means it has a benchmark; hover it to see the cut-offs.
+          <span class="help-edit">The <strong>Benchmarks</strong> button shows them all and lets you change them (same for every office).</span></li>
+      </ul>
+      <h4 style="margin:10px 0 4px">Data checks <span class="chk-flag" aria-hidden="true">⚠</span></h4>
+      <ul>
+        <li>A ⚠ means a value looks wrong: a rate over 100%, or a patient with more collected than approved. Hover it to see why.
+          The number is still counted as the sheet has it until the office fixes the sheet.</li>
+        <li>Click <strong>Checks</strong> to see the list.<span class="help-edit"> For each one you can:
+          <strong>Mark OK</strong> with a short note if it's correct, <strong>Email office</strong> to open a ready-made email in your
+          email app listing what to fix (you review it and press Send), or <strong>Copy message</strong> for Teams or Chat.</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="help-foot">
+    <p class="hint">Open this anytime with the <strong>?</strong> button.</p>
+    <button type="button" class="btn" id="help-prev">Back</button>
+    <button type="button" class="btn primary" id="help-next">Next</button>
+  </div>
+</dialog>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -646,31 +810,58 @@ function updateTotals() {
 // Reports are month-to-date, so From is always the 1st of Thru's month.
 $("thru").onchange = () => { if ($("thru").value) $("from").value = $("thru").value.slice(0, 8) + "01"; };
 
-$("save").onclick = async () => {
+// Saving checks dates and numbers first: a future date is refused, an older date than the log has is skipped,
+// and lower (or same-date changed) numbers are listed for a "Save anyway".
+const today = () => new Date().toLocaleDateString("en-CA");   // YYYY-MM-DD, local time
+["from", "thru", "paste-asof"].forEach(id => $(id).max = today());   // date pickers stop at today
+const LATER_HELP = "If that later report was a mistake, ask whoever manages the app to remove it.";
+const REVIEW_LABELS = {np_first_visit: "NPs by first visit", existing_patient_referrals: "Existing-patient referrals"};
+function showReview(box, r, msgEl, onConfirm) {
+  const lower = r.review.filter(x => x.lower).length, changed = r.review.length - lower;
+  const label = k => REVIEW_LABELS[k] || labelOf(k);
+  box.innerHTML = `<p><strong>Check before saving.</strong>
+    ${lower ? `${lower} number${lower > 1 ? "s are" : " is"} <strong>lower</strong> than the log already has for this month. Month-to-date numbers usually only go up, so check the report and its dates. ` : ""}
+    ${changed ? `${changed} number${changed > 1 ? "s" : ""} changed from a report with the <strong>same date</strong>. ` : ""}
+    Nothing has been saved yet.</p>
+    <div class="table-wrap"><table><thead><tr><th>Office</th><th>Number</th><th class="num">In the log</th><th class="num">This report</th><th></th></tr></thead>
+    <tbody>${r.review.map(x => `<tr><td>${esc(x.office)}</td><td>${esc(label(x.metric))}</td>
+      <td class="num">${fmtVal(x.was, kindOf(x.metric))} <span class="hint">as of ${x.was_as_of.slice(5).replace("-", "/")}</span></td>
+      <td class="num">${fmtVal(x.now, kindOf(x.metric))}</td><td>${x.lower ? "⬇ lower" : "changed"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn primary" data-go>Save anyway</button><button class="btn" data-cancel>Cancel</button></div>`;
+  box.hidden = false;
+  box.querySelector("[data-go]").onclick = () => { box.hidden = true; onConfirm(); };
+  box.querySelector("[data-cancel]").onclick = () => { box.hidden = true; msg(msgEl, "Not saved.", false); };
+  msg(msgEl, "", true);
+}
+async function saveUpload(confirm = false) {
   const from = $("from").value, thru = $("thru").value;
   if (!from || !thru) return msg($("save-msg"), "Enter the period dates first.", false);
+  if (thru > today()) return msg($("save-msg"), `The Thru date ${thru} hasn't happened yet. Use the report's last day (today or earlier).`, false);
+  $("save-confirm").hidden = true;
   try {
     // Reports other than the Executive Summary each add one number per office.
     const metrics = parsed.report_type === "executive_summary" ? null : reviewCols().map(([k]) => k);
     const r = metrics
       ? await api("/api/save-metrics", JSON.stringify({
-          as_of: thru, period_from: from, source: parsed.source_file, from_report: true,
+          as_of: thru, period_from: from, source: parsed.source_file, from_report: true, confirm,
           rows: selected().map(o => ({sheet_office: o.office, office: o.office,
                                       values: Object.fromEntries(metrics.map(k => [k, o[k]])),
                                       details: o.details}))}),
           {"Content-Type": "application/json"})
       : await api("/api/save", JSON.stringify({
-          period_from: from, period_thru: thru, source_file: parsed.source_file, offices: selected()}),
+          period_from: from, period_thru: thru, source_file: parsed.source_file, offices: selected(), confirm}),
           {"Content-Type": "application/json"});
+    if (r.needs_review) return showReview($("save-confirm"), r, $("save-msg"), () => saveUpload(true));
     const parts = [];
     if (r.added) parts.push(`added ${r.added}`);
     if (r.replaced) parts.push(`updated ${r.replaced} (earlier version kept in history)`);
     if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
     let text = `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
-    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}.`;
+    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}. ${LATER_HELP}`;
     msg($("save-msg"), text, !r.skipped.length || parts.length > 0);
   } catch (e) { msg($("save-msg"), e.message, false); }
-};
+}
+$("save").onclick = () => saveUpload();
 
 // Paste from a spreadsheet
 let pasted = null;
@@ -685,12 +876,19 @@ $("paste-read").onclick = async () => {
   } catch (e) { msg($("paste-msg"), e.message, false); }
 };
 
+// Which month a paste will be logged for. "Updated 10/1" on last month's tab would otherwise land in October.
+function showPasteMonth() {
+  const d = $("paste-asof").value;
+  $("paste-month").innerHTML = d ? `Will be logged for <strong>${monthName(d.slice(0, 7))}</strong>. If you copied last month's tab, `
+    + `set As of to that month's last day.` : "";
+}
 function renderPaste() {
   $("paste-asof").value = pasted.as_of || "";
   $("paste-hint").textContent = (pasted.as_of
     ? "As-of date read from “Updated …” in the sheet. "
     : "No “Updated” date found in the paste. Enter the date the sheet was updated. ")
     + "Refunds are logged to that month; a later paste for the same month replaces them.";
+  showPasteMonth();
   const opt = (v, label, sel) => `<option value="${esc(v)}" ${sel ? "selected" : ""}>${esc(label)}</option>`;
   $("paste-body").innerHTML = pasted.rows.map((r, i) => {
     const others = pasted.known_offices.filter(o => !r.candidates.includes(o));
@@ -726,25 +924,30 @@ function updatePasteSave() {
   else if (dupes.length) msg($("paste-save-msg"), `Two sheet rows point to the same office: ${dupes.join(", ")}.`, false);
   else $("paste-save-msg").textContent = "";
 }
-$("paste-save").onclick = async () => {
+async function savePaste(confirm = false) {
   const as_of = $("paste-asof").value;
   if (!as_of) return msg($("paste-save-msg"), "Enter the as-of date first.", false);
+  if (as_of > today()) return msg($("paste-save-msg"), `The as-of date ${as_of} hasn't happened yet. Use the day the sheet was updated (today or earlier).`, false);
+  $("paste-confirm").hidden = true;
   const rows = [...document.querySelectorAll(".paste-office")].map(s => {
     const r = pasted.rows[s.dataset.i];
     return {sheet_office: r.sheet_office, office: pasteOffice(s), values: r.values};
   });
   try {
-    const r = await api("/api/save-metrics", JSON.stringify({as_of, source: "pasted sheet", rows}),
+    const r = await api("/api/save-metrics", JSON.stringify({as_of, source: "pasted sheet", rows, confirm}),
                         {"Content-Type": "application/json"});
+    if (r.needs_review) return showReview($("paste-confirm"), r, $("paste-save-msg"), () => savePaste(true));
     const parts = [];
     if (r.added) parts.push(`added ${r.added}`);
     if (r.replaced) parts.push(`updated ${r.replaced} (earlier values kept in history)`);
     if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
     let text = `Refunds as of ${as_of}: ${parts.join(", ") || "nothing changed"}.`;
-    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later sheet for this month: ${r.skipped.join("; ")}.`;
+    if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later sheet for this month: ${r.skipped.join("; ")}. ${LATER_HELP}`;
     msg($("paste-save-msg"), text, !r.skipped.length || parts.length > 0);
   } catch (e) { msg($("paste-save-msg"), e.message, false); }
-};
+}
+$("paste-save").onclick = () => savePaste();
+$("paste-asof").addEventListener("input", showPasteMonth);
 
 
 // Log
@@ -903,6 +1106,38 @@ $("chk-btn").onclick = () => {
   $("chk-panel").hidden = !open; $("chk-btn").setAttribute("aria-expanded", open);
   if (open) renderChecks();
 };
+// Help: a step-by-step guide behind the ? button; it opens by itself the first time this browser opens the app.
+{
+  const dlg = $("help"), tabs = dlg.querySelector(".help-steps");
+  // Steps hidden by the page (view-only links have no Upload) are skipped.
+  const viewer = document.body.classList.contains("viewer");
+  const steps = () => [...dlg.querySelectorAll(".help-step")].filter(s => !(viewer && s.classList.contains("help-edit")));
+  let at = 0;
+  const show = i => {
+    const list = steps(); at = Math.max(0, Math.min(i, list.length - 1));
+    tabs.innerHTML = list.map((s, j) => `<button type="button" role="tab" aria-selected="${j === at}" data-step="${j}">${s.dataset.title}</button>`).join("");
+    list.forEach((s, j) => s.hidden = j !== at);
+    $("help-prev").disabled = at === 0;
+    $("help-next").textContent = at === list.length - 1 ? "Done" : "Next";
+    dlg.querySelector(".help-body").scrollTop = 0;
+  };
+  tabs.onclick = e => { const b = e.target.closest("[data-step]"); if (b) show(+b.dataset.step); };
+  $("help-prev").onclick = () => show(at - 1);
+  $("help-next").onclick = () => at === steps().length - 1 ? dlg.close() : show(at + 1);
+  $("help-close").onclick = () => dlg.close();
+  dlg.onclick = e => { if (e.target === dlg) dlg.close(); };   // click outside the box
+  dlg.addEventListener("close", () => { try { localStorage.setItem("helpSeen", "1"); } catch {} $("help-btn").focus(); });
+  const open = i => { show(i); dlg.showModal(); };
+  // The ? button opens on the step for the tab you're on (Upload → reports, Log → reading the log).
+  $("help-btn").onclick = () => {
+    const tab = document.querySelector("nav button.active")?.dataset.tab;
+    const want = dlg.querySelectorAll(".help-step")[tab === "log" || tab === "changes" ? 2 : 0];
+    open(Math.max(0, steps().indexOf(want)));
+  };
+  let seen = false;
+  try { seen = localStorage.getItem("helpSeen") === "1"; } catch {}
+  if (!seen && !viewer) open(0);
+}
 // Benchmarks: color a column's values green / yellow / red against cut-offs set in the app.
 let benchmarks = [];
 const BENCH_MARK = {green: "●", yellow: "▲", red: "▼"};
@@ -1659,7 +1894,7 @@ async function loadGoogle() {
   $("g-steps").open = !st.key_present;
   $("g-copy-email")?.addEventListener("click", e => copyGrid([[st.service_account]], "", e.currentTarget, "Copied ✓"));
   $("g-sources").innerHTML = st.sources.length ? st.sources.map(s => `<tr>
-      <td>${esc(s.office || "—")}</td>
+      <td>${s.kind === "refunds" ? "All offices · refunds" : esc(s.office || "—")}</td>
       <td><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></td>
       <td>${when(s.last_sync_at)}</td>
       <td class="${(s.last_status || "").startsWith("error") ? "err-text" : ""}" style="white-space:normal;max-width:420px">${esc(s.last_status || "not synced yet")}</td>
@@ -1668,7 +1903,7 @@ async function loadGoogle() {
     : `<tr><td colspan="5" class="hint">No sheets added yet.</td></tr>`;
   document.querySelectorAll("[data-remove]").forEach(b => b.onclick = async () => {
     const row = st.sources.find(s => s.id == b.dataset.remove);
-    if (!confirm(`Remove “${row.title}” (${row.office || "office"})?\n\n`
+    if (!confirm(`Remove “${row.title}” (${row.kind === "refunds" ? "refunds for all offices" : row.office || "office"})?\n\n`
       + `This stops syncing it and undoes the numbers it brought into the log: each goes back to its value from before `
       + `this sheet was added (e.g. your last upload), or is removed if it didn't exist before. `
       + `Numbers from other uploads or sheets aren't touched. Every change is listed in the Changes tab.\n\n`
@@ -1699,9 +1934,30 @@ $("g-add").onclick = async () => {
   msg($("g-add-msg"), "Checking the sheet…", true);
   try {
     const r = await api("/api/google/sources", JSON.stringify({url}), {"Content-Type": "application/json"});
-    msg($("g-add-msg"), `Added “${r.title}” for ${r.office} (latest tab: ${r.latest_tab}). Click Sync now to read it.`, true);
+    msg($("g-add-msg"), r.kind === "refunds"
+      ? `Added “${r.title}” as the % TO GOAL sheet: refunds for every office (latest tab: ${r.latest_tab}). Click Sync now to read it.`
+      : `Added “${r.title}” for ${r.office} (latest tab: ${r.latest_tab}). Click Sync now to read it.`, true);
     $("g-url").value = ""; loadGoogle();
   } catch (e) { msg($("g-add-msg"), e.message, false); }
+};
+$("g-backfill").onclick = async () => {
+  const since = $("g-since").value;
+  if (!since) return msg($("g-backfill-msg"), "Pick the first month to load.", false);
+  $("g-backfill").disabled = $("g-sync").disabled = true;
+  msg($("g-backfill-msg"), `Loading every month tab from ${monthName(since)} on… this can take a few minutes.`, true);
+  try {
+    const r = await api("/api/google/sync", JSON.stringify({since}), {"Content-Type": "application/json"});
+    if (r.error) throw new Error(r.error);
+    const total = r.results.reduce((a, x) => a + x.changes, 0), failed = r.results.filter(x => x.error);
+    const tabErrors = r.results.flatMap(x => x.tabs.filter(t => t.error).map(t => `${x.office || x.title} · ${t.tab}`));
+    msg($("g-backfill-msg"), `Read ${r.results.reduce((a, x) => a + x.tabs.length, 0)} month tab(s) from ${r.results.length} sheet(s): `
+      + `${total} number(s) added or changed.`
+      + (tabErrors.length ? ` Tabs that couldn't be read (older layout?): ${tabErrors.join("; ")}.` : "")
+      + (failed.length ? ` Problems: ${failed.map(x => `${x.office || x.title}: ${x.error}`).join("; ")}` : "")
+      + (total ? " See the Log (◀ Month) and the Changes tab." : ""), !failed.length);
+  } catch (e) { msg($("g-backfill-msg"), e.message, false); }
+  $("g-backfill").disabled = $("g-sync").disabled = false;
+  loadGoogle();
 };
 $("g-sync").onclick = async () => {
   $("g-sync").disabled = true; msg($("g-sync-msg"), "Syncing…", true);
@@ -1815,6 +2071,7 @@ $("sql-csv").onclick = () => {
     href: URL.createObjectURL(new Blob([text], {type: "text/csv"})), download: "query_results.csv"});
   a.click(); URL.revokeObjectURL(a.href);
 };
+loadLog();   // the Log tab opens first
 </script>
 </body>
 </html>

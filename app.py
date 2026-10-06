@@ -7,11 +7,16 @@ office, and save them to the log (SQLite, mirrored to CSV after every change).
 
 import base64
 import csv
+import getpass
+import hashlib
 import hmac
 import json
 import os
 import re
+import secrets
+import socket
 import sqlite3
+import sys
 import tempfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,14 +29,17 @@ from datetime import date, timedelta
 
 import google_sheets
 import np_analysis
-from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, title_case
+from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, rows_to_text, title_case
 from summary_parser import ParseError, parse_report
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "reports.db"
 CSV_PATH = DATA_DIR / "office_summary.csv"
-HOST, PORT = "127.0.0.1", int(os.environ.get("PORT", 8765))
+# HOST=0.0.0.0 opens the app to the office network; that needs a password (python3 app.py --set-password).
+HOST, PORT = os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", 8765))
+PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the password itself
+LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key"}   # only from the computer running the app
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
@@ -40,7 +48,7 @@ VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
   body.viewer nav button[data-tab="sql"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
-  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act { display: none; }
+  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
 <script>
@@ -409,6 +417,9 @@ def _setup(conn):
     for table in ("office_metrics", "metric_history"):   # logs created before details were kept
         if "detail" not in {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN detail TEXT")
+    if "kind" not in {r["name"] for r in conn.execute("PRAGMA table_info(sheet_sources)")}:
+        # 'np' = an office's New Patient Analysis; 'refunds' = the % TO GOAL sheet (refunds for every office)
+        conn.execute("ALTER TABLE sheet_sources ADD COLUMN kind TEXT NOT NULL DEFAULT 'np'")
     if "replaced_by" not in {r["name"] for r in conn.execute("PRAGMA table_info(metric_history)")}:
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
     conn.executescript(log_view_sql())
@@ -437,6 +448,30 @@ def to_iso(date_str):
     raise ValueError(f"Invalid date: {date_str!r}")
 
 
+# Month-to-date numbers only grow, so a later report with a lower number (or a same-date report with different
+# numbers) is shown to the person saving first; they confirm with "Save anyway". Not for the Google sync.
+NOT_CUMULATIVE = {"no_next_visit", "collected_over_approved"}   # these can go down as the month goes on
+
+
+class NeedsReview(Exception):
+    def __init__(self, items):
+        self.items = items
+
+
+def check_not_future(day, label="Thru"):
+    if day > date.today().isoformat():
+        raise ValueError(f"The {label} date {day} hasn't happened yet. Use the report's last day (today or earlier).")
+
+
+def review_item(review, office, metric, was, was_as_of, now, as_of):
+    """Note a number to confirm: lower than what the log has, or changed in a same-date report."""
+    if was is None or now is None or metric in NOT_CUMULATIVE or round(was, 2) == round(now, 2):
+        return
+    if now < was - 0.005 or was_as_of == as_of:
+        review.append({"office": office, "metric": metric, "was": round(was, 2), "now": round(now, 2),
+                       "was_as_of": was_as_of, "lower": now < was - 0.005})
+
+
 def save_rows(payload):
     """Insert or replace one row per office for the month. Returns counts."""
     period_from = to_iso(payload.get("period_from"))
@@ -447,23 +482,33 @@ def save_rows(payload):
         raise ValueError("'Thru' must be in the same month as 'From'")
     if period_from > period_thru:
         raise ValueError("'From' date is after 'Thru' date")
+    check_not_future(period_thru)
     offices = payload.get("offices") or []
     if not offices:
         raise ValueError("Nothing to save")
 
     now = datetime.now().isoformat(timespec="seconds")
     counts = {"added": 0, "replaced": 0, "skipped": []}
+    review = []
     conn = db()
-    with conn:
+    try:
+      with conn:
         for o in offices:
             office = str(o["office"]).strip()
             existing = conn.execute(
-                "SELECT id, period_thru FROM office_summary WHERE office = ? AND period_from = ?",
+                "SELECT * FROM office_summary WHERE office = ? AND period_from = ?",
                 (office, period_from),
             ).fetchone()
             if existing and existing["period_thru"] > period_thru:
                 counts["skipped"].append(f"{office} (already have thru {existing['period_thru']})")
                 continue
+            if existing and not payload.get("confirm"):
+                new = {"total_collection": o["total_collection"], "insurance_collection": o["insurance_collection"],
+                       "np_first_visit": o["np_first_visit"], "existing_patient_referrals": o["existing_patient_referrals"],
+                       "new_patients": int(o["np_first_visit"]) - int(o["existing_patient_referrals"]),
+                       "total_production": o["total_production"]}
+                for k, v in new.items():
+                    review_item(review, office, k, existing[k], existing["period_thru"], float(v), period_thru)
             npfv = int(o["np_first_visit"])
             existing_refs = int(o["existing_patient_referrals"])
             values = (office, period_from, period_thru,
@@ -484,6 +529,11 @@ def save_rows(payload):
                     values,
                 )
                 counts["added"] += 1
+        if review:
+            raise NeedsReview(review)   # undoes everything above; nothing is saved until confirmed
+    except NeedsReview as e:
+        conn.close()
+        return {"needs_review": True, "review": e.items, "skipped": counts["skipped"]}
     write_csv(conn)
     conn.close()
     return counts
@@ -497,7 +547,7 @@ def known_offices(conn):
 
 def read_paste(text):
     """Parse pasted sheet rows and suggest a log office for each."""
-    result = parse_paste(text)
+    result = parse_paste(text, office_in_first_column=True)   # the % TO GOAL header over the names is just "."
     conn = db()
     known = known_offices(conn)
     aliases = dict(conn.execute("SELECT alias, office FROM office_alias").fetchall())
@@ -524,13 +574,17 @@ def save_metrics(payload):
     if payload.get("period_from") and to_iso(payload["period_from"]) != period_from:
         raise ValueError("Reports are month-to-date: 'From' must be the 1st of the 'Thru' month")
     from_report = bool(payload.get("from_report"))  # office names already match the log
+    check_not_future(as_of, "as-of" if not from_report else "Thru")
+    reviewing = not payload.get("confirm") and payload.get("via") != "Google Sheets sync"
     rows = payload.get("rows") or []
     if not rows:
         raise ValueError("Nothing to save")
     now = datetime.now().isoformat(timespec="seconds")
     counts = {"added": 0, "replaced": 0, "unchanged": 0, "skipped": []}
+    review = []
     conn = db()
-    with conn:
+    try:
+      with conn:
         for row in rows:
             office = str(row.get("office") or "").strip()
             if not office:
@@ -554,6 +608,8 @@ def save_metrics(payload):
                         and existing["detail"] == detail:
                     counts["unchanged"] += 1
                     continue
+                if existing and reviewing:
+                    review_item(review, office, metric, existing["value"], existing["as_of"], float(value), as_of)
                 values = (office, period_from, as_of, metric, round(float(value), 2),
                           payload.get("source"), now, detail)
                 old_value = existing["value"] if existing else None
@@ -575,6 +631,11 @@ def save_metrics(payload):
                         "INSERT INTO office_metrics (office, period_from, as_of, metric, value, source, logged_at, detail) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
                     counts["added"] += 1
+        if review:
+            raise NeedsReview(review)   # undoes everything above; nothing is saved until confirmed
+    except NeedsReview as e:
+        conn.close()
+        return {"needs_review": True, "review": e.items, "skipped": counts["skipped"]}
     write_csv(conn)
     conn.close()
     return counts
@@ -616,31 +677,91 @@ sync_lock = threading.Lock()
 sync_state = {"last_run": None, "last_result": None, "next_run": None, "running": False}
 
 
+def refund_tabs(wb, how_many=2, since=None):
+    """The newest month tabs of a % TO GOAL sheet that have refunds for this month: [(tab, as_of, rows)].
+    A tab's numbers count for its own month: "Updated 10/1/26" on the September tab is September's final
+    numbers (as of 9/30). A tab not updated since its month began (a copied template) is skipped."""
+    found = []
+    for month in np_analysis.dated_months(wb):
+        first = date(month["year"], month["month"], 1)
+        last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        if first > date.today():
+            continue
+        if since and first.isoformat()[:7] < since:
+            break   # tabs are newest first
+        try:
+            parsed = parse_paste(rows_to_text(wb.rows(month["sheet"])), office_in_first_column=True)
+        except PasteError:
+            continue
+        if parsed["as_of"] and parsed["as_of"] < first.isoformat():
+            continue
+        as_of = min(parsed["as_of"] or date.today().isoformat(), last.isoformat(), date.today().isoformat())
+        found.append((month["sheet"], as_of, parsed["rows"]))
+        if how_many and len(found) == how_many:
+            break
+    return found
+
+
 def add_source(url):
     sid = google_sheets.spreadsheet_id(url)
     wb = google_sheets.SheetsWorkbook(account, sid)          # checks access right away
-    months = np_analysis.dated_months(wb)
-    office = np_analysis.parse_month(wb, months[0])["offices"][0]["office"]
+    try:
+        # The office name comes from the newest month tab that has patients (a new month's tab is often still empty).
+        latest = np_analysis.months_with_data(wb, 1)[0]
+        kind, office, tab = "np", latest["offices"][0]["office"], latest["sheet"]
+    except np_analysis.NPAnalysisError as np_error:
+        tabs = refund_tabs(wb, 1)     # not a New Patient Analysis: maybe the % TO GOAL sheet (refunds)
+        if not tabs:
+            raise ValueError(f"{np_error}. It isn't a % TO GOAL sheet either (no month tab with a 'refunds' column).")
+        kind, office, tab = "refunds", None, tabs[0][0]
     conn = db()
     with conn:
-        conn.execute("INSERT INTO sheet_sources (spreadsheet_id, url, title, office, added_at) VALUES (?, ?, ?, ?, ?) "
+        conn.execute("INSERT INTO sheet_sources (spreadsheet_id, url, title, office, added_at, kind) VALUES (?, ?, ?, ?, ?, ?) "
                      "ON CONFLICT (spreadsheet_id) DO UPDATE SET url = excluded.url, title = excluded.title, "
-                     "office = excluded.office", (sid, url, wb.title, office, datetime.now().isoformat(timespec="seconds")))
+                     "office = excluded.office, kind = excluded.kind",
+                     (sid, url, wb.title, office, datetime.now().isoformat(timespec="seconds"), kind))
     conn.close()
-    return {"title": wb.title, "office": office, "latest_tab": months[0]["sheet"]}
+    return {"title": wb.title, "office": office, "kind": kind, "latest_tab": tab}
+
+
+def sync_refunds(wb, result, since=None):
+    """Save refunds from a % TO GOAL sheet's newest two month tabs, matching office names like a paste."""
+    conn = db()
+    aliases = {r["alias"]: r["office"] for r in conn.execute("SELECT alias, office FROM office_alias")}
+    known = {normalize(o): o for o in known_offices(conn)}
+    conn.close()
+    unmatched = set()
+    for tab, as_of, rows in refund_tabs(wb, None if since else 2, since):
+        matched = []
+        for row in rows:
+            office = aliases.get(normalize(row["sheet_office"])) or known.get(normalize(row["sheet_office"]))
+            if office:
+                matched.append({"sheet_office": row["sheet_office"], "office": office, "values": row["values"]})
+            else:
+                unmatched.add(row["sheet_office"])
+        saved = save_metrics({"as_of": as_of, "source": f"Google Sheet: {wb.title} / {tab}",
+                              "via": "Google Sheets sync", "rows": matched}) if matched else {"skipped": []}
+        n = len(saved.get("changes", []))
+        result["changes"] += n
+        result["tabs"].append({"tab": f"{tab} (as of {as_of[5:].replace('-', '/')})", "changes": n,
+                               "skipped": len(saved["skipped"])})
+    if not result["tabs"]:
+        raise ValueError("No month tab with a 'refunds' column was updated for its month yet")
+    return sorted(unmatched)
 
 
 def month_thru(parsed, month):
     """Thru date: the latest date on the tab, else today (this month) or the month's last day."""
     if parsed["period"].get("thru"):
-        return parsed["period"]["thru"]
+        return min(parsed["period"]["thru"], date.today().isoformat())
     first = date(month["year"], month["month"], 1)
     last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     return min(date.today(), last).isoformat()
 
 
-def sync_all():
-    """Read the latest and previous month tab of every office sheet and save any changes."""
+def sync_all(since=None):
+    """Read the latest and previous month tab of every office sheet and save any changes.
+    since="2026-01": load past months instead -- every month tab from that month on (the "Load past months" button)."""
     if not sync_lock.acquire(blocking=False):
         return {"error": "A sync is already running"}
     sync_state["running"] = True
@@ -653,12 +774,20 @@ def sync_all():
             result = {"id": src["id"], "office": src["office"], "title": src["title"], "tabs": [], "changes": 0}
             try:
                 wb = google_sheets.SheetsWorkbook(account, src["spreadsheet_id"])
-                read, office_seen = 0, None
-                for month in np_analysis.dated_months(wb):    # latest + previous month with patients
-                    if read == 2:
+                read, office_seen, unmatched = 0, None, []
+                if src.get("kind") == "refunds":
+                    unmatched = sync_refunds(wb, result, since)
+                for month in ([] if src.get("kind") == "refunds" else np_analysis.dated_months(wb)):
+                    # latest + previous month with patients (or every month since `since`)
+                    if since and f"{month['year']}-{month['month']:02d}" < since:
                         break
+                    if read == 2 and not since:
+                        break
+                    if date(month["year"], month["month"], 1) > date.today():
+                        continue   # a tab set up for a month that hasn't started
                     try:
-                        parsed = np_analysis.parse_month(wb, month, office_seen)
+                        # A tab pasted without the "Office: ..." line uses the office this sheet was added for.
+                        parsed = np_analysis.parse_month(wb, month, office_seen or src["office"])
                     except np_analysis.EmptyMonthError:
                         result["tabs"].append({"tab": month["sheet"], "empty": True})
                         continue
@@ -682,7 +811,9 @@ def sync_all():
                 status = "ok: " + ", ".join(f"{t['tab']} " + ("empty, skipped" if t.get("empty") else
                                             f"error ({t['error']})" if "error" in t else f"{t['changes']} changed")
                                             for t in result["tabs"])
-            except (google_sheets.GoogleError, np_analysis.NPAnalysisError, ValueError) as e:
+                if unmatched:
+                    status += f"; not matched (paste once on the Upload tab to match): {', '.join(unmatched)}"
+            except (google_sheets.GoogleError, np_analysis.NPAnalysisError, ValueError, PasteError) as e:
                 result["error"] = str(e)
                 status = f"error: {e}"
             conn = db()
@@ -882,9 +1013,49 @@ def save_contacts(c):
     return {"ok": True, "emails": ", ".join(dict.fromkeys(emails))}
 
 
+def _pw_hash(password, salt, iterations):
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), iterations).hex()
+
+
+def load_app_password():
+    try:
+        return json.loads(PASSWORD_FILE.read_text())
+    except FileNotFoundError:
+        return None
+
+
+APP_PASSWORD = load_app_password()
+_good_auth = set()   # sha256 of Authorization headers already checked, so each request isn't re-hashed
+
+
+def app_password_ok(header, given):
+    key = hashlib.sha256(header.encode()).hexdigest()
+    if key in _good_auth:
+        return True
+    rec = APP_PASSWORD
+    if rec and hmac.compare_digest(_pw_hash(given, rec["salt"], rec["iterations"]), rec["hash"]):
+        _good_auth.add(key)
+        return True
+    return False
+
+
+def set_app_password():
+    pw = getpass.getpass("New password for the app (12+ characters): ")
+    if len(pw) < 12:
+        raise SystemExit("Too short: use at least 12 characters.")
+    if getpass.getpass("Type it again: ") != pw:
+        raise SystemExit("The passwords don't match.")
+    salt, iterations = secrets.token_hex(16), 300_000
+    DATA_DIR.mkdir(exist_ok=True)
+    fd = os.open(PASSWORD_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"salt": salt, "iterations": iterations, "hash": _pw_hash(pw, salt, iterations)}, f)
+    print(f"Saved. Restart the app for the new password to take effect.")
+
+
 def google_status():
     conn = db()
-    sources = [dict(r) for r in conn.execute("SELECT id, url, title, office, added_at, last_sync_at, last_status "
+    sources = [dict(r) for r in conn.execute("SELECT id, url, title, office, kind, added_at, last_sync_at, last_status "
                                              "FROM sheet_sources ORDER BY office")]
     conn.close()
     return {"key_present": account.exists(), "service_account": account.email(), "sources": sources,
@@ -929,34 +1100,42 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("File is too large (25 MB max)")
         return self.rfile.read(length)
 
-    def _viewer_blocked(self):
-        """In view-only mode: ask for the password, and refuse anything but reading. True if refused."""
-        if not VIEWER_PASSWORD:
-            return False
+    def _blocked(self):
+        """Ask for the password (view-only link, or the app password on the office network), and refuse
+        what this request may not do. True if refused."""
         auth = self.headers.get("Authorization", "")
         try:
             given = base64.b64decode(auth[6:]).decode().partition(":")[2] if auth.startswith("Basic ") else ""
         except ValueError:
             given = ""
-        if not hmac.compare_digest(given.encode(), VIEWER_PASSWORD.encode()):
-            time.sleep(1)   # slow down guessing
+        if VIEWER_PASSWORD:
+            if not hmac.compare_digest(given.encode(), VIEWER_PASSWORD.encode()):
+                time.sleep(1)   # slow down guessing
+                self._send(401, {"error": "Password required"},
+                           extra={"WWW-Authenticate": 'Basic realm="Monthly report (view only)", charset="UTF-8"'})
+                return True
+            if self.command != "GET" or self.path not in VIEWER_PATHS:
+                self._send(403, {"error": "This is a view-only link."})
+                return True
+        elif APP_PASSWORD and not app_password_ok(auth, given):
+            time.sleep(1)
             self._send(401, {"error": "Password required"},
-                       extra={"WWW-Authenticate": 'Basic realm="Monthly report (view only)", charset="UTF-8"'})
+                       extra={"WWW-Authenticate": 'Basic realm="Monthly report", charset="UTF-8"'})
             return True
-        if self.command != "GET" or self.path not in VIEWER_PATHS:
-            self._send(403, {"error": "This is a view-only link."})
+        if self.path in LOCAL_ONLY_PATHS and self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            self._send(403, {"error": "For safety, this only works on the computer that runs the app."})
             return True
         return False
 
     def end_headers(self):
-        if VIEWER_PASSWORD:
+        if VIEWER_PASSWORD or APP_PASSWORD:
             for k, v in (("Cache-Control", "no-store"), ("X-Robots-Tag", "noindex, nofollow"),
                          ("X-Frame-Options", "DENY"), ("Referrer-Policy", "no-referrer")):
                 self.send_header(k, v)
         super().end_headers()
 
     def do_GET(self):
-        if self._viewer_blocked():
+        if self._blocked():
             return
         if self.path in ("/", "/index.html"):
             page = (ROOT / "static" / "index.html").read_bytes()
@@ -996,7 +1175,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": "Not found"})
 
     def do_POST(self):
-        if self._viewer_blocked():
+        if self._blocked():
             return
         try:
             if self.path == "/api/parse":
@@ -1044,7 +1223,10 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/google/sources/delete":
                 self._send(200, remove_source(int(json.loads(self._body())["id"])))
             elif self.path == "/api/google/sync":
-                self._send(200, sync_all())
+                since = str(json.loads(self._body() or b"{}").get("since") or "")
+                if since and not re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", since):
+                    raise ValueError("Pick a start month like 2026-01")
+                self._send(200, sync_all(since or None))
             elif self.path == "/api/sql":
                 query = json.loads(self._body()).get("query", "").strip()
                 if not query:
@@ -1060,12 +1242,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--set-password"]:
+        set_app_password()
+        raise SystemExit
+    if HOST not in ("127.0.0.1", "localhost", "::1") and not (APP_PASSWORD or VIEWER_PASSWORD):
+        raise SystemExit("Opening the app to the network needs a password first: python3 app.py --set-password")
     db().close()
     if VIEWER_PASSWORD:
         print("View-only mode: password required, no changes allowed, Google sync off.")
     else:
         threading.Thread(target=sync_loop, daemon=True).start()
     print(f"Executive Summary logger running at http://{HOST}:{PORT}  (Ctrl+C to stop)")
+    if HOST == "0.0.0.0":
+        print(f"On the office network: http://{socket.gethostname()}.local:{PORT}  (password required)")
     print(f"Log: {DB_PATH}  |  CSV: {CSV_PATH}")
     try:
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

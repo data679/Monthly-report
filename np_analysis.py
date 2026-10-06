@@ -30,6 +30,25 @@ class NPAnalysisError(Exception):
     pass
 
 
+class NoOfficeError(NPAnalysisError):
+    pass
+
+
+# "Office: Dentist Of Gardena" (Denticon's header) or "Total for Office,Gardena Dental Care [ 3 ] :"
+OFFICE_LINE_RE = re.compile(r"(?:Office\s*:|Total for Office\s*,)\s*(.+?)(?:\s*\[.*)?$")
+
+
+def find_office(wb):
+    """The office name from the newest month tab that has an "Office: ..." line. Some tabs are pasted
+    without Denticon's header, so a tab may have no office line of its own."""
+    for month in dated_months(wb):
+        for cells in wb.rows(month["sheet"]).values():
+            m = OFFICE_LINE_RE.match(cells.get("A", ""))
+            if m:
+                return clean_office(m.group(1))
+    return None
+
+
 class EmptyMonthError(NPAnalysisError):
     """A month tab with no patients yet (e.g. next month's tab set up early)."""
 
@@ -112,7 +131,8 @@ def sheet_month(name):
     if SKIP_SHEETS.search(name):
         return None
     # Also allows a day between month and year: "August 1 2026" (but "November 25" is still Nov 2025).
-    m = re.match(r"\s*([a-z]{3})[a-z]*\.?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s+(?=\d{4}))?(\d{4}|\d{2})?\b", name.lower())
+    # and an apostrophe year: "APR'26".
+    m = re.match(r"\s*([a-z]{3})[a-z]*\.?\s*['’]?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s+(?=\d{4}))?(\d{4}|\d{2})?\b", name.lower())
     if not m or m.group(1) not in MONTHS:
         return None
     year = m.group(2)
@@ -224,8 +244,19 @@ def _excel_date(serial):
 
 
 def dated_months(wb):
-    """Month sheets that have a year in their name, newest first."""
-    months = [m for m in month_sheets(wb) if m["year"]]
+    """Month sheets with a year, newest first. A tab with no year ("October 🎃") is taken as the latest
+    such month up to today, unless another tab already has that month and year (old year-less tabs)."""
+    all_months = month_sheets(wb)
+    months = [m for m in all_months if m["year"]]
+    have = {(m["year"], m["month"]) for m in months}
+    today = date.today()
+    for m in all_months:
+        if not m["year"]:
+            year = today.year if m["month"] <= today.month else today.year - 1
+            if (year, m["month"]) not in have:
+                months.append({**m, "year": year})
+                have.add((year, m["month"]))
+    months.sort(key=lambda s: (s["year"], s["month"]), reverse=True)
     if not months:
         raise NPAnalysisError("No month sheets found (sheet names like 'September 2026')")
     return months
@@ -240,10 +271,15 @@ def parse_latest(path):
 
 def months_with_data(wb, how_many):
     """Parse month tabs newest first, skipping empty ones, until `how_many` have been read."""
-    found, empty = [], []
+    found, empty, fallback = [], [], None
     for month in dated_months(wb):
         try:
-            parsed = parse_month(wb, month, found[0]["offices"][0]["office"] if found else None)
+            try:
+                parsed = parse_month(wb, month, found[0]["offices"][0]["office"] if found else fallback)
+            except NoOfficeError:
+                if fallback is not None or not (fallback := find_office(wb)):
+                    raise
+                parsed = parse_month(wb, month, fallback)
         except EmptyMonthError:
             empty.append(month["sheet"])
             continue
@@ -313,7 +349,7 @@ def parse_month(wb, chosen, default_office=None):
                 cols = {**cols, "pat_id": block["pat id"], "collection": block.get("collection", cols["collection"])}
             continue
         a = cells.get("A", "")
-        m = re.match(r"(?:Office\s*:|Total for Office\s*,)\s*(.+?)(?:\s*\[.*)?$", a)
+        m = OFFICE_LINE_RE.match(a)
         if m and not office:
             office = clean_office(m.group(1))
         if NUMBER_RE.match(a) and 40000 < float(a) < 60000:   # a date marker (Excel date number)
@@ -493,7 +529,7 @@ def parse_month(wb, chosen, default_office=None):
                               "counts aren't available for that month (it was added to the sheets in November 2025)")
     office = office or default_office
     if not office:
-        raise NPAnalysisError(f"Couldn't find the office name ('Office: …') on sheet {chosen['sheet']!r}")
+        raise NoOfficeError(f"Couldn't find the office name ('Office: …') on sheet {chosen['sheet']!r} or any other month tab")
 
     period = {}
     if chosen["year"]:

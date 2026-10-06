@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -27,6 +28,19 @@ API_BASE = os.environ.get("GOOGLE_SHEETS_API", "https://sheets.googleapis.com/v4
 
 class GoogleError(Exception):
     pass
+
+
+# Google allows about 60 Sheets reads a minute per user; pace the requests to stay under it.
+MIN_GAP = float(os.environ.get("GOOGLE_MIN_GAP", 1.1))
+_pace_lock, _last_request = threading.Lock(), [0.0]
+
+
+def _pace():
+    with _pace_lock:
+        wait = _last_request[0] + MIN_GAP - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_request[0] = time.monotonic()
 
 
 def _b64url(data):
@@ -102,11 +116,15 @@ class ServiceAccount:
         return self._token
 
 
-def _request(req):
+def _request(req, retries=3):
+    _pace()
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
+        if e.code in (429, 503) and retries:   # over the read limit, or busy: wait and try again
+            time.sleep(int(e.headers.get("Retry-After") or 0) or 30 * (4 - retries))
+            return _request(req, retries - 1)
         try:
             message = json.loads(e.read()).get("error", {})
             message = message.get("message") if isinstance(message, dict) else message

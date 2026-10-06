@@ -19,14 +19,17 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
 ## 2. Running it
 
 - Folder: `~/Monthly-report` (git repo, remote `https://github.com/data679/Monthly-report.git`, branch `main`).
-- Start: `./run.sh` in the "Report logger" terminal tab → http://127.0.0.1:8765 (localhost only).
-- `run.sh` loops `python3 app.py`, so **to load code changes, kill the `python3 app.py` process** (its cwd is
-  `~/Monthly-report`) and `run.sh` restarts it in the same tab. Page-only changes (static/index.html) need no restart —
-  just a hard refresh (Ctrl+Shift+R); index.html is served with `Cache-Control: no-store`.
-- The terminal panel refuses a 7th tab opened by Claude; avoid opening new tabs — restart via kill + run.sh.
+- **Runs as an always-on systemd user service** `monthly-report` (`~/.config/systemd/user/monthly-report.service`,
+  `HOST=0.0.0.0`, Restart=always): on the office network at http://morg.local:8765 or http://192.168.1.113:8765
+  (VirtualBox VM, bridged network). Password required for everyone (Basic auth; salted PBKDF2 hash in
+  `data/app_password.json`; change with `python3 app.py --set-password`, then restart). `/api/sql` and
+  `/api/google/key` only work from this computer. The app refuses to bind to the network without a password.
+- **Restart / load code changes:** `systemctl --user restart monthly-report`; logs: `journalctl --user -u monthly-report`.
+  Page-only changes (static/index.html) need just a hard refresh (Ctrl+Shift+R); served with `Cache-Control: no-store`.
+- **Don't also run `./run.sh`** (same port). run.sh is only for running it by hand with the service stopped.
+- Starts at login; to start at boot without logging in: `sudo loginctl enable-linger morg` (needs the user's sudo).
 - Python 3.13, **standard library only** (no pip on this machine). Needs `pdftotext` (poppler) for PDFs and `openssl`
   for Google sign-in.
-- After a reboot the app isn't running; start `./run.sh` again.
 
 ## 3. Git status
 
@@ -69,6 +72,13 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
   calculated columns (below). The Log, CSV and SQL tab read this.
 
 ### Save rules
+- **No future dates:** a Thru / as-of date after today is refused (uploads, refunds paste); the sync caps a typo'd
+  future date on a tab at today. Date pickers stop at today.
+- **Lower or same-date-changed numbers need confirming** (uploads + refunds paste, not the Google sync): the save
+  returns `needs_review` with the list (was → now) and nothing is written; the UI shows "Check before saving" and
+  re-sends with `confirm: true` on "Save anyway". `no_next_visit` and `collected_over_approved` are exempt (can go down).
+- An older date than the log has is skipped per office/number, with a note to ask whoever manages the app if the
+  later one was a mistake (fixed by hand from history, e.g. the 2026-10-30 NP collection mix-up on 10/05).
 - Reports are **month-to-date**: `period_from` must be the 1st; `period_thru` in the same month.
 - Per office+month+metric the **newest `as_of` wins**; an older upload/sync is **skipped**; same `as_of` → replaced if
   the value differs (old value → history + change_log), "unchanged" otherwise.
@@ -217,6 +227,24 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   date would make syncs skip). An upload-warning safeguard was offered, not built.
 - Testing tip given to user: test copies should use "Office: TEST Office" or they write into the real office's numbers.
   (A "test" sheet did this once; it was undone from history.)
+
+- **% TO GOAL sheet (refunds)**: adding a link that isn't a New Patient Analysis tries it as the % TO GOAL
+  sheet (`sheet_sources.kind = 'refunds'`, office NULL). Sync reads the newest 2 month tabs with a `refunds`
+  header (office names in column A, header there is just "."), stops at the **Total** row (a "Max Adwords" table
+  below uses the same column), maps names through `office_alias` (unmatched names are listed in the status), and
+  files each tab under **its own month**: as_of = min("Updated m/d/yy", month end, today); a tab whose Updated date
+  is before its month (copied template) is skipped. Manual paste uses the same rules and shows "Will be logged for
+  <month>".
+- Word uploads: `.doc` (Word 97: UTF-16 text runs read straight from the file, no LibreOffice — it crashed this
+  1-CPU VM) and `.docx` (zipped XML) go through the same row readers as PDFs.
+
+- **Load past months** (Google Sheets tab): `POST /api/google/sync {"since": "2026-01"}` reads every month tab from
+  that month on for every connected sheet (NP + refunds); the regular sync still reads the newest 2. Google allows
+  ~60 reads/min, so `google_sheets._request` paces requests (1.1 s apart, `GOOGLE_MIN_GAP`) and retries 429/503.
+  A full load from Jan 2026 takes ~3–6 minutes. Tabs for months that haven't started are skipped.
+- Tab names: `APR'26` style years are read; a tab with **no year** ("October 🎃", "Feburary 💟") is taken as the
+  latest such month up to today unless a tab with a year already covers it (Cerritos' old 2023 "SEPTEMBER" etc.).
+- Tab order in the UI: Log (opens first), Changes, Upload, Google Sheets, SQL.
 
 ## 11. Known office/data quirks
 
