@@ -331,6 +331,9 @@ def parse_month(wb, chosen, default_office=None):
     # Data check: patients with more collected than approved (prime per lender, or subprime) -- often a typo.
     counts["collected_over_approved"] = 0
     details = {m: [] for m in counts}   # which sheet rows were counted, and why (never names)
+    # Every new patient's collected amounts per lender, to check against Denticon's Daily Journal. The Pat ID is
+    # only here so the app can replace it with a keyed hash (app.scrub_patients) before saving or sending it.
+    details["_patients"] = []
     for r in sorted(rows):
         cells = rows[r]
         header = _header_map(cells)
@@ -448,11 +451,14 @@ def parse_month(wb, chosen, default_office=None):
                 counts["prime_collected_amount"] += sum(v for _, v in coll_amts)
                 details["prime_collected_amount"].append(
                     {"row": r, "lenders": [f"{name} ${v:,.2f}" for name, v in coll_amts], "total": f"${sum(v for _, v in coll_amts):,.2f}"})
-            # Data check: more collected than approved, for a lender with an approved amount.
+            # Data check: more collected than approved, for a lender with an approved amount. Cash or another
+            # payment on the same row ("Other form of payment") can make up the difference: offices include it
+            # in $Amt Coll as the patient's total.
+            extra = max(other_paid, 0)
             over = [{"kind": "Prime", "lender": L["name"], "approved": f"${appr:,.2f}", "collected": f"${coll:,.2f}"}
                     for L in cols["prime_lenders"] if L["approved"] and L["collected"]
                     for appr, coll in [(_amount(cells.get(L["approved"])), abs(_amount(cells.get(L["collected"]))))]
-                    if appr > 0 and coll > appr]
+                    if appr > 0 and coll > appr + extra + 0.005]
             # Subprime dollar totals: every amount on the row.
             sc = cols["subprime"]
             # The sheet has one subprime amount per row, so show who approved it (or who was run).
@@ -464,9 +470,12 @@ def parse_month(wb, chosen, default_office=None):
             if s_appr_amt:
                 counts["subprime_approved_amount"] += s_appr_amt
                 details["subprime_approved_amount"].append({"row": r, "lenders": ran_with, "total": f"${s_appr_amt:,.2f}"})
-            if s_appr_amt > 0 and s_coll_amt > s_appr_amt:
+            if s_appr_amt > 0 and s_coll_amt > s_appr_amt + extra + 0.005:
                 over.append({"kind": "Subprime", "lender": ran_with, "approved": f"${s_appr_amt:,.2f}",
                              "collected": f"${s_coll_amt:,.2f}"})
+            details["_patients"].append({"row": r, "pat_id": cells.get(cols["pat_id"], ""),
+                                         "prime": {name: round(v, 2) for name, v in coll_amts},
+                                         "subprime": round(s_coll_amt, 2), "other": round(extra, 2)})
             if over:
                 counts["collected_over_approved"] += 1
                 details["collected_over_approved"].append({"row": r, "issues": over, "text": [

@@ -31,6 +31,12 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
 - Python 3.13, **standard library only** (no pip on this machine). Needs `pdftotext` (poppler) for PDFs and `openssl`
   for Google sign-in.
 
+- **Daily backups** (`backup_loop` thread, not in view-only copies): once a day, the first hourly check copies
+  `data/reports.db` to `data/backups/reports-YYYY-MM-DD.db` with SQLite's backup API, runs `PRAGMA integrity_check`
+  on the copy, and keeps the newest 30 (`KEEP_BACKUPS`). Days the app isn't running get no backup (nothing changes
+  then). Restore: stop the app, copy a backup over `data/reports.db`, start it. Backups are on the same VM disk;
+  an off-machine copy was suggested.
+
 ## 3. Git status
 
 - **Nothing has been committed since the first "Add README" commit.** All code is untracked/modified. User has been
@@ -256,6 +262,25 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   - **Heatmap** (`renderHeatmap`): HTML table, offices (Log's Office order) × months + Company total row; benchmark
     washes with marks, or a 5-step blue scale when there's no benchmark; click a cell to rank that month.
   - Suggested, not built: financing funnel, refunds by month.
+
+- **Denticon lender check** (lender_journal.py + `denticon_checks` in app.py): a Daily Journal with Patient Type
+  **Both** and Transactions **Payments, Adjustments** (Word or PDF) is read as `lender_journal`: per patient,
+  each lender's payment and merchant fee (Alphaeon, Care Credit, PatientFi, Proceed = prime; Access Alph, HFD,
+  Covered Care, Cherry, Sunbit = subprime). Detail must add up to Denticon's own "Summary for <office>" per lender
+  or the file is refused. Ortho journals still go to ortho collection.
+  - **Pat IDs are never stored or sent to the browser**: `pat_key` = HMAC-SHA256 with `data/patient_key` (0600);
+    `/api/parse` scrubs; storage scrubs again. Tables: `np_patients` (each NP row's collected per lender, saved with
+    every sync/upload of the NP sheet), `lender_payments`, `journal_uploads` (one per office+month, later Thru wins).
+  - Comparison: sheet "$Amt Coll" (before the fee) vs Denticon payment + fee, summed over all uploaded months;
+    tolerance $1. "Denticon more" always flagged; "sheet more" only when the journal reaches the sheet's date and
+    the next month (if started) is uploaded. A fee booked under another lender with no payment of its own is
+    paired with the one lender that paid without a fee (Alphaeon payment + "ACCESS ALPH" fee). Results are checks
+    (`den:<row>:<lender|Subprime>`, kind = missing_sheet / missing_denticon / amount / lender / odd) with Mark OK.
+  - The sheet's amount after the fee (= the payment alone) also counts as a match; a row whose total matches
+    under different lenders is one "different lender" note; under $50 with no Denticon payment is "odd value".
+  - **Admin only:** results are on the **Audit** tab (`/api/audit`), which, like saving a lender journal, only
+    works from the computer running the app (`LOCAL_ONLY_PATHS`); the tab stays hidden elsewhere and in view-only
+    links. They are not in the Log's ⚠ flags or the Checks panel. Sept 2026: 1,585 NPs checked, 124 differences.
 
 ## 11. Known office/data quirks
 

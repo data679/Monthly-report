@@ -39,7 +39,8 @@ CSV_PATH = DATA_DIR / "office_summary.csv"
 # HOST=0.0.0.0 opens the app to the office network; that needs a password (python3 app.py --set-password).
 HOST, PORT = os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", 8765))
 PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the password itself
-LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key"}   # only from the computer running the app
+# Only from the computer running the app: SQL, the Google key, and the Denticon audit (admin view).
+LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal"}
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
@@ -48,7 +49,7 @@ VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
   body.viewer nav button[data-tab="sql"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
-  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit { display: none; }
+  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"] { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
 <script>
@@ -58,10 +59,12 @@ VIEWER_HTML = """<style>
   });
 </script>
 """
-MAX_UPLOAD = 25 * 1024 * 1024
+MAX_UPLOAD = 200 * 1024 * 1024   # a month of Daily Journal with services can be large
 MAX_SQL_ROWS = 5000
 GOOGLE_DIR = DATA_DIR / "google"          # service account key (git-ignored with the rest of data/)
 SYNC_EVERY = int(os.environ.get("SYNC_MINUTES", 15)) * 60
+BACKUP_DIR = DATA_DIR / "backups"         # daily copies of the log (git-ignored with the rest of data/)
+KEEP_BACKUPS = int(os.environ.get("KEEP_BACKUPS", 30))
 
 COLUMNS = [
     "id", "office", "period_from", "period_thru",
@@ -191,6 +194,36 @@ CREATE TABLE IF NOT EXISTS office_contacts (
     office      TEXT PRIMARY KEY,
     emails      TEXT NOT NULL,        -- comma-separated
     updated_at  TEXT NOT NULL
+);
+
+-- Denticon check of the NP audit sheets. Pat IDs are never stored: pk is a keyed hash (data/patient_key).
+-- Each new patient row's collected amounts per lender, as the sheet has them (replaced on every save).
+CREATE TABLE IF NOT EXISTS np_patients (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,
+    row          INTEGER NOT NULL,
+    pk           TEXT NOT NULL,
+    prime        TEXT NOT NULL,       -- JSON {"Alphaeon": 3620.0, ...} ($Amt Coll, before the lender's fee)
+    subprime     REAL NOT NULL,       -- Subprime $Amt Coll
+    other        REAL NOT NULL DEFAULT 0,  -- "Other form of payment" on the row (cash etc., may be in $Amt Coll)
+    PRIMARY KEY (office, period_from, row)
+);
+-- Lender payments and merchant fees per patient from a Daily Journal (Patient Type: Both), per office and month.
+CREATE TABLE IF NOT EXISTS lender_payments (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,
+    pk           TEXT NOT NULL,
+    lender       TEXT NOT NULL,
+    payment      REAL NOT NULL,
+    fee          REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS journal_uploads (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,
+    as_of        TEXT NOT NULL,       -- the journal's Thru date
+    source       TEXT,
+    logged_at    TEXT NOT NULL,
+    PRIMARY KEY (office, period_from)
 );
 
 -- Sheet office names mapped to the office names used in the log.
@@ -420,6 +453,8 @@ def _setup(conn):
     if "kind" not in {r["name"] for r in conn.execute("PRAGMA table_info(sheet_sources)")}:
         # 'np' = an office's New Patient Analysis; 'refunds' = the % TO GOAL sheet (refunds for every office)
         conn.execute("ALTER TABLE sheet_sources ADD COLUMN kind TEXT NOT NULL DEFAULT 'np'")
+    if "other" not in {r["name"] for r in conn.execute("PRAGMA table_info(np_patients)")}:
+        conn.execute("ALTER TABLE np_patients ADD COLUMN other REAL NOT NULL DEFAULT 0")
     if "replaced_by" not in {r["name"] for r in conn.execute("PRAGMA table_info(metric_history)")}:
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
     conn.executescript(log_view_sql())
@@ -631,6 +666,17 @@ def save_metrics(payload):
                         "INSERT INTO office_metrics (office, period_from, as_of, metric, value, source, logged_at, detail) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
                     counts["added"] += 1
+            patients = (row.get("details") or {}).get("_patients")
+            if patients is not None:
+                newer = conn.execute("SELECT as_of FROM office_metrics WHERE office = ? AND period_from = ? AND "
+                                     "metric = 'np_rows' AND as_of > ?", (office, period_from, as_of)).fetchone()
+                if not newer:
+                    conn.execute("DELETE FROM np_patients WHERE office = ? AND period_from = ?", (office, period_from))
+                    conn.executemany(
+                        "INSERT OR REPLACE INTO np_patients (office, period_from, row, pk, prime, subprime, other) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [(office, period_from, int(p["row"]), p["pk"], json.dumps(p.get("prime") or {}),
+                          float(p.get("subprime") or 0), float(p.get("other") or 0)) for p in scrub_patients(patients) if p.get("pk")])
         if review:
             raise NeedsReview(review)   # undoes everything above; nothing is saved until confirmed
     except NeedsReview as e:
@@ -639,6 +685,145 @@ def save_metrics(payload):
     write_csv(conn)
     conn.close()
     return counts
+
+
+def save_lender_journal(payload):
+    """Save a Daily Journal's lender payments and fees per patient (keys only), per office and month.
+    A later Thru date replaces the month's earlier upload; an older one is skipped."""
+    period_from, thru = to_iso(payload.get("period_from")), to_iso(payload.get("period_thru"))
+    if not period_from.endswith("-01") or thru[:7] != period_from[:7] or period_from > thru:
+        raise ValueError("The Daily Journal must cover one month: From the 1st through a day in the same month")
+    check_not_future(thru)
+    now = datetime.now().isoformat(timespec="seconds")
+    counts = {"added": 0, "replaced": 0, "skipped": []}
+    conn = db()
+    with conn:
+        for o in payload.get("offices") or []:
+            office = str(o.get("office") or "").strip()
+            old = conn.execute("SELECT as_of FROM journal_uploads WHERE office = ? AND period_from = ?",
+                               (office, period_from)).fetchone()
+            if old and old["as_of"] > thru:
+                counts["skipped"].append(f"{office} (already have thru {old['as_of']})")
+                continue
+            conn.execute("DELETE FROM lender_payments WHERE office = ? AND period_from = ?", (office, period_from))
+            conn.executemany("INSERT INTO lender_payments VALUES (?, ?, ?, ?, ?, ?)",
+                             [(office, period_from, p["pk"], p["lender"], float(p["payment"]), float(p["fee"]))
+                              for p in scrub_patients(o.get("_patients")) if p.get("pk")])
+            conn.execute("INSERT OR REPLACE INTO journal_uploads VALUES (?, ?, ?, ?, ?)",
+                         (office, period_from, thru, payload.get("source"), now))
+            total = round(sum(v["payment"] + v["fee"] for v in (o.get("by_lender") or {}).values()), 2)
+            conn.execute("INSERT INTO change_log (changed_at, office, period_from, as_of, metric, new_value, via, source) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (now, office, period_from, thru, "denticon_lender_payments",
+                                                             total, "upload", payload.get("source")))
+            counts["replaced" if old else "added"] += 1
+    conn.close()
+    return counts
+
+
+# Sheet prime lender columns ("Care Credit", "Patient FI") by squeezed name -> the journal's lender names.
+SHEET_PRIME = {"alphaeon": "Alphaeon", "carecredit": "Care Credit", "patientfi": "PatientFi", "proceed": "Proceed"}
+
+
+def denticon_checks():
+    """New patients whose collected amounts on the NP sheet don't match Denticon's lender payments + fees.
+    Denticon more than the sheet is always flagged. The sheet more than Denticon is flagged only when journals
+    cover the patient's month and the month after (financing often posts the next month)."""
+    import lender_journal
+    conn = db()
+    covered = {}   # office -> {month: journal Thru date}
+    for r in conn.execute("SELECT office, period_from, as_of FROM journal_uploads"):
+        covered.setdefault(r["office"], {})[r["period_from"][:7]] = r["as_of"]
+    sheet_as_of = {(r["office"], r["period_from"]): r["as_of"] for r in
+                   conn.execute("SELECT office, period_from, as_of FROM office_metrics WHERE metric = 'np_rows'")}
+    if not covered:
+        conn.close()
+        return []
+    den = {}
+    for r in conn.execute("SELECT pk, lender, SUM(payment) AS payment, SUM(fee) AS fee FROM lender_payments GROUP BY pk, lender"):
+        den.setdefault(r["pk"], {})[r["lender"]] = [r["payment"], r["fee"]]
+    # A fee booked under another lender's name (an Alphaeon payment with an "ACCESS ALPH" fee) goes with the
+    # one lender that paid this patient without a fee of its own.
+    for lenders in den.values():
+        for name, (pay, fee) in list(lenders.items()):
+            if not pay and fee:
+                paid = [l for l, (p2, f2) in lenders.items() if p2 and not f2]
+                if name == "Access Alph" and lenders.get("Alphaeon", [0])[0]:
+                    paid = ["Alphaeon"]   # an Alphaeon payment with part of its fee booked as "ACCESS ALPH"
+                if len(paid) == 1:
+                    lenders[paid[0]][1] += fee
+                    del lenders[name]
+    rows = conn.execute("SELECT * FROM np_patients").fetchall()
+    conn.close()
+    this_month = date.today().isoformat()[:7]
+    money = lambda v: f"${v:,.2f}"
+    out = []
+    for p in rows:
+        months = covered.get(p["office"], {})
+        ym = p["period_from"][:7]
+        if ym not in months:
+            continue
+        # "The sheet says more than Denticon" needs journals that reach at least as far as the sheet: the
+        # month itself through the sheet's date, and the next month too once it has started.
+        nxt = (date(int(ym[:4]), int(ym[5:]), 28) + timedelta(days=4)).isoformat()[:7]
+        full = months[ym] >= (sheet_as_of.get((p["office"], p["period_from"])) or "") and (nxt > this_month or nxt in months)
+        mine = den.get(p["pk"], {})
+        sheet_prime = {}
+        for name, v in json.loads(p["prime"]).items():
+            lender = SHEET_PRIME.get(re.sub(r"\W", "", name.lower()))
+            if lender:
+                sheet_prime[lender] = sheet_prime.get(lender, 0) + v
+        groups = [(lender, sheet_prime.get(lender, 0.0), [lender], "prime_collected_amount")
+                  for lender in sorted(lender_journal.PRIME) if lender in sheet_prime or lender in mine]
+        sub_lenders = [l for l in mine if l not in lender_journal.PRIME]
+        if p["subprime"] or sub_lenders:
+            groups.append(("Subprime", p["subprime"], sub_lenders, "subprime_collected_amount"))
+        # Compare each lender (prime) or all subprime together. The sheet should have the amount before the fee
+        # (payment + fee); the amount after it (the payment alone) also counts as a match.
+        close = lambda a, b: abs(a - b) <= 1
+        found = []
+        for label, sheet_v, lenders, col in groups:
+            pay = sum(mine.get(l, (0, 0))[0] for l in lenders)
+            fee = sum(mine.get(l, (0, 0))[1] for l in lenders)
+            # Cash or another payment on the row ("Other form of payment") may be included in $Amt Coll.
+            extra = p["other"] or 0
+            if close(sheet_v, pay + fee) or (pay and close(sheet_v, pay)) or \
+                    (extra and pay and (pay - 1 <= sheet_v - extra <= pay + fee + 1)):
+                continue
+            found.append((label, sheet_v, lenders, col, round(pay, 2), round(fee, 2)))
+        if not found:
+            continue
+        key = lambda label: f"den:{p['row']}:{label}"
+        sheet_total = sum(sheet_prime.values()) + p["subprime"]
+        pay_total = sum(v[0] for v in mine.values())
+        fee_total = sum(v[1] for v in mine.values())
+        # The same total under a different lender (or the fee booked under another lender): one note, not two errors.
+        totals = [sheet_total, sheet_total - (p["other"] or 0)]
+        if sheet_total and any(close(t, pay_total + fee_total) or close(t, pay_total) for t in totals):
+            sheet_side = ", ".join(f"{l} {money(v)}" for l, v in [*sheet_prime.items(), ("Subprime", p["subprime"])] if v)
+            den_side = ", ".join(f"{l} {money(v[0] + v[1])}" for l, v in mine.items() if v[0] or v[1])
+            out.append({"office": p["office"], "period_from": p["period_from"], "check_key": key("lender"),
+                        "value_sig": f"{sheet_side}|{den_side}", "col": found[0][3], "kind": "lender",
+                        "problem": f"Row {p['row']}: right amount, different lender. The sheet has {sheet_side}; "
+                                   f"Denticon shows {den_side}."})
+            continue
+        for label, sheet_v, lenders, col, pay, fee in found:
+            d = round(pay + fee, 2)
+            if sheet_v > d and not full:
+                continue
+            via = ", ".join(lenders) if label == "Subprime" and lenders else label
+            seen = f"Denticon shows {money(d)} ({via}: {money(pay)} paid + {money(fee)} fee)" if d else "Denticon shows no payment"
+            if 0 < sheet_v < 50 and not d:
+                kind, problem = "odd", (f"Row {p['row']}: {money(sheet_v)} in the {label} $Amt Coll column and no payment "
+                                        f"in Denticon; that doesn't look like a dollar amount.")
+            elif not sheet_v:
+                kind, problem = "missing_sheet", f"Row {p['row']}: the sheet has no {label} collected, but {seen}."
+            elif not d:
+                kind, problem = "missing_denticon", f"Row {p['row']}: the sheet says {money(sheet_v)} {label} collected; {seen}."
+            else:
+                kind, problem = "amount", f"Row {p['row']}: the sheet says {money(sheet_v)} {label} collected; {seen}."
+            out.append({"office": p["office"], "period_from": p["period_from"], "check_key": key(label),
+                        "value_sig": f"{sheet_v:.2f}|{d:.2f}", "col": col, "kind": kind, "problem": problem})
+    return out
 
 
 def archive_metrics(conn, where, params, action, replaced_by=None):
@@ -829,6 +1014,42 @@ def sync_all(since=None):
     return {"results": results}
 
 
+def backup_db():
+    """Today's copy of the log, if there isn't one yet: data/backups/reports-YYYY-MM-DD.db. Uses SQLite's
+    backup API (safe while the app is writing), checks the copy, then keeps only the newest KEEP_BACKUPS."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    target = BACKUP_DIR / f"reports-{date.today().isoformat()}.db"
+    if target.exists() or not DB_PATH.exists():
+        return None
+    tmp = target.with_name(target.name + ".tmp")
+    src, dst = sqlite3.connect(DB_PATH, timeout=30), sqlite3.connect(tmp)
+    try:
+        src.backup(dst)
+        ok = dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        dst.close()
+        src.close()
+    if not ok:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError("the backup copy failed its integrity check")
+    tmp.replace(target)
+    for old in sorted(BACKUP_DIR.glob("reports-*.db"))[:-KEEP_BACKUPS]:
+        old.unlink()
+    return target
+
+
+def backup_loop():
+    """Check every hour; the first check each day makes that day's backup."""
+    while True:
+        try:
+            made = backup_db()
+            if made:
+                print(f"{datetime.now():%H:%M} Backup saved: {made.name}")
+        except Exception as e:  # never stop the app over a backup
+            print(f"{datetime.now():%H:%M} Backup failed: {e}")
+        time.sleep(3600)
+
+
 def sync_loop():
     """Sync every SYNC_EVERY seconds while the app runs (only once a key and sheets are set up)."""
     while True:
@@ -922,7 +1143,7 @@ EMAIL_RE = re.compile(r"[^@\s,;]+@[^@\s,;]+\.[A-Za-z]{2,}")
 def _check_ref(c):
     office, period_from = str(c.get("office") or "").strip(), str(c.get("period_from") or "")
     key, sig = str(c.get("check_key") or ""), str(c.get("value_sig") or "")
-    if not office or not re.fullmatch(r"\d{4}-\d{2}-01", period_from) or not key.startswith(("rate:", "row:")) or not sig:
+    if not office or not re.fullmatch(r"\d{4}-\d{2}-01", period_from) or not key.startswith(("rate:", "row:", "den:")) or not sig:
         raise ValueError("That check is missing its office, month or value")
     return office, period_from, key, sig
 
@@ -952,6 +1173,18 @@ def checks_info(viewer=False):
             "url": urls.get(r["office"]) if google else None}
     conn.close()
     return {"ok": ok, "notified": notified, "contacts": contacts, "sources": sources}
+
+
+def audit_info():
+    """The admin Audit tab: Denticon's lender payments vs the NP sheets, per office and month."""
+    issues = denticon_checks()
+    conn = db()
+    journals = [dict(r) for r in conn.execute("SELECT office, period_from, as_of, source FROM journal_uploads "
+                                              "ORDER BY period_from DESC, office")]
+    checked = {f"{r['office']}|{r['period_from']}": r["n"] for r in conn.execute(
+        "SELECT office, period_from, COUNT(*) AS n FROM np_patients GROUP BY office, period_from")}
+    conn.close()
+    return {"journals": journals, "issues": issues, "checked": checked}
 
 
 def mark_check_ok(c):
@@ -1011,6 +1244,46 @@ def save_contacts(c):
                      (datetime.now().isoformat(timespec="seconds"), office, "office emails", "contacts", ", ".join(emails) or "removed"))
     conn.close()
     return {"ok": True, "emails": ", ".join(dict.fromkeys(emails))}
+
+
+PATIENT_KEY_FILE = DATA_DIR / "patient_key"   # secret for hashing Pat IDs (git-ignored with data/)
+_patient_secret = None
+
+
+def pat_key(pat_id):
+    """A keyed hash of a Pat ID: the same patient always gets the same key, but the ID can't be read back."""
+    global _patient_secret
+    pid = str(pat_id or "").strip()
+    try:
+        pid = str(int(float(pid)))          # "90217483.0" from a Google Sheet = "90217483" in Denticon
+    except ValueError:
+        pass
+    if not pid:
+        return ""
+    if _patient_secret is None:
+        if not PATIENT_KEY_FILE.exists():
+            DATA_DIR.mkdir(exist_ok=True)
+            fd = os.open(PATIENT_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(secrets.token_bytes(32))
+        _patient_secret = PATIENT_KEY_FILE.read_bytes()
+    return hmac.new(_patient_secret, pid.encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def scrub_patients(entries):
+    """Replace Pat IDs with keys in a list of patient entries (in place); returns the list."""
+    for p in entries or []:
+        if "pat_id" in p:
+            p["pk"] = pat_key(p.pop("pat_id"))
+    return entries
+
+
+def scrub_result(result):
+    """No Pat IDs leave the server: hash them in a parsed report before it goes to the browser."""
+    for o in result.get("offices", []):
+        scrub_patients(o.get("_patients"))
+        scrub_patients((o.get("details") or {}).get("_patients"))
+    return result
 
 
 def _pw_hash(password, salt, iterations):
@@ -1097,7 +1370,7 @@ class Handler(BaseHTTPRequestHandler):
     def _body(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length > MAX_UPLOAD:
-            raise ValueError("File is too large (25 MB max)")
+            raise ValueError("File is too large (200 MB max)")
         return self.rfile.read(length)
 
     def _blocked(self):
@@ -1156,6 +1429,8 @@ class Handler(BaseHTTPRequestHandler):
             rows = [dict(r) for r in conn.execute("SELECT * FROM benchmarks ORDER BY metric")]
             conn.close()
             self._send(200, rows)
+        elif self.path == "/api/audit":
+            self._send(200, audit_info())
         elif self.path == "/api/checks":
             self._send(200, checks_info(viewer=bool(VIEWER_PASSWORD)))
         elif self.path == "/api/google/status":
@@ -1191,11 +1466,13 @@ class Handler(BaseHTTPRequestHandler):
                     if key in result["period"]:
                         result["period"][key] = to_iso(result["period"][key])
                 result["source_file"] = filename
-                self._send(200, result)
+                self._send(200, scrub_result(result))
             elif self.path == "/api/save":
                 self._send(200, save_rows(json.loads(self._body())))
             elif self.path == "/api/parse-paste":
                 self._send(200, read_paste(json.loads(self._body()).get("text", "")))
+            elif self.path == "/api/save-lender-journal":
+                self._send(200, save_lender_journal(json.loads(self._body())))
             elif self.path == "/api/save-metrics":
                 self._send(200, save_metrics(json.loads(self._body())))
             elif self.path == "/api/delete":
@@ -1252,6 +1529,7 @@ if __name__ == "__main__":
         print("View-only mode: password required, no changes allowed, Google sync off.")
     else:
         threading.Thread(target=sync_loop, daemon=True).start()
+        threading.Thread(target=backup_loop, daemon=True).start()
     print(f"Executive Summary logger running at http://{HOST}:{PORT}  (Ctrl+C to stop)")
     if HOST == "0.0.0.0":
         print(f"On the office network: http://{socket.gethostname()}.local:{PORT}  (password required)")

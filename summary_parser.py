@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+import lender_journal
 import np_analysis
 
 NUM_RE = re.compile(r"^\(?-?\$?[\d,]*\.?\d+\)?$")
@@ -53,6 +54,20 @@ def _rows_from_tokens(tokens):
 
 
 def doc_rows(path):
+    """Rows and period from a Denticon report saved as Word."""
+    tokens = doc_tokens(path)
+    joined = " ".join(tokens)
+    period = {}
+    m = re.search(r"From\s*:\s*" + DATE_RE, joined)
+    if m:
+        period["from"] = m.group(1)
+    m = re.search(r"Thru\s*:\s*" + DATE_RE, joined)
+    if m:
+        period["thru"] = m.group(1)
+    return _rows_from_tokens(tokens), period
+
+
+def doc_tokens(path):
     """Rows and period from a Denticon report saved as Word. A .doc (Word 97) keeps its text as UTF-16
     with \r between paragraphs and \x07 between table cells; a .docx is zipped XML. Nothing is executed."""
     raw = Path(path).read_bytes()
@@ -73,15 +88,7 @@ def doc_rows(path):
     tokens = [t for t in tokens if t]
     if not tokens:
         raise ParseError("No text found in this Word file")
-    joined = " ".join(tokens)
-    period = {}
-    m = re.search(r"From\s*:\s*" + DATE_RE, joined)
-    if m:
-        period["from"] = m.group(1)
-    m = re.search(r"Thru\s*:\s*" + DATE_RE, joined)
-    if m:
-        period["thru"] = m.group(1)
-    return _rows_from_tokens(tokens), period
+    return tokens
 
 
 # ---------------------------------------------------------------- PDF
@@ -402,6 +409,22 @@ def parse_report(path, filename=None):
         result["period"] = period
         return result
     if any(h.startswith("Daily Journal") for h in heading):
+        ortho = any(label.startswith("Patient Type") and "Ortho" in label for label, _ in rows)
+        if not ortho:
+            # All patients: the lenders' payments and fees per patient, to check the NP audit sheets.
+            try:
+                if name.endswith(".pdf"):
+                    lines = subprocess.run(["pdftotext", "-layout", str(path), "-"], capture_output=True,
+                                           text=True, check=True).stdout.replace("\f", "\n").splitlines()
+                    result = lender_journal.from_pdf_lines(lines)
+                elif name.endswith((".doc", ".docx")):
+                    result = lender_journal.from_tokens(doc_tokens(path))
+                else:
+                    raise ParseError("Save the Daily Journal as PDF or Word to check lender payments")
+            except lender_journal.JournalError as e:
+                raise ParseError(f"{e}. (For ortho collection, run it with Patient Type = Ortho.)")
+            result["period"] = period
+            return result
         result = parse_ortho_journal(rows)
         result["period"] = period
         return result

@@ -337,6 +337,7 @@
     <button data-tab="upload">Upload</button>
     <button data-tab="google">Google Sheets</button>
     <button data-tab="sql">SQL</button>
+    <button data-tab="audit" hidden>Audit</button>
   </nav>
 </header>
 
@@ -582,6 +583,23 @@
     </div>
   </section>
 
+  <!-- Audit (admin: only on the computer running the app) -->
+  <section id="audit">
+    <div class="card">
+      <h2 class="card-title" style="margin-top:0">Denticon check · NP audit sheets vs Daily Journal</h2>
+      <p class="hint" style="margin-top:0">Each new patient's financing on the office's NP sheet ($Amt Coll, before the lender's fee)
+        compared with what the lenders paid in Denticon (payment + fee), from the Daily Journals uploaded with Patient Type: Both.
+        Only shown on this computer. Upload a journal on the Upload tab.</p>
+      <div class="row"><label>Month <select id="au-month"></select></label><span class="hint" id="au-journals"></span></div>
+      <div class="table-wrap" style="margin-top:10px"><table>
+        <thead><tr><th>Office</th><th class="num">NPs checked</th><th class="num">Missing on sheet</th><th class="num">Not in Denticon</th>
+          <th class="num">Amount differs</th><th class="num">Different lender</th><th class="num">Odd value</th><th class="num">Marked OK</th></tr></thead>
+        <tbody id="au-summary"></tbody></table></div>
+      <div id="au-list" style="margin-top:12px"></div>
+      <p class="msg" id="au-msg"></p>
+    </div>
+  </section>
+
   <section id="changes">
     <div class="card">
       <div class="row" style="margin-bottom:12px">
@@ -664,6 +682,14 @@ ORDER BY period_thru DESC, office;</textarea>
         <ul><li>Select <strong>all Ortho</strong>, then <strong>Pay to Adjustment</strong>.</li>
           <li>Make sure <strong>Patient Type</strong> is <strong>Ortho</strong> (not <em>Both</em>); the app refuses a journal that
             includes general patients. Save it as PDF or Word (.doc).</li></ul>
+      </div>
+      <div class="help-report">
+        <h4>Lender check · Daily Journal (all patients)</h4>
+        <p class="gives">Checks each new patient's financing on the NP sheets against what the lenders actually paid in Denticon.</p>
+        <span class="path"><span>Daily Report</span><i>›</i><span>Daily Journal</span></span>
+        <ul><li>Set <strong>Patient Type</strong> to <strong>Both</strong> and <strong>Transactions</strong> to <strong>Payments, Adjustments</strong>
+          (the adjustments carry the lenders' fees), the whole month, all offices. Save as PDF or Word and upload it once a month.</li>
+          <li>The results are on the <strong>Audit</strong> tab, which only shows on the computer that runs the app.</li></ul>
       </div>
       <div class="help-report">
         <h4># of ortho referrals · Treatment Plan Status</h4>
@@ -763,6 +789,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   b.classList.add("active"); $(b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
+  if (b.dataset.tab === "audit") loadAudit();
   if (b.dataset.tab === "google") loadGoogle();
   if (b.dataset.tab === "changes") loadChanges();
 });
@@ -794,6 +821,8 @@ async function handleFile(file) {
 
 // Columns shown when reviewing each report type.
 const REVIEW_COLUMNS = {
+  lender_journal: [["prime_paid", "Prime lenders $ (paid + fee)", "money"], ["subprime_paid", "Subprime lenders $ (paid + fee)", "money"],
+                   ["fees", "Lender fees", "money"], ["patients_funded", "# patients funded"]],
   executive_summary: [
     ["total_collection", "Total collection", "money"], ["insurance_collection", "Insurance collection", "money"],
     ["new_patients", "New patients", "strong"], ["np_first_visit", "NP by first visit"],
@@ -821,7 +850,8 @@ const REVIEW_COLUMNS = {
 };
 const REPORT_NAMES = {executive_summary: "Executive Summary", referral: "Referral Production Listing",
                       ortho_journal: "Daily Journal (Ortho)", ortho_referrals: "Treatment Plan Status (ortho referrals)",
-                      np_analysis: "New Patient Analysis"};
+                      np_analysis: "New Patient Analysis",
+                      lender_journal: "Daily Journal (all patients): lender payments to check the NP sheets"};
 const reviewCols = () => REVIEW_COLUMNS[parsed.report_type];
 const cell = (v, kind) => v == null ? '<span class="none">—</span>'
   : kind === "money" ? money(v) : kind === "strong" ? `<strong>${v}</strong>` : v;
@@ -937,9 +967,14 @@ async function saveUpload(confirm = false) {
   if (thru > today()) return msg($("save-msg"), `The Thru date ${thru} hasn't happened yet. Use the report's last day (today or earlier).`, false);
   $("save-confirm").hidden = true;
   try {
-    // Reports other than the Executive Summary each add one number per office.
-    const metrics = parsed.report_type === "executive_summary" ? null : reviewCols().map(([k]) => k);
-    const r = metrics
+    // Reports other than the Executive Summary each add one number per office; a lender journal is kept
+    // per patient (keys only) to check the NP sheets.
+    const metrics = ["executive_summary", "lender_journal"].includes(parsed.report_type) ? null : reviewCols().map(([k]) => k);
+    const r = parsed.report_type === "lender_journal"
+      ? await api("/api/save-lender-journal", JSON.stringify({period_from: from, period_thru: thru, source: parsed.source_file,
+          offices: selected().map(o => ({office: o.office, by_lender: o.by_lender, _patients: o._patients}))}),
+          {"Content-Type": "application/json"})
+      : metrics
       ? await api("/api/save-metrics", JSON.stringify({
           as_of: thru, period_from: from, source: parsed.source_file, from_report: true, confirm,
           rows: selected().map(o => ({sheet_office: o.office, office: o.office,
@@ -952,9 +987,11 @@ async function saveUpload(confirm = false) {
     if (r.needs_review) return showReview($("save-confirm"), r, $("save-msg"), () => saveUpload(true));
     const parts = [];
     if (r.added) parts.push(`added ${r.added}`);
-    if (r.replaced) parts.push(`updated ${r.replaced} (earlier version kept in history)`);
+    if (r.replaced) parts.push(parsed.report_type === "lender_journal" ? `replaced ${r.replaced} (this month's earlier journal)`
+                                                                     : `updated ${r.replaced} (earlier version kept in history)`);
     if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
     let text = `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
+    if (parsed.report_type === "lender_journal") text += " See the Audit tab for differences from the NP sheets.";
     if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}. ${LATER_HELP}`;
     msg($("save-msg"), text, !r.skipped.length || parts.length > 0);
   } catch (e) { msg($("save-msg"), e.message, false); }
@@ -2075,8 +2112,10 @@ let changeRows = [];
 // Data check entries (marked OK, email drafted) and office email changes carry a note instead of numbers.
 const isNote = k => k.startsWith("check: ") || k === "office emails";
 const checkLabel = k => k.startsWith("check: rate:") ? `Data check: ${labelOf(k.slice(12))} over 100%`
-  : k.startsWith("check: row:") ? `Data check: row ${k.slice(11).split(":").join(" · ")}` : k;
-const labelOf = k => k.startsWith("check: ") ? checkLabel(k) : LOG_COLS.find(c => c.key === k)?.label || k;
+  : k.startsWith("check: row:") ? `Data check: row ${k.slice(11).split(":").join(" · ")}`
+  : k.startsWith("check: den:") ? `Denticon check: row ${k.slice(11).split(":").join(" · ")}`
+  : k === "denticon_lender_payments" ? "Denticon lender payments (Daily Journal)" : k;
+const labelOf = k => k.startsWith("check: ") || k === "denticon_lender_payments" ? checkLabel(k) : LOG_COLS.find(c => c.key === k)?.label || k;
 const kindOf = k => LOG_COLS.find(c => c.key === k)?.kind;
 async function loadChanges() {
   try { changeRows = await api("/api/changes"); renderChanges(); }
@@ -2088,7 +2127,8 @@ function shownChanges() {
 }
 function renderChanges() {
   const rows = shownChanges();
-  const val = (v, k) => v == null ? (isNote(k) ? "" : '<span class="none">new</span>') : kindOf(k) === "money" ? money(v) : Number.isInteger(v) ? v : v;
+  const val = (v, k) => v == null ? (isNote(k) ? "" : '<span class="none">new</span>')
+    : kindOf(k) === "money" || k === "denticon_lender_payments" ? money(v) : Number.isInteger(v) ? v : v;
   $("ch-body").innerHTML = rows.map(c => `<tr>
     <td>${when(c.changed_at)}</td><td>${esc(c.office)}</td><td>${(c.period_from || "").slice(0, 7)}</td><td>${esc(labelOf(c.metric))}</td>
     <td class="num">${val(c.old_value, c.metric)}</td>
@@ -2373,7 +2413,7 @@ function companyValue(col, ym) {
   return col.ratio ? totalRatio(rows, col.ratio) : have.reduce((a, r) => a + r[col.key], 0);
 }
 const ST_FILL = {green: "var(--st-good)", yellow: "var(--st-warn)", red: "var(--st-crit)"};
-function showTip(tip, lines) {   // lines: [[strong value, label], ...]; first entry may be a heading string
+function chartTip(tip, lines) {   // lines: [[strong value, label], ...]; first entry may be a heading string
   tip.textContent = "";
   lines.forEach(l => {
     if (typeof l === "string") { const h = document.createElement("div"); h.className = "tr-tip-head"; h.textContent = l; tip.append(h); return; }
@@ -2445,7 +2485,7 @@ function renderRanking() {
       "font-size": 12, fill: "var(--text)", style: "font-variant-numeric: tabular-nums"}, g);
     lab.textContent = `${level ? BENCH_MARK[level] + " " : ""}${fmtVal(v, col.kind)}`;
     const show = () => {
-      showTip(tip, [`#${i + 1} of ${rows.length} · ${monthName(ym)}`, [fmtVal(v, col.kind), r.office],
+      chartTip(tip, [`#${i + 1} of ${rows.length} · ${monthName(ym)}`, [fmtVal(v, col.kind), r.office],
         ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : []),
         ...(total != null ? [[fmtVal(total, col.kind), "Company total"]] : [])]);
       const scale = wrap.clientWidth / W;
@@ -2496,7 +2536,7 @@ function renderHeatmap() {
   $("hm-wrap").querySelectorAll(".hm-cell[data-m]").forEach(c => {
     const show = () => {
       const v = c.dataset.v === undefined ? null : +c.dataset.v, level = v == null ? null : benchLevel(k, v);
-      showTip(tip, [`${c.dataset.o} · ${monthName(c.dataset.m)}`, [v == null ? "—" : fmtVal(v, col.kind), v == null ? "no number yet" : col.label],
+      chartTip(tip, [`${c.dataset.o} · ${monthName(c.dataset.m)}`, [v == null ? "—" : fmtVal(v, col.kind), v == null ? "no number yet" : col.label],
         ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : [])]);
       const r = c.getBoundingClientRect();
       tip.style.left = `${Math.min(r.left, window.innerWidth - tip.offsetWidth - 8)}px`;
@@ -2505,6 +2545,65 @@ function renderHeatmap() {
     c.addEventListener("pointerenter", show); c.addEventListener("focus", show);
     c.addEventListener("pointerleave", () => tip.hidden = true); c.addEventListener("blur", () => tip.hidden = true);
     c.addEventListener("click", () => { trSel.month = c.dataset.m; $("tr-month").value = trSel.month; saveTrSel(); renderRanking(); renderHeatmap(); });
+  });
+}
+
+// Audit (admin): Denticon vs the NP sheets. The server only answers on the computer running the app, so the
+// tab stays hidden everywhere else.
+const AU_KINDS = {missing_sheet: "Missing on sheet", missing_denticon: "Not in Denticon", amount: "Amount differs",
+                  lender: "Different lender", odd: "Odd value"};
+let audit = null;
+api("/api/audit").then(a => { audit = a; document.querySelector('nav button[data-tab="audit"]').hidden = false; }).catch(() => {});
+async function loadAudit() {
+  try { [audit, checkInfo] = await Promise.all([api("/api/audit"), api("/api/checks").catch(() => checkInfo)]); }
+  catch (e) { return msg($("au-msg"), e.message, false); }
+  const months = [...new Set([...audit.journals.map(j => j.period_from), ...audit.issues.map(k => k.period_from)])].sort().reverse();
+  const cur = $("au-month").value;
+  $("au-month").innerHTML = months.map(m => `<option value="${m}">${monthName(m.slice(0, 7))}</option>`).join("");
+  if (months.includes(cur)) $("au-month").value = cur;
+  renderAudit();
+}
+$("au-month").onchange = () => renderAudit();
+function renderAudit() {
+  const m = $("au-month").value;
+  if (!m) { $("au-summary").innerHTML = `<tr><td colspan="8" class="hint">No Daily Journal (Patient Type: Both) uploaded yet.</td></tr>`;
+            $("au-list").innerHTML = ""; $("au-journals").textContent = ""; return; }
+  const js = audit.journals.filter(j => j.period_from === m);
+  $("au-journals").textContent = js.length ? `Journal thru ${[...new Set(js.map(j => j.as_of.slice(5).replace("-", "/")))].join(", ")}` : "No journal for this month yet.";
+  const issues = audit.issues.filter(k => k.period_from === m);
+  const open = issues.filter(k => !okFor(k)), oked = issues.filter(k => okFor(k));
+  const offices = [...new Set([...Object.keys(audit.checked).filter(k => k.endsWith("|" + m)).map(k => k.split("|")[0]),
+                               ...issues.map(k => k.office)])].sort(collator.compare);
+  const n = (o, kind) => open.filter(k => k.office === o && k.kind === kind).length;
+  $("au-summary").innerHTML = offices.map(o => `<tr><td>${esc(o)}</td><td class="num">${audit.checked[`${o}|${m}`] || 0}</td>${
+    Object.keys(AU_KINDS).map(kind => `<td class="num">${n(o, kind) || '<span class="none">—</span>'}</td>`).join("")}
+    <td class="num">${oked.filter(k => k.office === o).length || '<span class="none">—</span>'}</td></tr>`).join("")
+    + `<tr><td><strong>Total</strong></td><td class="num"><strong>${offices.reduce((a, o) => a + (audit.checked[`${o}|${m}`] || 0), 0)}</strong></td>${
+      Object.keys(AU_KINDS).map(kind => `<td class="num"><strong>${open.filter(k => k.kind === kind).length}</strong></td>`).join("")}
+      <td class="num"><strong>${oked.length}</strong></td></tr>`;
+  const groups = offices.map(o => ({office: o, period_from: m, checks: open.filter(k => k.office === o)})).filter(g => g.checks.length);
+  $("au-list").innerHTML = groups.length ? groups.map((g, gi) => `<details class="chk-group"><summary><strong>${esc(g.office)}</strong>
+      <span class="hint">${g.checks.length} difference${g.checks.length > 1 ? "s" : ""}</span></summary>
+      <ul>${g.checks.map((k, ki) => `<li><span class="hint">${AU_KINDS[k.kind] || ""}:</span> ${esc(k.problem)}
+        <button class="link-btn" data-au-ok="${gi}:${ki}">Mark OK</button></li>`).join("")}</ul>
+      <div class="row chk-contact"><button class="btn" data-au-copy="${gi}">Copy list</button></div></details>`).join("")
+    : `<p class="hint">No open differences for ${monthName(m.slice(0, 7))}.</p>`;
+  const post = (path, body) => api(path, JSON.stringify(body), {"Content-Type": "application/json"});
+  document.querySelectorAll("[data-au-ok]").forEach(b => b.onclick = () => {
+    const [gi, ki] = b.dataset.auOk.split(":").map(Number), k = groups[gi].checks[ki];
+    const form = Object.assign(document.createElement("span"), {className: "chk-ok-form",
+      innerHTML: `<input type="text" placeholder="Why it's OK (required)" aria-label="Why it's OK"><button class="btn">Save</button>`});
+    b.replaceWith(form); const input = form.querySelector("input"); input.focus();
+    const save = async () => {
+      try { await post("/api/checks/ok", {...k, note: input.value}); checkInfo = await api("/api/checks"); renderAudit(); msg($("au-msg"), "Marked OK.", true); }
+      catch (e) { msg($("au-msg"), e.message, false); }
+    };
+    form.querySelector("button").onclick = save; input.onkeydown = e => { if (e.key === "Enter") save(); };
+  });
+  document.querySelectorAll("[data-au-copy]").forEach(b => b.onclick = async () => {
+    const {subject, body} = checkEmail(groups[+b.dataset.auCopy]);
+    await navigator.clipboard.writeText(`${subject}\n\n${body}`);
+    msg($("au-msg"), "Copied. Paste it into an email, Teams or Chat.", true);
   });
 }
 loadLog();   // the Log tab opens first
