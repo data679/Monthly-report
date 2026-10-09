@@ -21,6 +21,9 @@ import urllib.request
 from pathlib import Path
 
 SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+# Only for the notes sheet the app keeps (shared with the service account as Editor). Office sheets are shared
+# as Viewer, so Google never lets the app change them even with this scope.
+WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 # Overridable so the sync can be tested against a local stand-in for Google.
 TOKEN_URL = os.environ.get("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token")
 API_BASE = os.environ.get("GOOGLE_SHEETS_API", "https://sheets.googleapis.com/v4")
@@ -61,7 +64,7 @@ class ServiceAccount:
     def __init__(self, key_dir):
         self.key_dir = Path(key_dir)
         self.key_file = self.key_dir / "service_account.json"
-        self._token, self._expires = None, 0
+        self._tokens = {}   # scope -> (token, expires)
 
     # ------------------------------------------------------------------ key file
     def exists(self):
@@ -81,19 +84,20 @@ class ServiceAccount:
         os.chmod(self.key_dir, 0o700)
         self.key_file.write_text(json.dumps(info))
         os.chmod(self.key_file, 0o600)
-        self._token = None
+        self._tokens = {}
         return info["client_email"]
 
     # ------------------------------------------------------------------ sign-in
-    def token(self):
-        if self._token and time.time() < self._expires - 60:
-            return self._token
+    def token(self, scope=SCOPE):
+        cached = self._tokens.get(scope)
+        if cached and time.time() < cached[1] - 60:
+            return cached[0]
         if not self.exists():
             raise GoogleError("No Google service account key yet. Add it on the Google Sheets tab.")
         info = json.loads(self.key_file.read_text())
         now = int(time.time())
         header = _b64url(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
-        claims = _b64url(json.dumps({"iss": info["client_email"], "scope": SCOPE, "aud": TOKEN_URL,
+        claims = _b64url(json.dumps({"iss": info["client_email"], "scope": scope, "aud": TOKEN_URL,
                                      "iat": now, "exp": now + 3600}).encode())
         signing_input = f"{header}.{claims}".encode()
         # openssl needs the key in a file; keep it private and remove it straight away.
@@ -112,11 +116,11 @@ class ServiceAccount:
         body = urllib.parse.urlencode({"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
                                        "assertion": f"{header}.{claims}.{_b64url(sig)}"}).encode()
         data = _request(urllib.request.Request(TOKEN_URL, data=body))
-        self._token, self._expires = data["access_token"], time.time() + int(data.get("expires_in", 3600))
-        return self._token
+        self._tokens[scope] = (data["access_token"], time.time() + int(data.get("expires_in", 3600)))
+        return data["access_token"]
 
 
-def _request(req, retries=3):
+def _request(req, retries=3, editing=False):
     _pace()
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
@@ -124,7 +128,7 @@ def _request(req, retries=3):
     except urllib.error.HTTPError as e:
         if e.code in (429, 503) and retries:   # over the read limit, or busy: wait and try again
             time.sleep(int(e.headers.get("Retry-After") or 0) or 30 * (4 - retries))
-            return _request(req, retries - 1)
+            return _request(req, retries - 1, editing)
         try:
             message = json.loads(e.read()).get("error", {})
             message = message.get("message") if isinstance(message, dict) else message
@@ -134,7 +138,7 @@ def _request(req, retries=3):
             raise GoogleError("That link is an Excel file stored in Google Drive, not a Google Sheet. Open it and use "
                               "File → Save as Google Sheets, then share and add the new sheet's link.")
         if e.code == 403:
-            raise GoogleError(f"No access. Share the sheet with the service account as Viewer. ({message})")
+            raise GoogleError(f"No access. Share the sheet with the service account as {'Editor' if editing else 'Viewer'}. ({message})")
         if e.code == 404:
             raise GoogleError("Sheet not found. Check the link, and that it's shared with the service account.")
         raise GoogleError(f"Google returned {e.code}: {message}")
@@ -156,9 +160,10 @@ class SheetsWorkbook:
 
     def __init__(self, account, sheet_id):
         self.account, self.id = account, sheet_id
-        meta = self._get(f"/spreadsheets/{sheet_id}", fields="properties.title,sheets.properties.title")
+        meta = self._get(f"/spreadsheets/{sheet_id}", fields="properties.title,sheets.properties(title,sheetId)")
         self.title = meta["properties"]["title"]
         self.sheets = {s["properties"]["title"]: s["properties"]["title"] for s in meta.get("sheets", [])}
+        self.sheet_ids = {s["properties"]["title"]: s["properties"].get("sheetId") for s in meta.get("sheets", [])}
 
     def _get(self, path, **params):
         url = API_BASE + urllib.parse.quote(path, safe="/!:',") + "?" + urllib.parse.urlencode(params)
@@ -181,3 +186,59 @@ class SheetsWorkbook:
             if cells:
                 out[r] = cells
         return out
+
+    # ------------------------------------------------------------------ writing (the notes sheet only)
+    def _send(self, method, path, body, **params):
+        url = API_BASE + urllib.parse.quote(path, safe="/!:',") + ("?" + urllib.parse.urlencode(params) if params else "")
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), method=method,
+                                     headers={"Authorization": f"Bearer {self.account.token(WRITE_SCOPE)}",
+                                              "Content-Type": "application/json"})
+        return _request(req, editing=True)
+
+    @staticmethod
+    def _range(tab, cells=""):
+        return "'" + tab.replace("'", "''") + "'" + (f"!{cells}" if cells else "")
+
+    def values_get(self, tab):
+        """Every value on a tab as shown (text), as a list of rows."""
+        return self._get(f"/spreadsheets/{self.id}/values/{self._range(tab)}").get("values", [])
+
+    def values_update(self, tab, rows, start="A1"):
+        return self._send("PUT", f"/spreadsheets/{self.id}/values/{self._range(tab, start)}", {"values": rows},
+                          valueInputOption="RAW")
+
+    def values_clear(self, tab):
+        return self._send("POST", f"/spreadsheets/{self.id}/values/{self._range(tab)}:clear", {})
+
+    def batch_update(self, requests):
+        reply = self._send("POST", f"/spreadsheets/{self.id}:batchUpdate", {"requests": requests})
+        for r in reply.get("replies", []):
+            props = (r.get("addSheet") or {}).get("properties")
+            if props:
+                self.sheets[props["title"]] = props["title"]
+                self.sheet_ids[props["title"]] = props.get("sheetId")
+        return reply
+
+    def values_batch_get(self, tabs):
+        """{tab: rows} for several tabs in one request."""
+        if not tabs:
+            return {}
+        url = (API_BASE + urllib.parse.quote(f"/spreadsheets/{self.id}/values:batchGet", safe="/!:',") + "?"
+               + urllib.parse.urlencode([("ranges", self._range(t)) for t in tabs]))
+        data = _request(urllib.request.Request(url, headers={"Authorization": f"Bearer {self.account.token()}"}))
+        return {t: vr.get("values", []) for t, vr in zip(tabs, data.get("valueRanges", []))}
+
+    def values_batch_clear(self, tabs):
+        if tabs:
+            self._send("POST", f"/spreadsheets/{self.id}/values:batchClear", {"ranges": [self._range(t) for t in tabs]})
+
+    def values_batch_update(self, data):
+        """data: {tab: rows}, each written from A1, in one request."""
+        if data:
+            self._send("POST", f"/spreadsheets/{self.id}/values:batchUpdate", {"valueInputOption": "RAW",
+                       "data": [{"range": self._range(t, "A1"), "values": rows} for t, rows in data.items()]})
+
+    def ensure_tab(self, tab):
+        if tab not in self.sheet_ids:
+            self.batch_update([{"addSheet": {"properties": {"title": tab}}}])
+        return self.sheet_ids[tab]

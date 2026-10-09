@@ -282,12 +282,77 @@ def parse_referral(rows):
 
     if not offices:
         raise ParseError("No 'Total for Office' lines found in this Referral Production Listing")
+    # For the Maps tab: each new patient's ZIP, Pat ID and collection (never the name), when the report is grouped
+    # by Zip Code. Used only if an office's patients add up to its own total.
+    patients = _referral_patients(rows)
+    grouped = any(label.startswith("Zip Code") for label, _ in rows)
+    for o in offices:
+        mine = patients.get(o["office"], [])
+        if mine and abs(sum(p["collection"] for p in mine) - o["np_collection"]) <= 0.05:
+            o["details"] = {"_map": mine}
     total = round(sum(o["np_collection"] for o in offices), 2)
     if grand_total is not None and abs(total - grand_total) > 0.01:
         raise ParseError(f"Office collections add up to {total:,.2f} but the report's Grand Total is "
                          f"{grand_total:,.2f}; not logging a mismatched report")
-    return {"report_type": "referral", "offices": offices, "skipped": [],
-            "grand_total": grand_total}
+    return {"report_type": "referral", "offices": offices, "skipped": [], "grand_total": grand_total,
+            "map_note": None if grouped else "This report isn't grouped by Zip Code, so it won't add new patients to the "
+                                             "Maps tab. Run it with Group by Zip Code to include them."}
+
+
+def _referral_patients(rows):
+    """{office: [{zip, referral_type, pat_id, visits, production, collection}]} from a Referral Production Listing
+    grouped by Zip Code. A patient line's numbers are [chart #,] Pat ID, # visits, #proc, production, collection,
+    adjustments; its text (the patient's name) is ignored."""
+    out, office, referral, zip_code = {}, None, None, None
+    for label, nums in rows:
+        if (m := re.match(r"Office\s*:\s*(.+)$", label)):
+            office, referral, zip_code = m.group(1).strip(), None, None
+        elif (m := re.match(r"Referral Type\s*:\s*(.+)$", label)):
+            referral, zip_code = m.group(1).strip(), None
+        elif (m := re.match(r"Zip Code\s*:\s*(\d{5})", label)):
+            zip_code = m.group(1)
+        elif office and zip_code and not label.startswith("Total") and \
+                (len(nums) in (6, 7) or (len(nums) == 5 and re.match(r"\d{6,9}\b", label))):
+            # In a PDF the Pat ID is at the start of the line's text: "90228259 <name>" [visits, proc, ...]
+            n = nums[-6:] if len(nums) != 5 else [float(re.match(r"\d{6,9}", label).group()), *nums]
+            if float(n[0]).is_integer() and 100000 <= n[0] < 10**9:
+                out.setdefault(office, []).append({
+                    "zip": zip_code, "referral_type": referral or "", "pat_id": str(int(n[0])),
+                    "visits": int(n[1]), "production": round(n[3], 2), "collection": round(abs(n[4]), 2)})
+    return out
+
+
+def parse_patient_types(path):
+    """Pat ID -> "General" / "Ortho" from Denticon's Patient List - Address (one office per file), for the Maps
+    tab's filter. Only the office, Pat IDs and types are returned; names and addresses are never kept."""
+    if not str(path).lower().endswith((".xlsx", ".xlsm")):
+        raise ParseError("Upload the Patient List - Address as an Excel file (.xlsx)")
+    wb = np_analysis.Workbook(path)
+    rows = wb.rows(next(iter(wb.sheets)))
+    keys = sorted(rows)
+    if not any("patient list" in v.lower() for r in keys[:6] for v in rows[r].values()):
+        raise ParseError("This doesn't look like Denticon's Patient List - Address report")
+    office = next((v.strip() for r in keys[:4] for v in rows[r].values()
+                   if v.strip() and "patient list" not in v.lower()), None)
+    head_r = next((r for r in keys[:20] if any(v.strip().lower() == "pat id" for v in rows[r].values())), None)
+    if not office or head_r is None:
+        raise ParseError("Couldn't find the office name or the header row (Pat ID) in this patient list")
+    head = {re.sub(r"\s+", " ", v).strip().lower(): c for c, v in rows[head_r].items()}
+    pid_c = head.get("pat id")
+    type_c = next((c for h, c in head.items() if "general" in h or "ortho" in h), None)
+    if not type_c:
+        raise ParseError("This patient list has no 'General / Ortho' column")
+    types = {}
+    for r in keys:
+        if r <= head_r:
+            continue
+        pid = rows[r].get(pid_c, "").split(".")[0]
+        t = rows[r].get(type_c, "").strip().lower()
+        if pid.isdigit():
+            types[pid] = "Ortho" if t.startswith("ortho") else "General" if t.startswith("gen") else ""
+    if not types:
+        raise ParseError("No patients found in this patient list")
+    return {"office": office, "types": types}
 
 
 # ---------------------------------------------------------------- Daily Journal (Ortho)

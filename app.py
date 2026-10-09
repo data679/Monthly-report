@@ -21,16 +21,21 @@ import tempfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
 from urllib.parse import unquote
 
 import threading
 import time
 from datetime import date, timedelta
 
+import denticon_api
 import google_sheets
 import np_analysis
 from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, rows_to_text, title_case
-from summary_parser import ParseError, parse_report
+from summary_parser import ParseError, parse_patient_types, parse_report
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
@@ -40,7 +45,10 @@ CSV_PATH = DATA_DIR / "office_summary.csv"
 HOST, PORT = os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", 8765))
 PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the password itself
 # Only from the computer running the app: SQL, the Google key, and the Denticon audit (admin view).
-LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal"}
+LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
+                    "/api/denticon/key", "/api/denticon/key/delete", "/api/denticon/test", "/api/denticon/offices",
+                    "/api/google/notes-sheet", "/api/google/notes-sheet/delete", "/api/google/notes-sheet/write",
+                    "/api/maps/patient-types", "/api/maps/office-location", "/api/maps/zip-download"}
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
@@ -49,7 +57,8 @@ VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
   body.viewer nav button[data-tab="sql"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
-  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"] { display: none; }
+  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"],
+  body.viewer nav button[data-tab="maps"] { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
 <script>
@@ -224,6 +233,53 @@ CREATE TABLE IF NOT EXISTS journal_uploads (
     source       TEXT,
     logged_at    TEXT NOT NULL,
     PRIMARY KEY (office, period_from)
+);
+
+-- Denticon API offices (from Practices > Offices) and which log office each one is.
+CREATE TABLE IF NOT EXISTS denticon_offices (
+    office_id    INTEGER PRIMARY KEY,
+    name         TEXT,
+    log_office   TEXT,                -- NULL until matched
+    updated_at   TEXT NOT NULL
+);
+
+-- The notes sheet: a Google Sheet the app keeps a copy of the Log in (one way), with a Notes column people type in.
+CREATE TABLE IF NOT EXISTS notes_sheet (
+    id                INTEGER PRIMARY KEY CHECK (id = 1),
+    spreadsheet_id    TEXT NOT NULL,
+    url               TEXT,
+    title             TEXT,
+    last_write_at     TEXT,
+    last_status       TEXT,
+    last_fingerprint  TEXT
+);
+
+-- Maps tab. New patients by ZIP from the Referral Production Listing (by Zip Code): Pat ID and amounts only,
+-- never names. Replaced per office and month by each upload (a later Thru date wins).
+CREATE TABLE IF NOT EXISTS map_patients (
+    office         TEXT NOT NULL,
+    period_from    TEXT NOT NULL,
+    as_of          TEXT NOT NULL,
+    pat_id         TEXT NOT NULL,
+    zip            TEXT NOT NULL,
+    referral_type  TEXT,
+    visits         INTEGER,
+    production     REAL,
+    collection     REAL NOT NULL
+);
+-- Pat ID -> General / Ortho, from Denticon's Patient List - Address (names and addresses aren't kept).
+CREATE TABLE IF NOT EXISTS patient_types (
+    office      TEXT NOT NULL,
+    pat_id      TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (office, pat_id)
+);
+CREATE TABLE IF NOT EXISTS office_locations (
+    office   TEXT PRIMARY KEY,
+    address  TEXT,
+    lat      REAL NOT NULL,
+    lon      REAL NOT NULL
 );
 
 -- Sheet office names mapped to the office names used in the log.
@@ -666,6 +722,17 @@ def save_metrics(payload):
                         "INSERT INTO office_metrics (office, period_from, as_of, metric, value, source, logged_at, detail) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
                     counts["added"] += 1
+            map_rows = (row.get("details") or {}).get("_map")
+            if map_rows is not None:
+                newer = conn.execute("SELECT 1 FROM map_patients WHERE office = ? AND period_from = ? AND as_of > ? LIMIT 1",
+                                     (office, period_from, as_of)).fetchone()
+                if not newer:
+                    conn.execute("DELETE FROM map_patients WHERE office = ? AND period_from = ?", (office, period_from))
+                    conn.executemany(
+                        "INSERT INTO map_patients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        [(office, period_from, as_of, str(p["pat_id"]), str(p["zip"])[:5], p.get("referral_type") or "",
+                          int(p.get("visits") or 0), float(p.get("production") or 0), float(p["collection"]))
+                         for p in map_rows if str(p.get("zip", "")).isdigit()])
             patients = (row.get("details") or {}).get("_patients")
             if patients is not None:
                 newer = conn.execute("SELECT as_of FROM office_metrics WHERE office = ? AND period_from = ? AND "
@@ -1050,6 +1117,218 @@ def backup_loop():
         time.sleep(3600)
 
 
+# ------------------------------------------------------------------ notes sheet (the Log, copied to Google)
+
+OLD_LOG_TAB, ORPHAN_TAB = "Log", "Notes (orphaned)"   # "Log": the one-tab layout used before month tabs
+MONTH_TAB_RE = re.compile(r"^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$")
+notes_lock = threading.Lock()
+
+
+def log_sheet_columns():
+    """The Log's columns, as the page shows them: [(key, label, kind, ratio)] from LOG_COLS in static/index.html,
+    in the page's section order, without internal, text and period columns. ratio = (numerator keys, denominator)
+    for rates and averages, so the Total row is calculated the same way as the page's."""
+    page = (ROOT / "static" / "index.html").read_text()
+    try:
+        block = page[page.index("const LOG_COLS = ["):page.index("// Rates that can't")]
+        sections = page[page.index("const SECTIONS = ["):page.index("const sectionOf")]
+    except ValueError:
+        return [(m, m, "count", None) for m in METRIC_NAMES]
+    cols = []
+    for chunk in re.split(r"\n  (?=\{key: \")", block):
+        m = re.match(r'\{key: "(\w+)", label: "([^"]+)", kind: "(\w+)"', chunk)
+        if not m or m.group(3) not in ("money", "count", "pct") or "internal: true" in chunk:
+            continue
+        r = re.search(r'ratio: \{num: \[([^\]]*)\], den: "(\w+)"\}', chunk)
+        ratio = (re.findall(r'"(\w+)"', r.group(1)), r.group(2)) if r else None
+        cols.append((m.group(1), m.group(2), m.group(3), ratio))
+    order = [k for keys in re.findall(r"keys: \[([^\]]+)\]", sections) for k in re.findall(r'"(\w+)"', keys)]
+    rank = {k: i for i, k in enumerate(order)}
+    return sorted(cols, key=lambda c: rank.get(c[0], len(rank)))
+
+
+def _total(rows, key, kind, ratio):
+    """The Total row's value, as the page calculates it: rates from the summed parts, amounts and counts added up."""
+    if ratio:
+        num, den = ratio
+        full = [r for r in rows if r[den] and all(r[k] is not None for k in num)]
+        base = sum(r[den] for r in full)
+        return round(sum(sum(r[k] for k in num) for r in full) / base, 4) if base else ""
+    vals = [r[key] for r in rows if r[key] is not None]
+    return round(sum(vals), 2) if vals and kind in ("money", "count") else ""
+
+
+def notes_fingerprint(conn):
+    """Changes whenever anything in the Log could have changed (cheap to check every couple of minutes)."""
+    q = lambda sql: conn.execute(sql).fetchone()[0]
+    return "|".join(str(v) for v in (q("SELECT MAX(id) FROM change_log"), q("SELECT COUNT(*) FROM monthly_log"),
+                                     q("SELECT MAX(logged_at) FROM office_metrics"), q("SELECT MAX(logged_at) FROM office_summary"),
+                                     q("SELECT COUNT(*) FROM office_metrics"), q("SELECT COUNT(*) FROM office_summary")))
+
+
+def notes_sheet_info():
+    conn = db()
+    row = conn.execute("SELECT * FROM notes_sheet WHERE id = 1").fetchone()
+    conn.close()
+    return {"service_account": account.email(), **({k: row[k] for k in row.keys() if k != "last_fingerprint"} if row else {})}
+
+
+def _notes_from(rows, month=None):
+    """{(office, month): note} from a tab's rows (header row first). Month tabs have no Month column."""
+    if not rows:
+        return {}
+    head = [h.strip().lower() for h in rows[0]]
+    if "office" not in head or "notes" not in head:
+        return {}
+    io, inote, im = head.index("office"), head.index("notes"), head.index("month") if "month" in head else None
+    out = {}
+    for r in rows[1:]:
+        note = r[inote].strip() if len(r) > inote else ""
+        office = r[io].strip() if len(r) > io else ""
+        m = month or (r[im].strip() if im is not None and len(r) > im else "")
+        for fmt in ("%b %Y", "%B %Y"):   # the old one-tab layout said "Sep 2026"; month tabs are "September 2026"
+            try:
+                m = datetime.strptime(m, fmt).strftime("%B %Y")
+                break
+            except ValueError:
+                pass
+        if note and office and office != "Total" and m:
+            out[(office, m)] = note
+    return out
+
+
+def write_notes_sheet(force=False):
+    """Copy the Log to the notes sheet, one tab per month like the platform ("October 2026", newest first),
+    keeping what people typed in each tab's Notes column (matched by office). Returns a status, or None
+    when nothing changed."""
+    if not notes_lock.acquire(timeout=300):
+        return None
+    try:
+        conn = db()
+        row = conn.execute("SELECT * FROM notes_sheet WHERE id = 1").fetchone()
+        if not row:
+            conn.close()
+            return None
+        fp = notes_fingerprint(conn)
+        if not force and fp == row["last_fingerprint"]:
+            conn.close()
+            return None
+        cols = log_sheet_columns()
+        log = conn.execute("SELECT * FROM monthly_log ORDER BY period_from DESC, office").fetchall()
+        conn.close()
+        tab_of = lambda pf: datetime.strptime(pf[:7], "%Y-%m").strftime("%B %Y")
+        months = list(dict.fromkeys(tab_of(r["period_from"]) for r in log))           # newest first
+        try:
+            wb = google_sheets.SheetsWorkbook(account, row["spreadsheet_id"])
+            ours = [t for t in wb.sheets if MONTH_TAB_RE.match(t) or t == OLD_LOG_TAB]
+            old = wb.values_batch_get(ours)
+            notes = {}
+            for t, rows in old.items():
+                notes.update(_notes_from(rows, None if t == OLD_LOG_TAB else t))
+            # Tabs: rename a brand-new sheet's empty "Sheet1", add missing months, drop month tabs (and the old
+            # one-tab "Log") that the log no longer has, then put the months first, newest first.
+            reqs = []
+            if "Sheet1" in wb.sheets and len(wb.sheets) == 1 and months and not wb.values_get("Sheet1"):
+                reqs.append({"updateSheetProperties": {"properties": {"sheetId": wb.sheet_ids["Sheet1"], "title": months[0]},
+                                                       "fields": "title"}})
+                wb.sheet_ids = {months[0]: wb.sheet_ids.pop("Sheet1")}
+                wb.sheets = {months[0]: months[0]}
+            reqs += [{"addSheet": {"properties": {"title": m}}} for m in months if m not in wb.sheets]
+            if reqs:
+                wb.batch_update(reqs)
+            gone = [t for t in ours if t not in months]
+            kept = {(r["office"], tab_of(r["period_from"])) for r in log}
+            orphans = [[o, m, n] for (o, m), n in notes.items() if (o, m) not in kept]
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if orphans:   # a row that's gone from the log: keep its note on another tab rather than lose it
+                wb.ensure_tab(ORPHAN_TAB)
+                prev = wb.values_get(ORPHAN_TAB)
+                have = {tuple(x[:3]) for x in prev[1:]}
+                new = [o + [now] for o in orphans if tuple(o) not in have]
+                if new:
+                    wb.values_update(ORPHAN_TAB, ([["Office", "Month", "Notes", "Moved here"]] if not prev else []) + new,
+                                     start=f"A{len(prev) + 1}")
+            header = ["Office", "Thru", *[c[1] for c in cols], "Notes", "Updated"]
+            data = {}
+            for m in months:
+                rows = [r for r in log if tab_of(r["period_from"]) == m]
+                body = [[r["office"], r["period_thru"] or "", *[("" if r[k] is None else r[k]) for k, _, _, _ in cols],
+                         notes.get((r["office"], m), ""), now] for r in rows]
+                total = ["Total", f"{len(rows)} offices", *[_total(rows, k, kind, ratio) for k, _, kind, ratio in cols], "", ""]
+                data[m] = [header, *body, total]
+            wb.values_batch_clear(months)
+            wb.values_batch_update(data)
+            # Formatting for new tabs or changed columns, plus tab order and removing tabs no longer needed.
+            fmt = {"money": {"type": "CURRENCY", "pattern": "$#,##0.00"}, "pct": {"type": "PERCENT", "pattern": "0.00%"},
+                   "count": {"type": "NUMBER", "pattern": "#,##0"}}
+            reqs = []
+            for m in months:
+                if old.get(m) and [h.strip() for h in old[m][0]] == header:
+                    continue
+                sid = wb.sheet_ids[m]
+                reqs += [{"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {
+                             "frozenRowCount": 1, "frozenColumnCount": 1}}, "fields": "gridProperties(frozenRowCount,frozenColumnCount)"}},
+                         {"repeatCell": {"range": {"sheetId": sid, "startRowIndex": 0, "endRowIndex": 1},
+                                         "cell": {"userEnteredFormat": {"textFormat": {"bold": True}, "wrapStrategy": "WRAP"}},
+                                         "fields": "userEnteredFormat(textFormat,wrapStrategy)"}}]
+                reqs += [{"repeatCell": {"range": {"sheetId": sid, "startRowIndex": 1, "startColumnIndex": i, "endColumnIndex": i + 1},
+                                         "cell": {"userEnteredFormat": {"numberFormat": fmt[c[2]]}},
+                                         "fields": "userEnteredFormat.numberFormat"}} for i, c in enumerate(cols, start=2)]
+            reqs += [{"deleteSheet": {"sheetId": wb.sheet_ids[t]}} for t in gone if t in wb.sheet_ids]
+            reqs += [{"updateSheetProperties": {"properties": {"sheetId": wb.sheet_ids[m], "index": i}, "fields": "index"}}
+                     for i, m in enumerate(months)]
+            if reqs:
+                wb.batch_update(reqs)
+            status = (f"ok: {len(months)} month tab(s), {len(log)} rows written"
+                      + (f", {len(orphans)} note(s) moved to '{ORPHAN_TAB}'" if orphans else ""))
+            done = {"last_fingerprint": fp, "title": wb.title}
+        except google_sheets.GoogleError as e:
+            status, done = f"error: {e}", {}
+        conn = db()
+        with conn:
+            conn.execute("UPDATE notes_sheet SET last_write_at = ?, last_status = ?, last_fingerprint = COALESCE(?, last_fingerprint), "
+                         "title = COALESCE(?, title) WHERE id = 1", (datetime.now().isoformat(timespec="seconds"), status,
+                                                                    done.get("last_fingerprint"), done.get("title")))
+        conn.close()
+        return status
+    finally:
+        notes_lock.release()
+
+
+def connect_notes_sheet(url):
+    sid = google_sheets.spreadsheet_id(url)
+    wb = google_sheets.SheetsWorkbook(account, sid)   # checks the link and read access
+    conn = db()
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO notes_sheet (id, spreadsheet_id, url, title) VALUES (1, ?, ?, ?)", (sid, url, wb.title))
+    conn.close()
+    status = write_notes_sheet(force=True)
+    if status and status.startswith("error") and "No access" in status:
+        disconnect_notes_sheet()
+        raise ValueError(f"The app can't edit that sheet. Share it with {account.email()} as Editor.")
+    return {"status": status, **notes_sheet_info()}
+
+
+def disconnect_notes_sheet():
+    conn = db()
+    with conn:
+        conn.execute("DELETE FROM notes_sheet")
+    conn.close()
+    return {"ok": True}
+
+
+def notes_sheet_loop():
+    """Every 2 minutes: if anything in the Log changed, copy it to the notes sheet."""
+    while True:
+        time.sleep(120)
+        try:
+            status = write_notes_sheet()
+            if status:
+                print(f"{datetime.now():%H:%M} Notes sheet: {status}")
+        except Exception as e:  # keep the loop alive
+            print(f"{datetime.now():%H:%M} Notes sheet failed: {e}")
+
+
 def sync_loop():
     """Sync every SYNC_EVERY seconds while the app runs (only once a key and sheets are set up)."""
     while True:
@@ -1173,6 +1452,173 @@ def checks_info(viewer=False):
             "url": urls.get(r["office"]) if google else None}
     conn.close()
     return {"ok": ok, "notified": notified, "contacts": contacts, "sources": sources}
+
+
+denticon = denticon_api.Client(DATA_DIR)
+denticon_state = {"last_test": None, "last_error": None}
+
+
+def _pick(d, *names):
+    for n in names:
+        if d.get(n) not in (None, ""):
+            return d[n]
+    return None
+
+
+def denticon_status():
+    conn = db()
+    offices = [dict(r) for r in conn.execute("SELECT * FROM denticon_offices ORDER BY name")]
+    known = known_offices(conn)
+    conn.close()
+    return {"key_present": denticon.exists(), "offices": offices, "log_offices": known, **denticon_state}
+
+
+def denticon_test():
+    """Check the key by listing the practice's offices (names and IDs only), and match them to the log."""
+    try:
+        rows = denticon.offices()
+    except denticon_api.DenticonError as e:
+        denticon_state.update(last_error=str(e), last_test=datetime.now().isoformat(timespec="seconds"))
+        raise ValueError(str(e))
+    conn = db()
+    known = {normalize(o): o for o in known_offices(conn)}
+    aliases = {r["alias"]: r["office"] for r in conn.execute("SELECT alias, office FROM office_alias")}
+    now = datetime.now().isoformat(timespec="seconds")
+    with conn:
+        for r in rows:
+            oid = _pick(r, "officeId", "id", "oid", "officeID")
+            name = str(_pick(r, "officeName", "name", "officeDescription", "description") or oid)
+            if oid is None:
+                continue
+            old = conn.execute("SELECT log_office FROM denticon_offices WHERE office_id = ?", (oid,)).fetchone()
+            match = (old and old["log_office"]) or known.get(normalize(name)) or aliases.get(normalize(name))
+            conn.execute("INSERT OR REPLACE INTO denticon_offices VALUES (?, ?, ?, ?)", (int(oid), name, match, now))
+    conn.close()
+    denticon_state.update(last_error=None, last_test=now,
+                          fields=sorted({k for r in rows for k in r})[:40])   # field names only, to plan the sync
+    return {**denticon_status(), "found": len(rows)}
+
+
+def set_denticon_office(c):
+    conn = db()
+    with conn:
+        n = conn.execute("UPDATE denticon_offices SET log_office = ? WHERE office_id = ?",
+                         ((c.get("log_office") or None), int(c["office_id"]))).rowcount
+    conn.close()
+    if not n:
+        raise ValueError("That Denticon office isn't in the list; click Test connection first")
+    return {"ok": True}
+
+
+# ------------------------------------------------------------------ Maps tab
+
+ZIP_FILE = DATA_DIR / "zip_centroids.json"
+ZIP_SOURCE = "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_zcta_national.zip"
+GEOCODER = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+_zips = None
+
+
+def zip_centroids():
+    global _zips
+    if _zips is None:
+        _zips = json.loads(ZIP_FILE.read_text()) if ZIP_FILE.exists() else {}
+    return _zips
+
+
+def download_zip_centroids():
+    """One time: the US Census ZIP (ZCTA) gazetteer, public data; only each ZIP's center point is kept."""
+    global _zips
+    import io
+    with urllib.request.urlopen(ZIP_SOURCE, timeout=120) as resp:
+        raw = resp.read()
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        text = z.read(next(n for n in z.namelist() if n.endswith(".txt"))).decode("utf-8", "replace")
+    lines = [l.split("\t") for l in text.splitlines()]
+    head = [h.strip().upper() for h in lines[0]]
+    iz, ila, ilo = head.index("GEOID"), head.index("INTPTLAT"), head.index("INTPTLONG")
+    out = {l[iz].strip(): [round(float(l[ila]), 5), round(float(l[ilo]), 5)] for l in lines[1:] if len(l) > ilo}
+    ZIP_FILE.write_text(json.dumps(out, separators=(",", ":")))
+    _zips = out
+    return {"zips": len(out)}
+
+
+def map_office_name(conn, name):
+    """A report's office name as the log's office name (exact, alias, or the same words)."""
+    known = {normalize(o): o for o in known_offices(conn)}
+    aliases = {r["alias"]: r["office"] for r in conn.execute("SELECT alias, office FROM office_alias")}
+    return known.get(normalize(name)) or aliases.get(normalize(name)) or name
+
+
+def save_patient_types(path, filename):
+    parsed = parse_patient_types(path)
+    conn = db()
+    office = map_office_name(conn, parsed["office"])
+    now = datetime.now().isoformat(timespec="seconds")
+    with conn:
+        conn.execute("DELETE FROM patient_types WHERE office = ?", (office,))
+        conn.executemany("INSERT INTO patient_types VALUES (?, ?, ?, ?)",
+                         [(office, pid, t, now) for pid, t in parsed["types"].items() if t])
+    conn.close()
+    vals = list(parsed["types"].values())
+    return {"office": office, "general": vals.count("General"), "ortho": vals.count("Ortho"), "patients": len(vals)}
+
+
+def set_office_location(c):
+    office = str(c.get("office") or "").strip()
+    if not office:
+        raise ValueError("Pick the office")
+    address = str(c.get("address") or "").strip()
+    lat, lon = c.get("lat"), c.get("lon")
+    if address and (lat in (None, "") or lon in (None, "")):
+        # Look the office's business address up with the US Census geocoder (no patient data is sent).
+        url = GEOCODER + "?" + urllib.parse.urlencode({"address": address, "benchmark": "Public_AR_Current", "format": "json"})
+        try:
+            with urllib.request.urlopen(url, timeout=60) as resp:
+                matches = json.loads(resp.read())["result"]["addressMatches"]
+        except (urllib.error.URLError, ValueError, KeyError) as e:
+            raise ValueError(f"Couldn't look up that address ({e}). Enter latitude and longitude instead.")
+        if not matches:
+            raise ValueError("The Census geocoder didn't find that address. Check it, or enter latitude and longitude.")
+        lat, lon = matches[0]["coordinates"]["y"], matches[0]["coordinates"]["x"]
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        raise ValueError("Enter the office's address, or its latitude and longitude")
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("Those don't look like latitude and longitude")
+    conn = db()
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO office_locations VALUES (?, ?, ?, ?)", (office, address, lat, lon))
+    conn.close()
+    return {"office": office, "lat": lat, "lon": lon}
+
+
+def maps_info(month=None):
+    """New patients by ZIP for a month (YYYY-MM), with each ZIP's center, the offices' pins and General/Ortho."""
+    conn = db()
+    months = [r[0][:7] for r in conn.execute("SELECT DISTINCT period_from FROM map_patients ORDER BY period_from DESC")]
+    month = month if month in months else (months[0] if months else None)
+    rows = conn.execute("SELECT m.*, t.type FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND "
+                        "t.pat_id = m.pat_id WHERE m.period_from = ?", (f"{month}-01",)).fetchall() if month else []
+    pins = [dict(r) for r in conn.execute("SELECT office, lat, lon FROM office_locations")]
+    offices = known_offices(conn)
+    types_loaded = [r[0] for r in conn.execute("SELECT DISTINCT office FROM patient_types")]
+    conn.close()
+    zips, missing = zip_centroids(), {}
+    by_zip = {}
+    for r in rows:
+        z = by_zip.setdefault(r["zip"], {"zip": r["zip"], "patients": []})
+        z["patients"].append({"pat_id": r["pat_id"], "office": r["office"], "collection": r["collection"],
+                              "type": r["type"] or "Unknown", "referral": r["referral_type"]})
+    out = []
+    for z in by_zip.values():
+        if z["zip"] in zips:
+            z["lat"], z["lon"] = zips[z["zip"]]
+            out.append(z)
+        else:
+            missing[z["zip"]] = len(z["patients"])
+    return {"month": month, "months": months, "zips": out, "missing": missing, "pins": pins, "offices": offices,
+            "zip_data": bool(zips), "types_loaded": types_loaded, "as_of": {}}
 
 
 def audit_info():
@@ -1395,10 +1841,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, {"error": "Password required"},
                        extra={"WWW-Authenticate": 'Basic realm="Monthly report", charset="UTF-8"'})
             return True
-        if self.path in LOCAL_ONLY_PATHS and self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+        if self.path in LOCAL_ONLY_PATHS and not self._on_this_computer():
             self._send(403, {"error": "For safety, this only works on the computer that runs the app."})
             return True
         return False
+
+    def _on_this_computer(self):
+        """True only for a browser on the computer running the app. Requests passed on by a proxy (Tailscale
+        Serve, which connects from this computer) carry forwarding headers and count as other computers."""
+        if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return False
+        forwarded = ("X-Forwarded-For", "X-Forwarded-Host", "Forwarded", "Tailscale-User-Login", "Tailscale-User-Name")
+        return not any(self.headers.get(h) for h in forwarded)
 
     def end_headers(self):
         if VIEWER_PASSWORD or APP_PASSWORD:
@@ -1429,6 +1883,13 @@ class Handler(BaseHTTPRequestHandler):
             rows = [dict(r) for r in conn.execute("SELECT * FROM benchmarks ORDER BY metric")]
             conn.close()
             self._send(200, rows)
+        elif self.path == "/api/google/notes-sheet":
+            self._send(200, notes_sheet_info())
+        elif self.path.startswith("/api/maps"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._send(200, maps_info((q.get("month") or [None])[0]))
+        elif self.path == "/api/denticon/status":
+            self._send(200, denticon_status())
         elif self.path == "/api/audit":
             self._send(200, audit_info())
         elif self.path == "/api/checks":
@@ -1471,6 +1932,34 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, save_rows(json.loads(self._body())))
             elif self.path == "/api/parse-paste":
                 self._send(200, read_paste(json.loads(self._body()).get("text", "")))
+            elif self.path == "/api/maps/patient-types":
+                filename = unquote(self.headers.get("X-Filename", "upload.xlsx"))
+                with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix.lower(), delete=False) as tmp:
+                    tmp.write(self._body())
+                try:
+                    self._send(200, save_patient_types(tmp.name, filename))
+                finally:
+                    os.unlink(tmp.name)
+            elif self.path == "/api/maps/office-location":
+                self._send(200, set_office_location(json.loads(self._body())))
+            elif self.path == "/api/maps/zip-download":
+                self._send(200, download_zip_centroids())
+            elif self.path == "/api/google/notes-sheet":
+                self._send(200, connect_notes_sheet(json.loads(self._body()).get("url", "")))
+            elif self.path == "/api/google/notes-sheet/delete":
+                self._send(200, disconnect_notes_sheet())
+            elif self.path == "/api/google/notes-sheet/write":
+                self._send(200, {"status": write_notes_sheet(force=True) or "nothing to write (not connected)", **notes_sheet_info()})
+            elif self.path == "/api/denticon/key":
+                denticon.save_key(json.loads(self._body()).get("key"))
+                self._send(200, {"ok": True})
+            elif self.path == "/api/denticon/key/delete":
+                denticon.remove_key()
+                self._send(200, {"ok": True})
+            elif self.path == "/api/denticon/test":
+                self._send(200, denticon_test())
+            elif self.path == "/api/denticon/offices":
+                self._send(200, set_denticon_office(json.loads(self._body())))
             elif self.path == "/api/save-lender-journal":
                 self._send(200, save_lender_journal(json.loads(self._body())))
             elif self.path == "/api/save-metrics":
@@ -1511,7 +2000,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, run_sql(query))
             else:
                 self._send(404, {"error": "Not found"})
-        except (ParseError, PasteError, ValueError, KeyError, sqlite3.Error,
+        except (ParseError, PasteError, ValueError, KeyError, sqlite3.Error, denticon_api.DenticonError,
                 google_sheets.GoogleError, np_analysis.NPAnalysisError) as e:
             self._send(400, {"error": str(e)})
         except Exception as e:  # keep the server up, report the problem
@@ -1530,6 +2019,7 @@ if __name__ == "__main__":
     else:
         threading.Thread(target=sync_loop, daemon=True).start()
         threading.Thread(target=backup_loop, daemon=True).start()
+        threading.Thread(target=notes_sheet_loop, daemon=True).start()
     print(f"Executive Summary logger running at http://{HOST}:{PORT}  (Ctrl+C to stop)")
     if HOST == "0.0.0.0":
         print(f"On the office network: http://{socket.gethostname()}.local:{PORT}  (password required)")

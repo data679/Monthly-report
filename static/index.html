@@ -102,11 +102,20 @@
   .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   tr.bands th { padding: 4px 8px 2px; font-size: 11px; letter-spacing: .04em; border-bottom: 0; text-transform: uppercase; }
   tr.bands th.band { color: var(--sec); border-top: 3px solid var(--sec); text-align: left;
-                     background: color-mix(in srgb, var(--sec) 8%, transparent); }
+                     background-color: var(--surface);
+                     background-image: linear-gradient(color-mix(in srgb, var(--sec) 8%, transparent), color-mix(in srgb, var(--sec) 8%, transparent)); }
   /* Keep the office name visible while scrolling the log sideways. */
   #log table th:nth-child(2), #log table td:nth-child(2) { position: sticky; left: 0; z-index: 1;
     background: var(--surface); box-shadow: 1px 0 0 var(--border); }
   #log tbody tr:hover td:nth-child(2) { background: var(--hover); }
+  /* Freeze the column headers (and the Total row) too: the table scrolls inside its own box. */
+  .log-wrap { max-height: calc(100vh - 110px); overflow: auto; overscroll-behavior: contain; padding-bottom: 0; }
+  #log thead th { position: sticky; z-index: 2; background-color: var(--surface); box-shadow: inset 0 -1px 0 var(--border); }
+  #log-bands th { top: 0; }
+  #log-head th { top: var(--bands-h, 0px); }
+  #log thead th:nth-child(2) { z-index: 3; }
+  #log tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 1px 0 var(--border); }
+  #log tfoot td:nth-child(2) { z-index: 3; }
   .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   .picker { position: relative; }
   .picker > button.trigger { font: inherit; font-size: 15px; min-width: 150px; text-align: left; padding: 7px 9px;
@@ -214,6 +223,17 @@
   .tr-tip .tr-row span { color: var(--muted); }
   .tr-table { margin-top: 6px; }
   .tr-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .mp-map { height: min(70vh, 640px); border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+  @media (prefers-color-scheme: dark) { .mp-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); } }
+  .mp-step { margin: 12px 0 6px; }
+  #mp-zips tr { cursor: pointer; }
+  .mp-pop { max-height: 260px; overflow: auto; font-size: 12px; min-width: 220px; }
+  .mp-pop table { border-collapse: collapse; width: 100%; } .mp-pop td { padding: 2px 6px; border-bottom: 1px solid #eee; }
+  .mp-pop .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mp-pin { background: #111827; color: #fff; border: 2px solid #fff; border-radius: 50%; width: 14px; height: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .leaflet-tooltip.mp-label { font-size: 11px; padding: 1px 5px; }
+  #mp-offices input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+                      background: var(--surface); color: var(--text); }
   #charts > .tr-controls { margin: 0 0 12px; }
   #charts > .card + .card { margin-top: 16px; }
   .tr-series { gap: 8px 16px; margin: 6px 0 10px; }
@@ -333,6 +353,7 @@
   <nav>
     <button data-tab="log" class="active">Log</button>
     <button data-tab="charts">Charts</button>
+    <button data-tab="maps">Maps</button>
     <button data-tab="changes">Changes</button>
     <button data-tab="upload">Upload</button>
     <button data-tab="google">Google Sheets</button>
@@ -468,7 +489,7 @@
         <span id="sections-label" class="hint">Sections:</span>
         <span id="section-switches"></span>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap log-wrap">
         <table>
           <thead><tr id="log-bands" class="bands"></tr><tr id="log-head"></tr></thead>
           <tbody id="log-body"></tbody>
@@ -542,6 +563,23 @@
         <button class="btn" id="g-backfill">Load past months</button></div>
       <p class="msg" id="g-backfill-msg"></p>
     </div>
+
+    <div class="card" id="ns-card" hidden>
+      <h2 class="card-title">4. Notes sheet (a copy of the Log)</h2>
+      <p class="hint" style="margin-top:0">The app keeps a Google Sheet copy of the Log, one tab per month like the platform (newest first,
+        same columns, with a Total row), updated
+        within about 2 minutes of any change. Create a blank Google Sheet, share it with <code id="ns-email"></code> as
+        <strong>Editor</strong>, and paste its link here. Type your notes in its <strong>Notes</strong> column; everything else is
+        rewritten by the app. Only on this computer.</p>
+      <p id="ns-status"></p>
+      <div class="row">
+        <label>Sheet link <input type="url" id="ns-url" placeholder="https://docs.google.com/spreadsheets/d/…" style="width:min(420px,75vw)"></label>
+        <button class="btn primary" id="ns-connect">Connect</button>
+        <button class="btn" id="ns-write">Write now</button>
+        <button class="btn danger" id="ns-disconnect">Disconnect</button>
+      </div>
+      <p class="msg" id="ns-msg"></p>
+    </div>
   </section>
 
   <!-- Changes -->
@@ -597,6 +635,61 @@
         <tbody id="au-summary"></tbody></table></div>
       <div id="au-list" style="margin-top:12px"></div>
       <p class="msg" id="au-msg"></p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2 class="card-title" style="margin-top:0">Denticon API</h2>
+      <p class="hint" style="margin-top:0">Connect the app to Denticon with your API subscription key, so it can read the offices' ledgers
+        (lender payments and fees) every night instead of uploading Daily Journals. The key is stored only on this computer
+        (in data/, readable only by your user) and is never shown again.</p>
+      <p id="dx-status"></p>
+      <div class="row">
+        <label>API subscription key <input type="password" id="dx-key" autocomplete="off" spellcheck="false" style="width:min(360px,70vw)"></label>
+        <button class="btn primary" id="dx-save">Save key</button>
+        <button class="btn" id="dx-test">Test connection</button>
+        <button class="btn danger" id="dx-remove">Remove key</button>
+      </div>
+      <p class="msg" id="dx-msg"></p>
+      <div class="table-wrap" id="dx-offices"></div>
+    </div>
+  </section>
+
+  <!-- Maps -->
+  <section id="maps">
+    <div class="row tr-controls" role="group" aria-label="Map filters (apply to the map and the ZIP table)">
+      <label>Month <select id="mp-month"></select></label>
+      <label>Office <select id="mp-office"></select></label>
+      <label>Patients <select id="mp-type"><option value="">General + Ortho</option><option>General</option>
+        <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
+      <label>Heat by <select id="mp-weight"><option value="count">number of new patients</option>
+        <option value="collection">$ collected</option></select></label>
+      <label class="tr-check"><input type="checkbox" id="mp-paid"> Hide $0 patients</label>
+    </div>
+    <div class="card">
+      <h2 class="tr-title" id="mp-title">New patients by ZIP code</h2>
+      <p class="hint tr-sub" id="mp-sub"></p>
+      <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
+      <p class="hint" id="mp-note"></p>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h2 class="tr-title">ZIP codes</h2>
+        <button class="btn" id="mp-copy">Copy</button></div>
+      <p class="hint tr-sub">Click a ZIP to find it on the map. Hover or click a ZIP's circle on the map for its Pat IDs.</p>
+      <div class="table-wrap"><table><thead><tr><th>ZIP</th><th class="num">New patients</th><th class="num">$ collected</th>
+        <th class="num">$ per patient</th><th>Offices</th></tr></thead><tbody id="mp-zips"></tbody><tfoot id="mp-zips-foot"></tfoot></table></div>
+    </div>
+    <div class="card" id="mp-admin" hidden>
+      <h2 class="card-title" style="margin-top:0">Map setup (only on this computer)</h2>
+      <p class="mp-step"><strong>Step 1.</strong> <button class="btn" id="mp-zipdl">Download ZIP locations</button>
+        <span class="hint" id="mp-zipstate"></span></p>
+      <p class="mp-step"><strong>Step 2.</strong> Type each office's address below and click <strong>Save</strong>.</p>
+      <div class="table-wrap"><table><thead><tr><th>Office</th><th>Address</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
+        <tbody id="mp-offices"></tbody></table></div>
+      <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter, upload each office's Denticon
+        <strong>Patient List – Address</strong>: <label class="btn" style="display:inline-block">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
+        <span class="hint" id="mp-types"></span></p>
+      <p class="mp-step"><strong>Then:</strong> on the <strong>Upload</strong> tab, upload the month's <strong>Referral Production Listing</strong>
+        (Excel, grouped by Zip Code). The map fills in by itself.</p>
+      <p class="msg" id="mp-msg"></p>
     </div>
   </section>
 
@@ -739,7 +832,12 @@ ORDER BY period_thru DESC, office;</textarea>
         <li>The <strong>Charts</strong> tab, for the <em>Number</em> and <em>Month</em> you pick: an <strong>office ranking</strong> (best
           first, benchmark colors), the <strong>trend over months</strong> (company total plus up to three offices), and a
           <strong>heatmap</strong> of every office by month (click a cell to rank that month). Hover any bar, point or cell for the exact number.</li>
+        <li>The <strong>Maps</strong> tab shows where each month's new patients live, by ZIP code, with your offices' pins. Hover a ZIP's
+          circle for its Pat IDs and $ collected. It fills from the Referral Production Listing when it's run <em>grouped by Zip Code</em>
+          and saved as Excel.</li>
         <li>The <strong>Changes</strong> tab lists every number that was added or changed, when, and from which report.</li>
+        <li class="help-edit">A Google Sheet copy of the Log can be kept up to date for notes (Google Sheets tab › Notes sheet, on the
+          computer that runs the app). Type notes in its <em>Notes</em> column; they stay with the right office and month.</li>
       </ul>
     </div>
 
@@ -789,8 +887,9 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   b.classList.add("active"); $(b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
-  if (b.dataset.tab === "audit") loadAudit();
-  if (b.dataset.tab === "google") loadGoogle();
+  if (b.dataset.tab === "maps") loadMaps();
+  if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); }
+  if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
   if (b.dataset.tab === "changes") loadChanges();
 });
 
@@ -836,15 +935,15 @@ const REVIEW_COLUMNS = {
                 ["prime_applicants", "# NPs applied prime"], ["prime_approved", "# NPs approved w/ prime"],
                 ["prime_apps_ran", "# prime apps ran"], ["prime_apps_approved", "# prime apps approved"],
                 ["prime_approved_amount", "Total prime approved $", "money"], ["prime_collected_amount", "Total prime collected $", "money"],
-                ["prime_funded", "# NPs funded w/ prime"], ["prime_approved_funded", "# approved NPs funded"],
+                ["prime_funded", "# NPs paid w/ prime (incl. existing accts)"], ["prime_approved_funded", "# NPs approved & funded w/ prime"],
                 ["subprime_applicants", "# NPs applied subprime"], ["subprime_approved", "# NPs approved w/ subprime"],
                 ["subprime_apps_ran", "# subprime apps ran"], ["subprime_apps_approved", "# subprime apps approved"],
                 ["subprime_approved_amount", "Total subprime approved $", "money"],
                 ["subprime_collected_amount", "Total subprime collected $", "money"],
-                ["subprime_funded", "# NPs funded w/ subprime"],
-                ["fin_approved", "# NPs approved (prime + subprime)"], ["fin_funded", "# NPs funded (prime + subprime)"],
-                ["np_rows", "# NPs in workbook"], ["tx_diagnosed_amount", "Amt Tx diagnosed", "money"],
-                ["np_collection_wb", "NP collection (workbook)", "money"], ["no_next_visit", "# NPs w/o next visit"],
+                ["subprime_funded", "# NPs paid w/ subprime"],
+                ["fin_approved", "# NPs approved (prime + subprime)"], ["fin_funded", "# NPs paid w/ financing (prime + sub)"],
+                ["np_rows", "# NPs on NP sheet", "count", "hidden"], ["tx_diagnosed_amount", "Amt Tx diagnosed", "money"],
+                ["no_next_visit", "# NPs w/o next visit"],
                 ["started_tx", "# NPs started Tx (paid)"],
                 ["collected_over_approved", "⚠ # collected > approved"]],
 };
@@ -852,7 +951,8 @@ const REPORT_NAMES = {executive_summary: "Executive Summary", referral: "Referra
                       ortho_journal: "Daily Journal (Ortho)", ortho_referrals: "Treatment Plan Status (ortho referrals)",
                       np_analysis: "New Patient Analysis",
                       lender_journal: "Daily Journal (all patients): lender payments to check the NP sheets"};
-const reviewCols = () => REVIEW_COLUMNS[parsed.report_type];
+const reviewCols = () => REVIEW_COLUMNS[parsed.report_type];          // every number saved
+const shownReviewCols = () => reviewCols().filter(c => c[3] !== "hidden");   // the ones shown for review
 const cell = (v, kind) => v == null ? '<span class="none">—</span>'
   : kind === "money" ? money(v) : kind === "strong" ? `<strong>${v}</strong>` : v;
 // Hover text listing what a count is made of, e.g. each financing applicant's sheet row and lenders.
@@ -899,7 +999,7 @@ function detailText(key, list) {
 function renderReview() {
   const p = parsed.period;
   $("review-head").innerHTML = `<th class="sel-col"><input type="checkbox" id="all" checked aria-label="Select all"></th>
-    <th>Office</th>${reviewCols().map(([, label]) => `<th class="num">${label}</th>`).join("")}`;
+    <th>Office</th>${shownReviewCols().map(([, label]) => `<th class="num">${label}</th>`).join("")}`;
   $("all").onchange = e => { document.querySelectorAll(".pick").forEach(c => c.checked = e.target.checked); updateTotals(); };
   $("from").value = p.from || ""; $("thru").value = p.thru || "";
   $("period-hint").textContent = p.from && p.thru
@@ -910,7 +1010,7 @@ function renderReview() {
   $("review-body").innerHTML = parsed.offices.map((o, i) => `<tr>
     <td class="sel-col"><input type="checkbox" class="pick" data-i="${i}" checked aria-label="Include ${esc(o.office)}"></td>
     <td>${esc(o.office)}</td>
-    ${reviewCols().map(([k, , kind]) => {
+    ${shownReviewCols().map(([k, , kind]) => {
       const tip = detailText(k, o.details?.[k]);
       return `<td class="num${tip ? " has-detail" : ""}" ${tip ? `data-detail="${esc(tip)}" tabindex="0"` : ""}>${cell(o[k], kind)}</td>`;
     }).join("")}</tr>`).join("");
@@ -932,7 +1032,7 @@ function selected() {
 function updateTotals() {
   const s = selected(), sum = k => s.reduce((a, o) => a + o[k], 0);
   $("review-foot").innerHTML = s.length > 1 ? `<tr><td class="sel-col"></td><td>Total (${s.length} offices)</td>
-    ${reviewCols().map(([k, , kind]) => `<td class="num">${kind === "money" ? money(sum(k)) : sum(k)}</td>`).join("")}</tr>` : "";
+    ${shownReviewCols().map(([k, , kind]) => `<td class="num">${kind === "money" ? money(sum(k)) : sum(k)}</td>`).join("")}</tr>` : "";
   $("save").disabled = !s.length;
 }
 // Reports are month-to-date, so From is always the 1st of Thru's month.
@@ -992,6 +1092,7 @@ async function saveUpload(confirm = false) {
     if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
     let text = `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
     if (parsed.report_type === "lender_journal") text += " See the Audit tab for differences from the NP sheets.";
+    if (parsed.map_note) text += " " + parsed.map_note;
     if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}. ${LATER_HELP}`;
     msg($("save-msg"), text, !r.skipped.length || parts.length > 0);
   } catch (e) { msg($("save-msg"), e.message, false); }
@@ -1294,7 +1395,7 @@ function benchText(key, level) {
   return level ? `${BENCH_WORD[level][0].toUpperCase()}${BENCH_WORD[level].slice(1)}. ${rule}` : `Benchmark: ${rule}`;
 }
 function renderBenchPanel() {
-  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind));
+  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind) && !c.internal);
   $("bm-rows").innerHTML = benchmarks.length ? benchmarks.map(b => {
     const cmp = b.direction === "higher" ? "≥" : "≤", flip = b.direction === "higher" ? "<" : ">";
     return `<tr><td>${esc(colOf(b.metric)?.label || b.metric)}</td><td>${b.direction}</td>
@@ -1435,7 +1536,8 @@ const LOG_COLS = [
   {key: "new_patients", label: "New patients", kind: "count"},
   {key: "total_production", label: "Total production", kind: "money"},
   {key: "refunds", label: "Refunds", kind: "money", asOf: true},
-  {key: "np_collection", label: "NP collection", kind: "money", asOf: true},
+  {key: "np_collection", label: "NP collection", kind: "money", asOf: true,
+   title: "From Denticon's Referral Production Listing report (each office's total). Compare: NP collection (NP sheet)"},
   {key: "ortho_collection", label: "Ortho collection", kind: "money", asOf: true},
   {key: "ortho_referrals", label: "# of ortho referrals", kind: "count", asOf: true},
   {key: "medi_cal_patients", label: "# Medi-Cal patients", kind: "count", asOf: true},
@@ -1458,15 +1560,17 @@ const LOG_COLS = [
    title: "Sum of $ approved by Alphaeon, Care Credit, Patient FI and Proceed"},
   {key: "prime_collected_amount", label: "Total prime collected $", kind: "money", asOf: true,
    title: "Sum of $ collected through Alphaeon, Care Credit, Patient FI and Proceed (including existing accounts)"},
-  {key: "prime_funded", label: "# NPs funded w/ prime", kind: "count", asOf: true,
-   title: "New patients with money collected through a prime lender (Alphaeon, Care Credit, Patient FI, Proceed), including existing accounts"},
-  {key: "prime_approved_funded", label: "# approved NPs funded", kind: "count", asOf: true,
-   title: "NPs approved w/ prime who were also funded (money collected through a prime lender)"},
+  {key: "prime_funded", label: "# NPs paid w/ prime (incl. existing accts)", kind: "count", asOf: true,
+   title: "Every new patient with money collected through a prime lender (Alphaeon, Care Credit, PatientFi, Proceed), "
+        + "whether they applied this visit or used a financing account they already had"},
+  {key: "prime_approved_funded", label: "# NPs approved & funded w/ prime", kind: "count", asOf: true,
+   title: "Of the # NPs approved w/ prime (applied and approved this visit), how many then had money collected "
+        + "through a prime lender. Used for % of prime-approved NPs funded"},
   {key: "prime_approval_rate", label: "Prime approval rate", kind: "pct",
    title: "# NPs approved w/ prime ÷ # NPs applied prime",
    ratio: {num: ["prime_approved"], den: "prime_applicants"}},
-  {key: "prime_funded_rate", label: "% of approved NPs funded", kind: "pct",
-   title: "# approved NPs funded ÷ # NPs approved w/ prime",
+  {key: "prime_funded_rate", label: "% of prime-approved NPs funded", kind: "pct",
+   title: "# NPs approved & funded w/ prime ÷ # NPs approved w/ prime",
    ratio: {num: ["prime_approved_funded"], den: "prime_approved"}},
   {key: "prime_collected_rate", label: "% of prime collected", kind: "pct",
    title: "Total prime collected $ ÷ Total prime approved $",
@@ -1501,8 +1605,8 @@ const LOG_COLS = [
   {key: "subprime_collected_rate", label: "% of subprime collected", kind: "pct",
    title: "Total subprime collected $ ÷ Total subprime approved $",
    ratio: {num: ["subprime_collected_amount"], den: "subprime_approved_amount"}},
-  {key: "subprime_funded", label: "# NPs funded w/ subprime", kind: "count", asOf: true,
-   title: "New patients with money collected through a subprime lender"},
+  {key: "subprime_funded", label: "# NPs paid w/ subprime", kind: "count", asOf: true,
+   title: "Every new patient with money collected through a subprime lender (HFD, Covered Care, Cherry, Sunbit, Access Alph)"},
   {key: "fin_approved", label: "# NPs approved (prime + sub)", kind: "count", asOf: true,
    title: "New patients approved by a prime or subprime lender; a patient approved by both counts once"},
   {key: "fin_approval_rate", label: "Approval rate (prime + sub)", kind: "pct",
@@ -1522,33 +1626,28 @@ const LOG_COLS = [
   {key: "fin_collected_rate", label: "% collected (prime + sub)", kind: "pct",
    title: "Total collected $ ÷ Total approved $ (prime + subprime)",
    ratio: {num: ["fin_collected_amount"], den: "fin_approved_amount"}},
-  {key: "fin_funded", label: "# NPs funded (prime + sub)", kind: "count", asOf: true,
-   title: "New patients with money collected through a prime or subprime lender; each patient once"},
-  {key: "fin_approved_funded", label: "# approved NPs funded (prime + sub)", kind: "count", asOf: true,
-   title: "NPs approved (prime + sub) who were also funded"},
+  {key: "fin_funded", label: "# NPs paid w/ financing (prime + sub)", kind: "count", asOf: true,
+   title: "Every new patient with money collected through a prime or subprime lender, including existing accounts; each patient once"},
+  {key: "fin_approved_funded", label: "# NPs approved & funded (prime + sub)", kind: "count", asOf: true,
+   title: "Of the # NPs approved (prime + sub), how many then had money collected through a lender"},
   {key: "fin_funded_rate", label: "% of approved NPs funded (prime + sub)", kind: "pct",
-   title: "# approved NPs funded ÷ # NPs approved (prime + sub)",
+   title: "# NPs approved & funded (prime + sub) ÷ # NPs approved (prime + sub)",
    ratio: {num: ["fin_approved_funded"], den: "fin_approved"}},
-  {key: "np_rows", label: "# NPs in workbook", kind: "count", asOf: true,
+  // Not shown (only used to calculate the per-NP rates below), so `internal`.
+  {key: "np_rows", label: "# NPs on NP sheet", kind: "count", asOf: true, internal: true,
    title: "New patient rows in the New Patient Analysis sheet (the \"per NP\" denominator in this section)"},
   {key: "tx_diagnosed_amount", label: "Amt Tx diagnosed", kind: "money", asOf: true,
    title: "Sum of \"$ Treatment Diagnosed\""},
   {key: "avg_tx_dx_per_np", label: "Avg Tx diagnosed / NP", kind: "money",
-   title: "Amt Tx diagnosed ÷ # NPs in workbook", ratio: {num: ["tx_diagnosed_amount"], den: "np_rows"}},
-  {key: "np_collection_wb", label: "NP collection (workbook)", kind: "money", asOf: true,
-   title: "Sum of the Denticon \"Collection\" column for the workbook's new patients"},
-  {key: "collection_per_np", label: "Collection / NP", kind: "money",
-   title: "NP collection (workbook) ÷ # NPs in workbook", ratio: {num: ["np_collection_wb"], den: "np_rows"}},
-  {key: "collection_per_dx", label: "Collection / diagnosis", kind: "pct",
-   title: "NP collection (workbook) ÷ Amt Tx diagnosed", ratio: {num: ["np_collection_wb"], den: "tx_diagnosed_amount"}},
+   title: "Amt Tx diagnosed ÷ # NPs on NP sheet", ratio: {num: ["tx_diagnosed_amount"], den: "np_rows"}},
   {key: "no_next_visit", label: "# NPs w/o next visit", kind: "count", asOf: true,
    title: "\"Has an Appointment\" = No"},
   {key: "np_loss_rate", label: "NP loss rate", kind: "pct",
-   title: "# NPs w/o next visit ÷ # NPs in workbook", ratio: {num: ["no_next_visit"], den: "np_rows"}},
+   title: "# NPs w/o next visit ÷ # NPs on NP sheet", ratio: {num: ["no_next_visit"], den: "np_rows"}},
   {key: "started_tx", label: "# NPs started Tx (paid)", kind: "count", asOf: true,
    title: "Paid anything: a Denticon collection, money collected through financing, or another form of payment"},
   {key: "start_tx_rate", label: "% of NPs starting Tx", kind: "pct",
-   title: "# NPs started Tx ÷ # NPs in workbook", ratio: {num: ["started_tx"], den: "np_rows"}},
+   title: "# NPs started Tx ÷ # NPs on NP sheet", ratio: {num: ["started_tx"], den: "np_rows"}},
   {key: "irrelevant_rate", label: "% irrelevant patients", kind: "pct",
    title: "(# Medi-Cal + # HMO + # no SSN/ITIN) ÷ New patients",
    ratio: {num: ["medi_cal_patients", "hmo_patients", "no_ssn_itin_patients"], den: "new_patients"}},
@@ -1595,8 +1694,7 @@ const SECTIONS = [
           "fin_apps_approved", "fin_app_approval_rate", "fin_approved_amount", "fin_collected_amount",
           "fin_collected_rate", "fin_funded", "fin_approved_funded", "fin_funded_rate"]},
   {id: "tx", label: "Treatment", color: "var(--sec-8)",
-   keys: ["np_rows", "tx_diagnosed_amount", "avg_tx_dx_per_np", "np_collection_wb", "collection_per_np",
-          "collection_per_dx", "no_next_visit", "np_loss_rate", "started_tx", "start_tx_rate"]},
+   keys: ["tx_diagnosed_amount", "avg_tx_dx_per_np", "no_next_visit", "np_loss_rate", "started_tx", "start_tx_rate"]},
   {id: "checks", label: "Data checks", color: "var(--chk)", keys: ["collected_over_approved"]},
 ];
 const sectionOf = Object.fromEntries(SECTIONS.flatMap(sec => sec.keys.map(k => [k, sec])));
@@ -1633,7 +1731,7 @@ try { colOrder = JSON.parse(localStorage.getItem("colOrder")) || []; } catch {}
 const colByKey = Object.fromEntries(LOG_COLS.map(c => [c.key, c]));
 // Office first, then the saved order; columns added later go in at their default spot.
 function orderedCols() {
-  const movable = LOG_COLS.filter(c => !c.fixed).map(c => c.key);
+  const movable = LOG_COLS.filter(c => !c.fixed && !c.internal).map(c => c.key);
   const order = colOrder.filter(k => movable.includes(k));
   movable.forEach((k, i) => {
     if (order.includes(k)) return;
@@ -1654,6 +1752,7 @@ function buildLogHead() {
     i = j;
   }
   $("log-bands").innerHTML = bands;
+  requestAnimationFrame(() => $("log").style.setProperty("--bands-h", `${$("log-bands").offsetHeight}px`));
   $("log-head").innerHTML = `<th class="sel-col"><input type="checkbox" id="log-all" aria-label="Select all shown"></th>`
     + orderedCols().map(c => {
       const bench = benchFor(c.key), title = [c.title, bench && benchText(c.key)].filter(Boolean).join(" — ");
@@ -2218,7 +2317,7 @@ try { Object.assign(trSel, JSON.parse(localStorage.getItem("trendSel")) || {}); 
 const saveTrSel = () => { try { localStorage.setItem("trendSel", JSON.stringify(trSel)); } catch {} };
 async function loadCharts() {
   if (!logRows.length) await loadLog();
-  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind));
+  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind) && !c.internal);
   if (!numeric.some(c => c.key === trSel.metric)) trSel.metric = "start_tx_rate";
   $("tr-metric").innerHTML = SECTIONS.map(sec => `<optgroup label="${esc(sec.label)}">${sec.keys.filter(k => numeric.some(c => c.key === k))
     .map(k => `<option value="${k}">${esc(labelOf(k))}</option>`).join("")}</optgroup>`).join("")
@@ -2606,6 +2705,234 @@ function renderAudit() {
     msg($("au-msg"), "Copied. Paste it into an email, Teams or Chat.", true);
   });
 }
+
+// Denticon API (admin): save the key, test it by listing offices, and match Denticon offices to the log's.
+async function loadDenticon() {
+  let st; try { st = await api("/api/denticon/status"); } catch { return; }
+  $("dx-status").innerHTML = st.key_present
+    ? `Key saved.${st.last_test ? ` Last test ${when(st.last_test)}: ${st.last_error ? `<span class="err-text">${esc(st.last_error)}</span>` : "connected"}.` : " Click Test connection."}`
+    : "No key yet. Paste it below and click Save key.";
+  $("dx-remove").hidden = !st.key_present;
+  const opts = o => `<option value="">— not matched —</option>` + st.log_offices.map(n => `<option ${n === o ? "selected" : ""}>${esc(n)}</option>`).join("");
+  $("dx-offices").innerHTML = st.offices.length ? `<table><thead><tr><th>Denticon office</th><th>ID</th><th>Log office</th></tr></thead><tbody>${
+    st.offices.map(o => `<tr><td>${esc(o.name)}</td><td class="num">${o.office_id}</td><td><select data-dx-office="${o.office_id}">${opts(o.log_office)}</select></td></tr>`).join("")
+  }</tbody></table>` : "";
+  document.querySelectorAll("[data-dx-office]").forEach(sel => sel.onchange = async () => {
+    try { await api("/api/denticon/offices", JSON.stringify({office_id: +sel.dataset.dxOffice, log_office: sel.value}), {"Content-Type": "application/json"});
+          msg($("dx-msg"), "Saved.", true); } catch (e) { msg($("dx-msg"), e.message, false); }
+  });
+}
+$("dx-save").onclick = async () => {
+  try { await api("/api/denticon/key", JSON.stringify({key: $("dx-key").value}), {"Content-Type": "application/json"});
+        $("dx-key").value = ""; msg($("dx-msg"), "Key saved. Click Test connection.", true); loadDenticon(); }
+  catch (e) { msg($("dx-msg"), e.message, false); }
+};
+$("dx-test").onclick = async () => {
+  msg($("dx-msg"), "Asking Denticon for your office list…", true);
+  try { const r = await api("/api/denticon/test", "{}", {"Content-Type": "application/json"});
+        const unmatched = r.offices.filter(o => !o.log_office).length;
+        msg($("dx-msg"), `Connected: Denticon returned ${r.found} office(s).${unmatched ? ` ${unmatched} need matching to a log office below.` : " All matched."}`, true); }
+  catch (e) { msg($("dx-msg"), e.message, false); }
+  loadDenticon();
+};
+$("dx-remove").onclick = async () => {
+  if (!confirm("Remove the Denticon API key from this computer?")) return;
+  await api("/api/denticon/key/delete", "{}", {"Content-Type": "application/json"}); msg($("dx-msg"), "Key removed.", true); loadDenticon();
+};
+
+// Notes sheet (admin): the app keeps a Google Sheet copy of the Log; people type notes in its Notes column.
+async function loadNotesSheet() {
+  let ns; try { ns = await api("/api/google/notes-sheet"); } catch { $("ns-card").hidden = true; return; }
+  $("ns-card").hidden = false;
+  $("ns-email").textContent = ns.service_account || "the service account";
+  const on = !!ns.spreadsheet_id;
+  $("ns-status").innerHTML = on
+    ? `Writing to <a href="${esc(ns.url)}" target="_blank" rel="noopener">${esc(ns.title || "the notes sheet")}</a>.`
+      + (ns.last_write_at ? ` Last written ${when(ns.last_write_at)}: <span class="${(ns.last_status || "").startsWith("error") ? "err-text" : ""}">${esc(ns.last_status || "")}</span>` : "")
+    : "Not connected yet.";
+  $("ns-write").hidden = $("ns-disconnect").hidden = !on;
+}
+const nsPost = (path, body) => api(path, JSON.stringify(body || {}), {"Content-Type": "application/json"});
+$("ns-connect").onclick = async () => {
+  if (!$("ns-url").value.trim()) return msg($("ns-msg"), "Paste the sheet's link first.", false);
+  msg($("ns-msg"), "Connecting and writing the Log…", true);
+  try { const r = await nsPost("/api/google/notes-sheet", {url: $("ns-url").value.trim()}); $("ns-url").value = "";
+        msg($("ns-msg"), r.status || "Connected.", !(r.status || "").startsWith("error")); }
+  catch (e) { msg($("ns-msg"), e.message, false); }
+  loadNotesSheet();
+};
+$("ns-write").onclick = async () => {
+  msg($("ns-msg"), "Writing…", true);
+  try { const r = await nsPost("/api/google/notes-sheet/write"); msg($("ns-msg"), r.status, !String(r.status).startsWith("error")); }
+  catch (e) { msg($("ns-msg"), e.message, false); }
+  loadNotesSheet();
+};
+$("ns-disconnect").onclick = async () => {
+  if (!confirm("Stop writing to the notes sheet? The sheet itself (and your notes) stay as they are.")) return;
+  await nsPost("/api/google/notes-sheet/delete"); msg($("ns-msg"), "Disconnected.", true); loadNotesSheet();
+};
+
+// Maps: new patients by ZIP code for a month (from the Referral Production Listing grouped by Zip Code), as a heat
+// map with each ZIP's Pat IDs and $ collected, the offices' pins and a ZIP table. Leaflet loads only when needed.
+let mapData = null, mapView = null, mapLayers = [];
+function loadLeaflet() {
+  if (window.L?.heatLayer) return Promise.resolve();
+  const add = (tag, attrs) => new Promise((ok, fail) => {
+    const el = Object.assign(document.createElement(tag), attrs); el.onload = ok; el.onerror = () => fail(new Error("Couldn't load the map library (no internet?)"));
+    document.head.append(el);
+  });
+  return add("link", {rel: "stylesheet", href: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"})
+    .then(() => add("script", {src: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"}))
+    .then(() => add("script", {src: "https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"}));
+}
+async function loadMaps(month) {
+  try {
+    await loadLeaflet();
+    mapData = await api("/api/maps" + (month ? `?month=${month}` : ""));
+  } catch (e) { $("mp-note").textContent = e.message; return; }
+  $("mp-month").innerHTML = mapData.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No months yet</option>`;
+  $("mp-month").value = mapData.month || "";
+  const cur = $("mp-office").value;
+  $("mp-office").innerHTML = `<option value="">All offices</option>` + mapData.offices.map(o => `<option>${esc(o)}</option>`).join("");
+  if (mapData.offices.includes(cur)) $("mp-office").value = cur;
+  if (!mapView) {
+    mapView = L.map("mp-map", {scrollWheelZoom: true}).setView([34.0, -118.2], 9);
+    // A plain light-gray base map (few labels, no street clutter) so the heat and circles stand out. Tile
+    // servers refuse requests without a referrer, and the app's pages send none (privacy header); the tiles
+    // alone send the app's address (origin only, never a page path or any data).
+    const base = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 16, referrerPolicy: "origin", attribution: "Tiles &copy; Esri"}).addTo(mapView);
+    base.once("tileerror", () => {   // if that server is unavailable, fall back to OpenStreetMap
+      base.remove();
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, referrerPolicy: "origin",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(mapView);
+    });
+  }
+  // The tab has only just been shown: let the map take its size before drawing (the heat layer needs it).
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  mapView.invalidateSize();
+  renderMap(true);
+  loadMapAdmin();
+}
+["mp-office", "mp-type", "mp-weight", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(true));
+$("mp-month").onchange = () => loadMaps($("mp-month").value);
+function mapZips() {   // the ZIPs after the filters, each with its matching patients
+  const office = $("mp-office").value, type = $("mp-type").value, paidOnly = $("mp-paid").checked;
+  return mapData.zips.map(z => {
+    const ps = z.patients.filter(p => (!office || p.office === office) && (!type || p.type === type) && (!paidOnly || p.collection > 0));
+    return {...z, ps, n: ps.length, total: ps.reduce((a, p) => a + p.collection, 0)};
+  }).filter(z => z.n).sort((a, b) => b.n - a.n || b.total - a.total);
+}
+function zipList(z, limit) {   // the hover / click content, built as DOM text (no HTML from data)
+  const box = document.createElement("div"); box.className = "mp-pop";
+  const head = document.createElement("div");
+  head.innerHTML = `<strong></strong><br><span></span>`;
+  head.querySelector("strong").textContent = `ZIP ${z.zip}`;
+  head.querySelector("span").textContent = `${z.n} new patient${z.n > 1 ? "s" : ""} · $${money(z.total)} collected`;
+  const t = document.createElement("table");
+  z.ps.slice().sort((a, b) => b.collection - a.collection).slice(0, limit).forEach(p => {
+    const tr = t.insertRow();
+    [`Pat ${p.pat_id}`, p.office, p.type === "Unknown" ? "Gen/Ortho not loaded" : p.type, `$${money(p.collection)}`].forEach((v, i) => { const td = tr.insertCell(); td.textContent = v; if (i === 3) td.className = "num"; });
+  });
+  box.append(head, t);
+  if (z.ps.length > limit) { const more = document.createElement("div"); more.className = "hint"; more.textContent = `+ ${z.ps.length - limit} more: click for all`; box.append(more); }
+  return box;
+}
+function renderMap(fit) {
+  if (!mapData || !mapView) return;
+  mapLayers.forEach(l => l.remove()); mapLayers = [];
+  const zips = mapZips(), byCount = $("mp-weight").value === "count";
+  const max = Math.max(1, ...zips.map(z => byCount ? z.n : z.total));
+  if (zips.length && mapView.getSize().x > 0) {
+    mapLayers.push(L.heatLayer(zips.map(z => [z.lat, z.lon, (byCount ? z.n : z.total) / max]),
+      {radius: 28, blur: 24, maxZoom: 11, minOpacity: 0.25}).addTo(mapView));
+  }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2563eb";
+  zips.forEach(z => {
+    const c = L.circleMarker([z.lat, z.lon], {radius: 3 + Math.sqrt(z.n) * 2.5, color: accent, weight: 1, opacity: 0.6, fillColor: accent, fillOpacity: 0.25});
+    c.bindTooltip(() => zipList(z, 8), {direction: "top", sticky: true});
+    c.bindPopup(() => zipList(z, 500), {maxWidth: 360});
+    mapLayers.push(c.addTo(mapView));
+  });
+  mapData.pins.forEach(p => {
+    const m = L.marker([p.lat, p.lon], {icon: L.divIcon({className: "mp-pin", iconSize: [14, 14]}), title: p.office, zIndexOffset: 1000});
+    m.bindTooltip(p.office.replace(/^Dentists? Of /, ""), {permanent: true, direction: "right", offset: [8, 0], className: "mp-label"});
+    mapLayers.push(m.addTo(mapView));
+  });
+  if (fit && (zips.length || mapData.pins.length)) {
+    // Zoom to where most patients are: a few far-away ZIPs (out of state) shouldn't zoom the map out to nothing.
+    const pins = mapData.pins.filter(p => !$("mp-office").value || p.office === $("mp-office").value);
+    const total = zips.reduce((a, z) => a + z.n, 0);
+    const center = pins.length ? [pins.reduce((a, p) => a + p.lat, 0) / pins.length, pins.reduce((a, p) => a + p.lon, 0) / pins.length]
+      : [zips.reduce((a, z) => a + z.lat * z.n, 0) / total, zips.reduce((a, z) => a + z.lon * z.n, 0) / total];
+    const near = zips.slice().sort((a, b) => Math.hypot(a.lat - center[0], a.lon - center[1]) - Math.hypot(b.lat - center[0], b.lon - center[1]));
+    let covered = 0, keep = [];
+    for (const z of near) { if (covered >= total * 0.95 && keep.length) break; keep.push([z.lat, z.lon]); covered += z.n; }
+    const pts = [...keep, ...pins.map(p => [p.lat, p.lon])];
+    if (pts.length) mapView.fitBounds(pts, {padding: [30, 30], maxZoom: 11});
+  }
+  const n = zips.reduce((a, z) => a + z.n, 0), total = zips.reduce((a, z) => a + z.total, 0);
+  $("mp-title").textContent = `New patients by ZIP code · ${mapData.month ? monthName(mapData.month) : "no data yet"}`;
+  $("mp-sub").textContent = mapData.month ? `${n} new patients from ${zips.length} ZIP codes · $${money(total)} collected.`
+    : "No data yet: upload the month's Referral Production Listing (Excel, grouped by Zip Code) on the Upload tab.";
+  const notes = [];
+  if (!mapData.zip_data) notes.push("Map setup step 1 isn't done yet (Download ZIP locations).");
+  const miss = Object.entries(mapData.missing);
+  if (miss.length) notes.push(`${miss.reduce((a, [, c]) => a + c, 0)} patient(s) in ZIPs not on the map: ${miss.map(([z]) => z).join(", ")}.`);
+  const unknown = zips.reduce((a, z) => a + z.ps.filter(p => p.type === "Unknown").length, 0);
+  if (unknown) notes.push(`${unknown} patient(s) have no General/Ortho yet (Map setup step 3).`);
+  if (!mapData.pins.length) notes.push("No office pins yet (Map setup step 2).");
+  $("mp-note").textContent = notes.join(" ");
+  // ZIP table
+  $("mp-zips").innerHTML = zips.map((z, i) => {
+    const per = {}; z.ps.forEach(p => per[p.office] = (per[p.office] || 0) + 1);
+    return `<tr data-i="${i}"><td>${z.zip}</td><td class="num">${z.n}</td><td class="num">${money(z.total)}</td><td class="num">${money(z.total / z.n)}</td>
+      <td>${Object.entries(per).sort((a, b) => b[1] - a[1]).map(([o, c]) => `${esc(o.replace(/^Dentists? Of /, ""))} ${c}`).join(" · ")}</td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="hint">No new patients for these filters.</td></tr>`;
+  $("mp-zips-foot").innerHTML = zips.length ? `<tr><td>Total</td><td class="num">${n}</td><td class="num">${money(total)}</td><td class="num">${money(total / Math.max(n, 1))}</td><td></td></tr>` : "";
+  document.querySelectorAll("#mp-zips tr[data-i]").forEach(tr => tr.onclick = () => {
+    const z = zips[+tr.dataset.i]; mapView.setView([z.lat, z.lon], 12); document.querySelector(".mp-map").scrollIntoView({block: "center", behavior: "smooth"});
+  });
+  $("mp-copy").onclick = e => copyGrid([["ZIP", "New patients", "$ collected", "$ per patient"],
+    ...zips.map(z => [z.zip, z.n, z.total.toFixed(2), (z.total / z.n).toFixed(2)])], "ZIP codes", e.currentTarget);
+}
+// Map setup (only answers on the computer running the app; hidden elsewhere).
+async function loadMapAdmin() {
+  try { await api("/api/google/notes-sheet"); } catch { $("mp-admin").hidden = true; return; }
+  $("mp-admin").hidden = false;
+  $("mp-zipstate").textContent = mapData.zip_data ? "✓ Done." : "(free US Census file, about 1 MB, one time)";
+  $("mp-zipdl").hidden = mapData.zip_data;
+  $("mp-types").textContent = mapData.types_loaded.length ? `✓ Loaded: ${mapData.types_loaded.join(", ")}.` : "";
+  const pin = Object.fromEntries(mapData.pins.map(p => [p.office, p]));
+  $("mp-offices").innerHTML = mapData.offices.map((o, i) => `<tr><td>${esc(o)}</td>
+    <td><input data-mp-addr="${i}" placeholder="e.g. 123 Main St, Torrance, CA 90503" style="width:min(300px,50vw)"></td>
+    <td><input data-mp-lat="${i}" value="${pin[o] ? pin[o].lat : ""}" style="width:100px"></td>
+    <td><input data-mp-lon="${i}" value="${pin[o] ? pin[o].lon : ""}" style="width:110px"></td>
+    <td><button class="btn" data-mp-save="${i}" style="padding:2px 10px;font-size:13px">${pin[o] ? "✓ Update" : "Save"}</button></td></tr>`).join("");
+  document.querySelectorAll("[data-mp-save]").forEach(b => b.onclick = async () => {
+    const i = b.dataset.mpSave, q = k => document.querySelector(`[data-mp-${k}="${i}"]`).value.trim();
+    const address = q("addr"), body = {office: mapData.offices[i], address};
+    if (!address) { body.lat = q("lat"); body.lon = q("lon"); }
+    try { const r = await api("/api/maps/office-location", JSON.stringify(body), {"Content-Type": "application/json"});
+          msg($("mp-msg"), `${r.office}: pinned at ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}.`, true); loadMaps($("mp-month").value); }
+    catch (e) { msg($("mp-msg"), e.message, false); }
+  });
+}
+$("mp-zipdl").onclick = async () => {
+  msg($("mp-msg"), "Downloading ZIP locations from the US Census…", true);
+  try { const r = await api("/api/maps/zip-download", "{}", {"Content-Type": "application/json"});
+        msg($("mp-msg"), `Saved ${r.zips.toLocaleString()} ZIP code locations.`, true); loadMaps($("mp-month").value); }
+  catch (e) { msg($("mp-msg"), e.message, false); }
+};
+$("mp-typefile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  msg($("mp-msg"), `Reading ${f.name}…`, true);
+  try { const r = await api("/api/maps/patient-types", f, {"X-Filename": encodeURIComponent(f.name)});
+        msg($("mp-msg"), `${r.office}: ${r.general.toLocaleString()} general and ${r.ortho.toLocaleString()} ortho patients loaded.`, true);
+        loadMaps($("mp-month").value); }
+  catch (err) { msg($("mp-msg"), err.message, false); }
+  e.target.value = "";
+};
 loadLog();   // the Log tab opens first
 </script>
 </body>

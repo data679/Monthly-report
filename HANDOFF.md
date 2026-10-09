@@ -282,6 +282,34 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     works from the computer running the app (`LOCAL_ONLY_PATHS`); the tab stays hidden elsewhere and in view-only
     links. They are not in the Log's ⚠ flags or the Checks panel. Sept 2026: 1,585 NPs checked, 124 differences.
 
+- **Denticon API** (denticon_api.py, Audit tab, local-only): base `https://api.planetdds.com/denticon`, header
+  `PDDS-Subscription-Key` (key in `data/denticon_api.json`, 0600, entered by the user in the app). Step 1 built:
+  save key, Test connection (Practices `/practices/v0/offices`), match Denticon offices to log offices
+  (`denticon_offices`). Step 2 planned: nightly RCM `/rcm/v0/ledgers/{OfficeId}` (LastChangedOn ≤ 30-day windows,
+  PageSize 1000; ledgerType C/P/I/A, description, amount, patientId) → lender payments + fees per hashed patient,
+  replacing Daily Journal uploads for the Audit tab. 429 responses say "Try again in N seconds" (handled).
+
+- **Notes sheet** (Google Sheets tab › 4, admin/local-only): the app copies the Log (every office × month, the
+  Log's visible columns read from `LOG_COLS`/`SECTIONS` in index.html, internal ones skipped) to **one tab per month**
+  ("October 2026", newest first, Total row calculated like the page, rates from `ratio`) of a
+  Google Sheet the user shares with the service account as **Editor** (write scope `spreadsheets`; office sheets
+  stay Viewer, so still read-only). One way: month tabs are cleared and rewritten (batchGet/batchClear/batchUpdate,
+  3–4 requests per update), except each tab's **Notes** column, read first and re-attached by office; notes for rows
+  that disappear go to "Notes (orphaned)". The earlier one-tab "Log" layout is migrated and its tab removed.
+  `notes_sheet_loop` checks a fingerprint every 2 minutes and writes only when the log changed; Write now forces.
+  Table `notes_sheet`; endpoints `/api/google/notes-sheet[/write|/delete]`.
+
+- **Maps tab** (everyone with the password; not in view-only links): new patients by ZIP for a month.
+  - Source: the Referral Production Listing run **grouped by Zip Code** (Excel best; PDF only where page breaks
+    don't scramble lines). `parse_referral` → `_referral_patients` (Pat ID, zip, referral type, visits,
+    production, collection; never names), attached as `details._map` only if an office's patients add up to its
+    total → `map_patients` (replaced per office × month, later as_of wins).
+  - General/Ortho: Patient List – Address upload (`parse_patient_types` → `patient_types`, Pat ID → type only).
+  - ZIP centers: the US Census ZCTA gazetteer, downloaded once to `data/zip_centroids.json` (Map setup button).
+    Office pins: `office_locations` (US Census geocoder for office addresses, or lat/lon typed in).
+  - UI: Leaflet + leaflet.heat (cdnjs, loaded only on the tab), OpenStreetMap tiles; heat by patients or $; ZIP
+    circles with hover/click Pat ID lists; ZIP table. Setup endpoints are local-only.
+
 ## 11. Known office/data quirks
 
 - Office names differ between sources; aliases map sheet names (e.g. GARDENA → Gardena Dental Care,
