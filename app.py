@@ -48,7 +48,7 @@ PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the
 LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
                     "/api/denticon/key", "/api/denticon/key/delete", "/api/denticon/test", "/api/denticon/offices",
                     "/api/google/notes-sheet", "/api/google/notes-sheet/delete", "/api/google/notes-sheet/write",
-                    "/api/maps/patient-types", "/api/maps/office-location", "/api/maps/zip-download"}
+                    "/api/maps/patient-types", "/api/maps/office-location", "/api/maps/zip-download", "/api/maps/shapes-download"}
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
@@ -1513,6 +1513,33 @@ def set_denticon_office(c):
 # ------------------------------------------------------------------ Maps tab
 
 ZIP_FILE = DATA_DIR / "zip_centroids.json"
+POP_FILE = DATA_DIR / "zip_population.json"        # older population download, read as a fallback only
+SHAPES_FILE = DATA_DIR / "zip_shapes.json"          # ZIP -> {"g": GeoJSON geometry, "pop": residents, "c": [lat, lon]}
+NO_ZCTA_FILE = DATA_DIR / "zip_no_zcta.json"        # ZIPs the Census has no area for (PO boxes, unique ZIPs): asked once, remembered
+CITY_FILE = DATA_DIR / "city_names.json"            # {"cities": {name: {"c": [lat, lon], "pop": int}}, "zip_city": {zip: name}}
+# US Census TIGERweb 2020 places: incorporated cities (layer 25) and census-designated places (26), with population.
+CITY_SOURCE = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/{layer}/query"
+_cities = None
+# US Census TIGERweb: ZIP Code Tabulation Area boundaries with 2020 population (public, no key needed).
+SHAPES_SOURCE = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/4/query"
+_pops = None
+_shapes = None
+
+
+def _load_json_file(path):
+    """A JSON data file, or {} if it's missing or unreadable (a half-written file must not break the app)."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_json_file(path, data):
+    """Write the file whole, then swap it into place, so a crash mid-write can't leave a broken file."""
+    DATA_DIR.mkdir(exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, separators=(",", ":")))
+    os.replace(tmp, path)
 ZIP_SOURCE = "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_zcta_national.zip"
 GEOCODER = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
 _zips = None
@@ -1520,9 +1547,212 @@ _zips = None
 
 def zip_centroids():
     global _zips
-    if _zips is None:
-        _zips = json.loads(ZIP_FILE.read_text()) if ZIP_FILE.exists() else {}
+    if not _zips and (_zips is None or ZIP_FILE.exists()):   # empty: the file may have been written since (Map setup)
+        _zips = _load_json_file(ZIP_FILE)
     return _zips
+
+
+def zip_population():
+    global _pops
+    if _pops is None:
+        _pops = _load_json_file(POP_FILE)
+    return _pops
+
+
+def zip_shapes():
+    global _shapes
+    if not _shapes and (_shapes is None or SHAPES_FILE.exists()):   # empty: the file may have been written since
+        _shapes = _load_json_file(SHAPES_FILE)
+    return _shapes
+
+
+MAP_PAD = 0.5    # degrees, about 35 miles: how far past the offices the map area reaches
+
+
+def map_region(conn=None):
+    """[[lat0, lon0], [lat1, lon1]]: the area the map shows and boundaries are downloaded for. The offices' box
+    padded by MAP_PAD, or (before any office is pinned) a box around where most patients live. None without either."""
+    own = conn is None
+    conn = conn or db()
+    pins = [(r["lat"], r["lon"]) for r in conn.execute("SELECT lat, lon FROM office_locations")]
+    data_zips = {r[0] for r in conn.execute("SELECT DISTINCT zip FROM map_patients")}
+    if own:
+        conn.close()
+    if pins:
+        pts = pins
+    else:
+        centers = {**zip_centroids(), **{z: v["c"] for z, v in zip_shapes().items() if v.get("c")}}
+        pts = [centers[z] for z in data_zips if z in centers]
+        if not pts:
+            return None
+        lat_m, lon_m = sorted(c[0] for c in pts)[len(pts) // 2], sorted(c[1] for c in pts)[len(pts) // 2]
+        pts = [c for c in pts if abs(c[0] - lat_m) < 1.5 and abs(c[1] - lon_m) < 1.5]   # within ~100 mi of the median
+    return [[round(min(p[0] for p in pts) - MAP_PAD, 4), round(min(p[1] for p in pts) - MAP_PAD, 4)],
+            [round(max(p[0] for p in pts) + MAP_PAD, 4), round(max(p[1] for p in pts) + MAP_PAD, 4)]]
+
+
+def download_zip_shapes():
+    """Every ZIP boundary (with its 2020 population and center point) around the offices, from the US Census: a box
+    around the office pins padded by about 25 miles, plus the individual ZIPs of mapped patients who live outside
+    it (other counties or states), fetched by ZIP number. Rerun it after adding an office or when new patients
+    turn up in ZIPs that have no boundary yet. Nothing about patients is sent: only box coordinates and ZIP numbers."""
+    global _shapes, _zips
+    conn = db()
+    data_zips = {r[0] for r in conn.execute("SELECT DISTINCT zip FROM map_patients")}
+    region = map_region(conn)
+    conn.close()
+    out = dict(zip_shapes())
+    centers = {**zip_centroids(), **{z: v["c"] for z, v in out.items() if v.get("c")}}
+    if not region:
+        raise ValueError("Add the offices' addresses (step 2) or upload a Referral Production Listing first, so the app knows the region.")
+    box = (region[0][1], region[0][0], region[1][1], region[1][0])   # lon0, lat0, lon1, lat1
+    import math
+    x0, y0, x1, y1 = box   # TIGERweb caps one answer at a few thousand ZIPs: ask in pieces of about 1.2 degrees
+    nx, ny = max(1, math.ceil((x1 - x0) / 1.2)), max(1, math.ceil((y1 - y0) / 1.2))
+    pieces = [(x0 + (x1 - x0) * i / nx, y0 + (y1 - y0) * j / ny, x0 + (x1 - x0) * (i + 1) / nx, y0 + (y1 - y0) * (j + 1) / ny)
+              for i in range(nx) for j in range(ny)]
+    common = {"outFields": "ZCTA5,POP100,INTPTLAT,INTPTLON", "outSR": "4326", "f": "geojson", "geometryPrecision": "4",
+              "maxAllowableOffset": "0.0005"}
+
+    def fetch(params):
+        url = SHAPES_SOURCE + "?" + urllib.parse.urlencode(params)
+        try:
+            with urllib.request.urlopen(url, timeout=180) as resp:
+                data = json.loads(resp.read())
+        except (urllib.error.URLError, ValueError, TimeoutError) as e:
+            raise ValueError(f"Couldn't get ZIP boundaries from the US Census ({getattr(e, 'reason', e)}). Try again in a minute.")
+        if data.get("error"):
+            raise ValueError(f"The Census boundary service refused the request: {str(data['error'])[:200]}")
+        if (data.get("properties") or {}).get("exceededTransferLimit"):
+            raise ValueError("The Census boundary service sent back only part of the region; try again.")
+        for f in data.get("features", []):
+            pr = f.get("properties") or {}
+            z = str(pr.get("ZCTA5") or "").strip()
+            if not z.isdigit() or not f.get("geometry"):
+                continue
+            try:
+                c = [round(float(pr["INTPTLAT"]), 5), round(float(pr["INTPTLON"]), 5)]
+            except (KeyError, TypeError, ValueError):
+                c = centers.get(z)
+            out[z] = {"g": f["geometry"], "pop": int(pr.get("POP100") or 0), "c": c}
+
+    for piece in pieces:
+        fetch({"geometry": ",".join(f"{v:.4f}" for v in piece), "geometryType": "esriGeometryEnvelope", "inSR": "4326",
+               "spatialRel": "esriSpatialRelIntersects", **common})
+    # Patients' ZIPs outside the box (other counties, other states): fetched by number, 40 at a time.
+    far = sorted(z for z in data_zips if z not in out and z.isdigit())
+    for i in range(0, len(far), 40):
+        fetch({"where": "ZCTA5 IN (" + ",".join(f"'{z}'" for z in far[i:i + 40]) + ")", **common})
+    if not out:
+        raise ValueError("The Census returned no ZIP boundaries for the region.")
+    _write_json_file(SHAPES_FILE, out)
+    _shapes = out
+    no_zcta = sorted(set(_load_json_file(NO_ZCTA_FILE) or []) | {z for z in far if z not in out})   # asked for, nothing came back
+    _write_json_file(NO_ZCTA_FILE, no_zcta)
+    conn = db()
+    points = {f"office:{r['office']}": (r["lat"], r["lon"]) for r in conn.execute("SELECT office, lat, lon FROM office_locations")}
+    conn.close()
+    points.update({z: tuple(v["c"]) for z, v in out.items() if v.get("c")})
+    n_cities = download_city_names(region, points)
+    _zips = {**zip_centroids(), **{z: v["c"] for z, v in out.items() if v.get("c")}}   # center points for the inset/fit
+    _write_json_file(ZIP_FILE, _zips)
+    return {"zips": len(out), "far": len(far), "cities": n_cities}
+
+
+def city_names():
+    global _cities
+    if not _cities and (_cities is None or CITY_FILE.exists()):
+        _cities = _load_json_file(CITY_FILE)
+    return _cities or {}
+
+
+def _in_ring(lat, lon, ring):
+    """Ray casting: is (lat, lon) inside this GeoJSON ring of [lon, lat] points?"""
+    inside = False
+    for i in range(len(ring)):
+        x1, y1 = ring[i - 1]
+        x2, y2 = ring[i]
+        if (y1 > lat) != (y2 > lat) and lon < (x2 - x1) * (lat - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _in_geometry(lat, lon, g):
+    polys = [g["coordinates"]] if g.get("type") == "Polygon" else g.get("coordinates", []) if g.get("type") == "MultiPolygon" else []
+    return any(_in_ring(lat, lon, poly[0]) for poly in polys if poly)
+
+
+def download_city_names(region, points):
+    """City names (incorporated cities and census-designated places, with 2020 population) inside the map area, and
+    which city each given point (ZIP centers, office pins) falls in. The city outlines are used once, here, and not
+    kept. Only the area's box coordinates are sent to the Census."""
+    global _cities
+    cities, polys = {}, []
+    x0, y0, x1, y1 = region[0][1], region[0][0], region[1][1], region[1][0]
+    for layer in (25, 26):
+        url = CITY_SOURCE.format(layer=layer) + "?" + urllib.parse.urlencode({
+            "geometry": f"{x0:.4f},{y0:.4f},{x1:.4f},{y1:.4f}", "geometryType": "esriGeometryEnvelope", "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects", "outFields": "BASENAME,POP100,INTPTLAT,INTPTLON", "outSR": "4326",
+            "f": "geojson", "geometryPrecision": "3", "maxAllowableOffset": "0.002"})
+        try:
+            with urllib.request.urlopen(url, timeout=180) as resp:
+                data = json.loads(resp.read())
+        except (urllib.error.URLError, ValueError, TimeoutError) as e:
+            raise ValueError(f"Couldn't get city names from the US Census ({getattr(e, 'reason', e)}). Try again in a minute.")
+        if data.get("error"):
+            raise ValueError(f"The Census place service refused the request: {str(data['error'])[:200]}")
+        for f in data.get("features", []):
+            pr = f.get("properties") or {}
+            name = str(pr.get("BASENAME") or "").strip()
+            if not name or not f.get("geometry"):
+                continue
+            try:
+                c = [round(float(pr["INTPTLAT"]), 5), round(float(pr["INTPTLON"]), 5)]
+            except (KeyError, TypeError, ValueError):
+                c = _geom_center(f["geometry"])
+            if not c:
+                continue
+            cities[name] = {"c": c, "pop": int(pr.get("POP100") or 0), "cdp": layer == 26}
+            polys.append((name, f["geometry"]))
+    where = {}
+    for key, (lat, lon) in points.items():
+        for name, g in polys:
+            if _in_geometry(lat, lon, g):
+                where[key] = name
+                break
+    out = {"cities": cities, "where": where}
+    _write_json_file(CITY_FILE, out)
+    _cities = out
+    return len(cities)
+
+
+def _geom_center(g):
+    """A point inside-ish a GeoJSON polygon: the mean of its outer ring (good enough for a label/dot when the
+    Census gave no interior point)."""
+    try:
+        ring = g["coordinates"][0] if g["type"] == "Polygon" else g["coordinates"][0][0]
+        return [round(sum(p[1] for p in ring) / len(ring), 5), round(sum(p[0] for p in ring) / len(ring), 5)]
+    except (KeyError, TypeError, IndexError, ZeroDivisionError):
+        return None
+
+
+def zip_shapes_geojson():
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": v["g"], "properties": {"zip": z, "pop": v.get("pop")}} for z, v in zip_shapes().items()]}
+
+
+def office_short_names(conn):
+    """Short office names for map labels, from the names the % TO GOAL sheet uses (office_alias), e.g.
+    'Dentist Of Torrance' -> 'Torrance', 'Care Dental Center' -> 'Carson'; else the name without 'Dentist(s) Of'."""
+    best = {}
+    for r in conn.execute("SELECT alias, office FROM office_alias"):
+        if r["office"] not in best or len(r["alias"]) < len(best[r["office"]]):
+            best[r["office"]] = r["alias"]
+    out = {}
+    for o in known_offices(conn):
+        short = title_case(best[o]) if o in best else re.sub(r"^Dentists?\s+Of\s+", "", o)
+        out[o] = short
+    return out
 
 
 def download_zip_centroids():
@@ -1537,7 +1767,7 @@ def download_zip_centroids():
     head = [h.strip().upper() for h in lines[0]]
     iz, ila, ilo = head.index("GEOID"), head.index("INTPTLAT"), head.index("INTPTLONG")
     out = {l[iz].strip(): [round(float(l[ila]), 5), round(float(l[ilo]), 5)] for l in lines[1:] if len(l) > ilo}
-    ZIP_FILE.write_text(json.dumps(out, separators=(",", ":")))
+    _write_json_file(ZIP_FILE, out)
     _zips = out
     return {"zips": len(out)}
 
@@ -1600,25 +1830,46 @@ def maps_info(month=None):
     month = month if month in months else (months[0] if months else None)
     rows = conn.execute("SELECT m.*, t.type FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND "
                         "t.pat_id = m.pat_id WHERE m.period_from = ?", (f"{month}-01",)).fetchall() if month else []
-    pins = [dict(r) for r in conn.execute("SELECT office, lat, lon FROM office_locations")]
+    pins = [dict(r) for r in conn.execute("SELECT office, lat, lon FROM office_locations ORDER BY office")]
     offices = known_offices(conn)
+    short = office_short_names(conn)
     types_loaded = [r[0] for r in conn.execute("SELECT DISTINCT office FROM patient_types")]
+    # Each office's listing has its own Thru date; show the range when they differ.
+    thru = dict(zip(("min", "max"), conn.execute("SELECT MIN(as_of), MAX(as_of) FROM map_patients WHERE period_from = ?",
+                                                   (f"{month}-01",)).fetchone())) if month else None
+    region = map_region(conn)
     conn.close()
-    zips, missing = zip_centroids(), {}
+    zips, missing, pops, shapes = zip_centroids(), {}, zip_population(), zip_shapes()
+    no_zcta = set(_load_json_file(NO_ZCTA_FILE) or []) if shapes else set()
     by_zip = {}
     for r in rows:
         z = by_zip.setdefault(r["zip"], {"zip": r["zip"], "patients": []})
         z["patients"].append({"pat_id": r["pat_id"], "office": r["office"], "collection": r["collection"],
                               "type": r["type"] or "Unknown", "referral": r["referral_type"]})
     out = []
+    # Three cases for a ZIP without a boundary: the Census has no area for it ("missing": not on the map), or it just
+    # hasn't been downloaded yet ("no_shape": step 1 again adds it; drawn as a dot meanwhile if its center is known).
+    no_shape = []
     for z in by_zip.values():
-        if z["zip"] in zips:
-            z["lat"], z["lon"] = zips[z["zip"]]
-            out.append(z)
-        else:
+        shape = shapes.get(z["zip"])
+        center = (shape or {}).get("c") or zips.get(z["zip"]) or (_geom_center(shape["g"]) if shape else None)
+        if not shape and z["zip"] in no_zcta:
             missing[z["zip"]] = len(z["patients"])
-    return {"month": month, "months": months, "zips": out, "missing": missing, "pins": pins, "offices": offices,
-            "zip_data": bool(zips), "types_loaded": types_loaded, "as_of": {}}
+            continue
+        if not shape:
+            no_shape.append(z["zip"])
+        if center:
+            z["lat"], z["lon"] = center
+            z["pop"] = (shape or {}).get("pop") or pops.get(z["zip"])
+            z["shape"] = bool(shape)
+            out.append(z)
+        elif not shapes:   # step 1 never run and no center known either
+            missing[z["zip"]] = len(z["patients"])
+    cn = city_names()
+    return {"month": month, "months": months, "thru": thru, "region": region, "zips": out, "missing": missing, "no_shape": sorted(no_shape),
+            "cities": cn.get("cities", {}), "where": cn.get("where", {}),
+            "pins": pins, "offices": offices, "short": short, "zip_data": bool(zips or shapes), "shapes_data": len(shapes),
+            "pop_data": bool(shapes or pops), "types_loaded": types_loaded}
 
 
 def audit_info():
@@ -1885,6 +2136,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, rows)
         elif self.path == "/api/google/notes-sheet":
             self._send(200, notes_sheet_info())
+        elif self.path == "/api/maps/shapes":
+            self._send(200, zip_shapes_geojson())
         elif self.path.startswith("/api/maps"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, maps_info((q.get("month") or [None])[0]))
@@ -1944,6 +2197,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, set_office_location(json.loads(self._body())))
             elif self.path == "/api/maps/zip-download":
                 self._send(200, download_zip_centroids())
+            elif self.path == "/api/maps/shapes-download":
+                self._send(200, download_zip_shapes())
             elif self.path == "/api/google/notes-sheet":
                 self._send(200, connect_notes_sheet(json.loads(self._body()).get("url", "")))
             elif self.path == "/api/google/notes-sheet/delete":

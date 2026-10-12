@@ -20,14 +20,19 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
 
 - Folder: `~/Monthly-report` (git repo, remote `https://github.com/data679/Monthly-report.git`, branch `main`).
 - **Runs as an always-on systemd user service** `monthly-report` (`~/.config/systemd/user/monthly-report.service`,
-  `HOST=0.0.0.0`, Restart=always): on the office network at http://morg.local:8765 or http://192.168.1.113:8765
-  (VirtualBox VM, bridged network). Password required for everyone (Basic auth; salted PBKDF2 hash in
-  `data/app_password.json`; change with `python3 app.py --set-password`, then restart). `/api/sql` and
-  `/api/google/key` only work from this computer. The app refuses to bind to the network without a password.
+  Restart=always, no HOST override → listens on 127.0.0.1:8765 only). Reachable from this computer and, through
+  **Tailscale Serve** (`sudo tailscale serve --bg 8765`, persists across restarts), at https://<node>.<tailnet>.ts.net (`tailscale serve status` prints the real address)
+  for devices on the tailnet. Not on the office Wi-Fi (set `Environment=HOST=0.0.0.0` in the unit to allow that).
+  App password required for everyone (salted PBKDF2 hash in `data/app_password.json`; change with
+  `python3 app.py --set-password`, then restart). Admin parts (`LOCAL_ONLY_PATHS`: SQL, Google/Denticon keys,
+  Audit, notes sheet, map setup) only from this computer's own browser; requests forwarded by Tailscale carry
+  forwarding headers and are treated as other computers.
 - **Restart / load code changes:** `systemctl --user restart monthly-report`; logs: `journalctl --user -u monthly-report`.
   Page-only changes (static/index.html) need just a hard refresh (Ctrl+Shift+R); served with `Cache-Control: no-store`.
-- **Don't also run `./run.sh`** (same port). run.sh is only for running it by hand with the service stopped.
+- **Don't also run `./run.sh`** (same port; it was the cause of three outages after terminal closes / reboots).
+  run.sh is only for running it by hand with the service stopped.
 - Starts at login; to start at boot without logging in: `sudo loginctl enable-linger morg` (needs the user's sudo).
+  The VM is VirtualBox: the host must stay on and the VM running.
 - Python 3.13, **standard library only** (no pip on this machine). Needs `pdftotext` (poppler) for PDFs and `openssl`
   for Google sign-in.
 
@@ -305,10 +310,39 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     production, collection; never names), attached as `details._map` only if an office's patients add up to its
     total → `map_patients` (replaced per office × month, later as_of wins).
   - General/Ortho: Patient List – Address upload (`parse_patient_types` → `patient_types`, Pat ID → type only).
-  - ZIP centers: the US Census ZCTA gazetteer, downloaded once to `data/zip_centroids.json` (Map setup button).
+  - ZIP centers: `data/zip_centroids.json`, refreshed from the boundary download (Map setup step 1); the older
+    gazetteer download (`/api/maps/zip-download`, `download_zip_centroids`) still exists as a fallback with no button.
     Office pins: `office_locations` (US Census geocoder for office addresses, or lat/lon typed in).
-  - UI: Leaflet + leaflet.heat (cdnjs, loaded only on the tab), OpenStreetMap tiles; heat by patients or $; ZIP
-    circles with hover/click Pat ID lists; ZIP table. Setup endpoints are local-only.
+  - UI: Leaflet (cdnjs, loaded only on the tab). **No street tiles**: plain background, every ZIP in the region
+    drawn as an area (US Census TIGERweb ZCTA GeoJSON cached in `data/zip_shapes.json` via Map setup step 1 →
+    `/api/maps/shapes-download`, local-only; served to the page by `GET /api/maps/shapes`; ZCTA POP100 gives the
+    population for "per 10k residents", so no Census key; ZIPs the Census has no area for, e.g. PO boxes, are
+    remembered in `data/zip_no_zcta.json` so the page says "not on the map" rather than "run step 1 again"), ZIPs
+    with patients filled by the measure (new patients,
+    $ collected, per 10k, dominant office; light-yellow→dark-red ramp, top 5% capped), white = no patients; a
+    labels-only Esri overlay (`Reference/World_Boundaries_and_Places`, pane "labels" z450) for city names, inverted
+    in dark mode; ZIP numbers as permanent tooltips at zoom ≥ 11 (busiest 150 in view). Numbered office pins
+    (short names from office_alias via `office_short_names`; offices < 0.7 mi apart share a "5·13" pin), legend,
+    optional 3/5/8-mile rings (straight-line; nearest/outside measured against the same offices the rings are drawn
+    for; "not nearest" flag when a ZIP's patients mostly visit a farther office), inset mini-map (light-gray base
+    tiles, bottom right) with the main view's box, auto-fit to the ZIPs holding 80% of patients within 35 miles of
+    the patient-weighted median (nearby pins within 1.1× that reach). ZIPs with patients but no boundary (outside the
+    downloaded region) show as dots and are listed in the note. The map is limited to the **map area**
+    (`map_region()`: the office pins padded by `MAP_PAD` = 0.5°, about 35 miles; before any pin, a box around the
+    patients' median): zoom out stops where the area fits, zoom in at 13, panning can't leave it, and the inset shows
+    exactly that area. Patients in ZIPs outside the area (other counties/states) stay in the totals and the ZIP table
+    with an "outside map" flag and are listed in the note under the map; they are never drawn.
+    Color classes (`classBreaks`): five data-driven classes (quantiles of the ZIPs, top class from the 95th
+    percentile when ≥ 20 ZIPs, whole numbers for counts, fewer classes when values repeat); the legend (top-right,
+    collapsible, folded by default on phones) lists each class's real range. Office colors (`assignOfficeColors`)
+    are stable per office and chosen so offices within 10 miles get the most different hues; mixed ZIPs get a dark
+    dashed outline. The numbered office key sits under the map (`#mp-key`). The map canvas stays light in dark mode.
+    City names: Step 1 also downloads the area's cities (Census 2020 incorporated places + CDPs, layers 25/26 of
+    TIGERweb Places, with population) and works out which city each ZIP center and office pin falls in (point in
+    polygon, done once; outlines not kept) → `data/city_names.json` {"cities": {name: {c, pop, cdp}}, "where":
+    {zip|"office:<name>": city}}. The page (`drawCityLabels`) names only cities with an office or with patients on
+    show, thinning by population when zoomed out; without that file it falls back to Esri's labels-only tiles. ZIP table adds per-10k, nearest office (miles) and
+    multi-office flags; hover lists Pat ID · office · $ (General/Ortho column only once a patient list is loaded).
 
 ## 11. Known office/data quirks
 
