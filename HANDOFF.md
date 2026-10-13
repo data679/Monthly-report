@@ -255,18 +255,22 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   A full load from Jan 2026 takes ~3–6 minutes. Tabs for months that haven't started are skipped.
 - Tab names: `APR'26` style years are read; a tab with **no year** ("October 🎃", "Feburary 💟") is taken as the
   latest such month up to today unless a tab with a year already covers it (Cerritos' old 2023 "SEPTEMBER" etc.).
-- Tab order in the UI: Log (opens first), Charts, Changes, Upload, Google Sheets, SQL.
-- **Charts tab** (index.html `renderTrend`): "Trend over months" for any number column, plain SVG (no library).
-  Company total (rates from summed parts via `totalRatio`, sums otherwise, tooltip notes "n of 15 offices") + up
-  to 3 offices; fixed series colors `--tr-s1..4` (first 4 slots of a CVD-checked palette, separate dark steps);
-  benchmark bands behind the lines; crosshair readout (hover or ←/→ keys); legend; "Show as a table". Selection is
-  remembered per browser (`trendSel`). Shared filters on top: Number + Month.
-  - **Office ranking** (`renderRanking`): horizontal bars for the chosen month, best first by the benchmark's
-    direction, status fills with ● ▲ ▼ + value at the tip, cut-off lines, company line only for rates/averages
-    (sums go in the note), offices without a number listed.
-  - **Heatmap** (`renderHeatmap`): HTML table, offices (Log's Office order) × months + Company total row; benchmark
-    washes with marks, or a 5-step blue scale when there's no benchmark; click a cell to rank that month.
-  - Suggested, not built: financing funnel, refunds by month.
+- Tab order in the UI: Log (opens first), Charts (report + map), Calls, Changes, Upload, Google Sheets, SQL, Audit (local only).
+  There is no Maps tab any more: the map is a card inside the Charts report (`#mp-section`), with the Map setup card
+  (`#mp-admin`, local only) at the bottom of the Charts tab.
+- **Charts tab** = the **collections report** (index.html `loadCharts` → `renderReport`/`renderReportTable`/
+  `renderHeatmap`; server `maps_trends` → `GET /api/maps/trends`, also allowed on view-only links: ZIP-level counts
+  only). Per ZIP × month × office × General/Ortho: patients, paid patients, $ collected, plus each month's latest
+  Thru date (`thru`; a month whose Thru is before its last day is **partial**: shown dashed/italic, left out of
+  counts and totals), office `pins` and ZIP `centers` (nearest office, computed on the page). Filters: Office
+  (patients who visit it) + From/To month (`zipReportSel`). Sections: lead sentence + 4 tiles (collected, patients,
+  ZIPs, ZIPs for half the $ / top-10 share); collected per month (bars, partial dashed); top 25 ZIPs by $ (bars);
+  **the map** (see Maps below; its Office comes from the report's Office filter, its Month select stays inside the
+  report's range); top 10 ZIPs month by month (small multiples, one scale); every ZIP as a sortable/searchable table
+  with Copy; each office's top 5 ZIPs; footnote. A ZIP link scrolls to the map and zooms it on that ZIP (`mapFocusZip`). The
+  same report exists as a shared artifact ("ZIP Collections Report", a snapshot). The earlier office charts
+  (trend / ranking / heatmap by office) and the ZIP-trends view (bump chart, per-month lists) were removed at the
+  user's request (Oct 2026).
 
 - **Denticon lender check** (lender_journal.py + `denticon_checks` in app.py): a Daily Journal with Patient Type
   **Both** and Transactions **Payments, Adjustments** (Word or PDF) is read as `lender_journal`: per patient,
@@ -287,6 +291,54 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     works from the computer running the app (`LOCAL_ONLY_PATHS`); the tab stays hidden elsewhere and in view-only
     links. They are not in the Log's ⚠ flags or the Checks panel. Sept 2026: 1,585 NPs checked, 124 differences.
 
+- **Invoca API** (invoca_api.py, Audit tab card "Invoca API (call tracking)", local-only endpoints
+  `/api/invoca/status|save|delete|test`): Transactions API v2020-10-01,
+  `https://<site>.invoca.net/api/2020-10-01/<networks|advertisers>/transactions/<id>.json`, token in the
+  `Authorization` header (never in URLs), `from`/`to` (YYYY-MM-DD, inclusive), `limit` ≤ 4000, paging with
+  `start_after_transaction_id`, `include_columns` = `invoca_api.COLUMNS` (ids, times, durations, advertiser/campaign,
+  promo line, city/region, result, `custom_data` for signals; **no caller phone numbers**). Config + token in
+  `data/invoca_api.json` (0600). `invoca_test()` reads the last 7 days and summarizes calls by advertiser/campaign
+  and the signal names seen. Docs: developers.invoca.net (Transactions API → Network/Brand, Advertiser/Merchant;
+  Manage API Credentials: Integrations → Manage Integrations → Invoca APIs → + New API Credential). Nothing is
+  stored from the test beyond its summary (in memory).
+- **Calls tab** (`#calls`, hidden on view-only links): one day's calls from Invoca as a sheet. `POST /api/calls/pull`
+  {date} (app password; any day up to today) → `pull_invoca_calls` → `all_transactions(day, day)` →
+  `store_invoca_calls` keeps Call transactions in table `invoca_calls` (replace that day; signals = true Signal
+  entries from the call's custom_data plus Signal transactions with the same complete_call_id; other marketing data
+  as JSON `custom`; never phone numbers). `GET /api/calls?date=` → that day's rows + the list of pulled days.
+  Page: Day (default yesterday) + Pull button + Office + Search + Copy; tiles (calls, answered %, avg talk, repeat
+  callers, top signals); sortable sheet (time, office, campaign, promo line, city, state, phone type, repeat,
+  rang+talked, talked or "not answered", outcome, signals/marketing chips); a pie of calls by promo line (≤ 8
+  slices, rest "Other") and a callers' map (`drawCallsMap`: a second Leaflet map on the ZIP outlines, one circle per
+  caller city sized/shaded by calls, the 12 busiest named; `calls_info` returns `points` = city → center from
+  `city_names.json` for California cities by name, other cities listed in the note). Both follow the Office/Search
+  filters.
+- **Call → new patient matching** (privacy by fingerprint): `invoca_api.COLUMNS` includes `calling_phone_number`
+  only so `store_invoca_calls` can store `phone_fp()` of it (HMAC with the patient_key secret over the 10 digits;
+  the number itself is never kept or shown). Denticon's **New Patients Through Appointment Book** (Excel, one sheet
+  per office: Patient Name, DOB, Home/Work/CellPhone, Email, Appt Date) is uploaded on the Calls tab
+  (`POST /api/calls/appointments` → `summary_parser.parse_new_patient_appts` → `save_np_appts`): only the office,
+  appointment date and phone fingerprints go into `np_appts`; names, DOB and emails are never read into the result;
+  extensions ("x: 12") are stripped. `calls_info` joins each call's fingerprint to `np_appts`: an appointment on or
+  after the call day = "converted" (shown green "booked m/d · office"), earlier = "booked earlier"; tile "became new
+  patients (% of answered)". The report has no Pat ID, so the link is phone-only; run it for a wide date range.
+  **Preferred source: Denticon's "New Patients List"** (one office per file: Pat ID, Patient Name (Chart No), DOB,
+  Phone# (one cell "(H) : … (C) : … (W) : …"), Email, Prdr, Referred By, Created On, First visit, Type, General/Ortho)
+  → `parse_new_patients_list` → `save_patient_phones` → table `patient_phones(fp, pat_id, office, first_visit,
+  created_on, phone_kind)`. The same Calls-tab button (`POST /api/calls/upload`, `calls_upload_kind` tells the two
+  reports apart) takes either report. `calls_info` match priority: **visited** (patient_phones first_visit ≥ call
+  day; `collected` = that patient's Referral-listing collection for the first-visit month, from map_patients by
+  pat_id + office) > **converted** (np_appts appointment ≥ call day) > **existing** (first_visit < call day) >
+  **before** (appointment < call day). The sheet shows "came in m/d · office · $x" (Pat ID in the hover title),
+  "booked m/d · office", "existing patient", "booked earlier"; the tile adds "N came in ($ collected), M booked".
+  Placeholder numbers (one repeated digit, 000…, 123-456-7890) are skipped everywhere (`phone_fp`).
+- **Funnel** (`calls_funnel(month, office)` → `GET /api/calls/funnel`; card `#fn-card` at the top of the Calls tab):
+  for a call month: calls, answered, distinct callers, became new patients (first visit ≥ call day on a loaded
+  patient list; each patient once, credited to their first qualifying call's promo line/campaign), started
+  treatment (collected > 0 that first-visit month), $ collected, booked-not-yet-seen (np_appts); breakdown by
+  promo line or campaign. The office filter applies from the patient step (calls are group-level in Invoca).
+  `pull_invoca_range(frm, to)` backfills a date range in one paged fetch (Aug 1–Sep 30 2026 were backfilled).
+  Next: a nightly pull and calls per office per month next to new patients.
 - **Denticon API** (denticon_api.py, Audit tab, local-only): base `https://api.planetdds.com/denticon`, header
   `PDDS-Subscription-Key` (key in `data/denticon_api.json`, 0600, entered by the user in the app). Step 1 built:
   save key, Test connection (Practices `/practices/v0/offices`), match Denticon offices to log offices
@@ -304,7 +356,9 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   `notes_sheet_loop` checks a fingerprint every 2 minutes and writes only when the log changed; Write now forces.
   Table `notes_sheet`; endpoints `/api/google/notes-sheet[/write|/delete]`.
 
-- **Maps tab** (everyone with the password; not in view-only links): new patients by ZIP for a month.
+- **The map** (formerly the Maps tab; now the `#mp-section` card in the Charts report; everyone with the password,
+  hidden on view-only links): new patients by ZIP for a month. Its Office comes from the report's Office filter; the
+  Maps ZIP table was removed (the report's table covers it).
   - Source: the Referral Production Listing run **grouped by Zip Code** (Excel best; PDF only where page breaks
     don't scramble lines). `parse_referral` → `_referral_patients` (Pat ID, zip, referral type, visits,
     production, collection; never names), attached as `details._map` only if an office's patients add up to its

@@ -32,10 +32,11 @@ import time
 from datetime import date, timedelta
 
 import denticon_api
+import invoca_api
 import google_sheets
 import np_analysis
 from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, rows_to_text, title_case
-from summary_parser import ParseError, parse_patient_types, parse_report
+from summary_parser import parse_new_patient_appts, parse_new_patients_list, calls_upload_kind, ParseError, parse_patient_types, parse_report
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
@@ -47,18 +48,19 @@ PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the
 # Only from the computer running the app: SQL, the Google key, and the Denticon audit (admin view).
 LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
                     "/api/denticon/key", "/api/denticon/key/delete", "/api/denticon/test", "/api/denticon/offices",
+                    "/api/invoca/status", "/api/invoca/save", "/api/invoca/delete", "/api/invoca/test",
                     "/api/google/notes-sheet", "/api/google/notes-sheet/delete", "/api/google/notes-sheet/write",
                     "/api/maps/patient-types", "/api/maps/office-location", "/api/maps/zip-download", "/api/maps/shapes-download"}
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
-VIEWER_PATHS = {"/", "/index.html", "/api/log", "/api/benchmarks", "/api/changes", "/api/checks"}
+VIEWER_PATHS = {"/", "/index.html", "/api/log", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends"}
 VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
-  body.viewer nav button[data-tab="sql"], body.viewer a[href="/api/export.csv"],
+  body.viewer nav button[data-tab="sql"], body.viewer nav button[data-tab="calls"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
   body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"],
-  body.viewer nav button[data-tab="maps"] { display: none; }
+  body.viewer #mp-section, body.viewer #mp-admin { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
 <script>
@@ -241,6 +243,57 @@ CREATE TABLE IF NOT EXISTS denticon_offices (
     name         TEXT,
     log_office   TEXT,                -- NULL until matched
     updated_at   TEXT NOT NULL
+);
+
+-- Calls pulled from Invoca (one row per call; no caller phone numbers or names).
+CREATE TABLE IF NOT EXISTS invoca_calls (
+    transaction_id   TEXT PRIMARY KEY,
+    complete_call_id TEXT,
+    call_date        TEXT NOT NULL,    -- YYYY-MM-DD (local)
+    start_local      TEXT,
+    start_utc        INTEGER,
+    duration         INTEGER,          -- seconds ringing + talking
+    connect_duration INTEGER,          -- seconds connected to the office
+    ivr_duration     INTEGER,
+    advertiser_id    TEXT,
+    advertiser       TEXT,
+    campaign         TEXT,
+    promo_line       TEXT,
+    virtual_line_id  TEXT,
+    city             TEXT,
+    region           TEXT,
+    mobile           TEXT,
+    repeat_caller    INTEGER,
+    result           TEXT,
+    signals          TEXT,             -- JSON list of signal names that were true
+    custom           TEXT,             -- JSON {marketing data field: value}
+    pulled_at        TEXT NOT NULL,
+    caller_fp        TEXT              -- keyed fingerprint of the caller's number (the number itself is never kept)
+);
+CREATE INDEX IF NOT EXISTS invoca_calls_date ON invoca_calls (call_date);
+
+-- Patients' phone numbers from Denticon's "New Patients List" (Pat ID + first visit), as keyed fingerprints only:
+-- lets a caller be linked to the patient record the app already holds (first visit, $ collected).
+CREATE TABLE IF NOT EXISTS patient_phones (
+    fp          TEXT NOT NULL,
+    pat_id      TEXT NOT NULL,
+    office      TEXT NOT NULL,
+    first_visit TEXT,
+    created_on  TEXT,
+    phone_kind  TEXT NOT NULL,         -- cell / home / work
+    loaded_at   TEXT NOT NULL,
+    PRIMARY KEY (fp, pat_id, office, phone_kind)
+);
+
+-- New-patient appointments from Denticon's "New Patients Through Appointment Book": only a keyed fingerprint of
+-- each phone number, the office and the appointment date, to tell which callers became new patients.
+CREATE TABLE IF NOT EXISTS np_appts (
+    fp          TEXT NOT NULL,
+    office      TEXT NOT NULL,
+    appt_date   TEXT,
+    phone_kind  TEXT NOT NULL,         -- cell / home / work
+    loaded_at   TEXT NOT NULL,
+    PRIMARY KEY (fp, office, appt_date, phone_kind)
 );
 
 -- The notes sheet: a Google Sheet the app keeps a copy of the Log in (one way), with a Notes column people type in.
@@ -513,6 +566,8 @@ def _setup(conn):
         conn.execute("ALTER TABLE np_patients ADD COLUMN other REAL NOT NULL DEFAULT 0")
     if "replaced_by" not in {r["name"] for r in conn.execute("PRAGMA table_info(metric_history)")}:
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
+    if "caller_fp" not in {r["name"] for r in conn.execute("PRAGMA table_info(invoca_calls)")}:
+        conn.execute("ALTER TABLE invoca_calls ADD COLUMN caller_fp TEXT")
     conn.executescript(log_view_sql())
 
 
@@ -1456,6 +1511,210 @@ def checks_info(viewer=False):
 
 denticon = denticon_api.Client(DATA_DIR)
 denticon_state = {"last_test": None, "last_error": None}
+invoca = invoca_api.Client(DATA_DIR)
+invoca_state = {"last_test": None, "last_error": None, "last_result": None}
+
+
+def invoca_status():
+    return {"connected": invoca.exists(), "config": invoca.config(), **invoca_state}
+
+
+def _int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def store_invoca_calls(day, transactions):
+    """Keep the day's calls from a Transactions API answer. Signals come from each call's custom_data, plus any
+    Signal transactions for the same call (complete_call_id). Returns how many calls were stored."""
+    sig_by_call = {}
+    for t in transactions:
+        if (t.get("transaction_type") or "") == "Signal":
+            for d in t.get("custom_data") or []:
+                if isinstance(d, dict) and d.get("data_type") == "Signal" and d.get("name"):
+                    sig_by_call.setdefault(t.get("complete_call_id"), {})[d["name"]] = bool(d.get("value") in (True, "true", "True", 1, "1"))
+    now = datetime.now().isoformat(timespec="seconds")
+    rows = []
+    for t in transactions:
+        if (t.get("transaction_type") or "Call") != "Call" or not t.get("transaction_id"):
+            continue
+        sigs, custom = dict(sig_by_call.get(t.get("complete_call_id"), {})), {}
+        for d in t.get("custom_data") or []:
+            if not isinstance(d, dict) or not d.get("name"):
+                continue
+            if d.get("data_type") == "Signal":
+                if d.get("value") is not None:
+                    sigs[d["name"]] = bool(d.get("value") in (True, "true", "True", 1, "1"))
+            elif d.get("value") not in (None, ""):
+                custom[d["name"]] = str(d["value"])[:200]
+        rows.append((t["transaction_id"], t.get("complete_call_id"), day, t.get("start_time_local"), _int(t.get("start_time_utc")),
+                     _int(t.get("duration")), _int(t.get("connect_duration")), _int(t.get("ivr_duration")), str(t.get("advertiser_id") or ""),
+                     t.get("advertiser_name"), t.get("advertiser_campaign_name"), t.get("promo_line_description"), str(t.get("virtual_line_id") or ""),
+                     t.get("city"), t.get("region"), t.get("mobile"), 1 if str(t.get("repeat_calling_phone_number")).lower() in ("true", "1", "yes") else 0,
+                     t.get("call_result_description_detail"), json.dumps(sorted(k for k, v in sigs.items() if v)), json.dumps(custom), now,
+                     phone_fp(t.get("calling_phone_number"))))
+    conn = db()
+    with conn:
+        conn.execute("DELETE FROM invoca_calls WHERE call_date = ?", (day,))
+        conn.executemany("INSERT OR REPLACE INTO invoca_calls VALUES (" + ",".join("?" * 22) + ")", rows)
+    conn.close()
+    return len(rows)
+
+
+def pull_invoca_calls(day):
+    """Fetch one day's calls from Invoca and keep them. The day is YYYY-MM-DD, not in the future."""
+    from datetime import date
+    try:
+        d = date.fromisoformat(day)
+    except (TypeError, ValueError):
+        raise ValueError("Pick a date (YYYY-MM-DD).")
+    if d > date.today():
+        raise ValueError("That day hasn't happened yet.")
+    transactions = invoca.all_transactions(day, day)
+    n = store_invoca_calls(day, transactions)
+    return {"date": day, "calls": n, "transactions": len(transactions), **calls_info(day)}
+
+
+def pull_invoca_range(frm, to):
+    """Backfill: every call from `frm` to `to` (YYYY-MM-DD, inclusive) in one paged fetch, kept day by day."""
+    from datetime import date
+    d0, d1 = date.fromisoformat(frm), date.fromisoformat(to)
+    if d1 < d0 or d1 > date.today():
+        raise ValueError("Pick a range of past days, oldest first.")
+    transactions = invoca.all_transactions(frm, to, max_pages=400)
+    by_day = {}
+    for t in transactions:
+        day = str(t.get("start_time_local") or "")[:10]
+        if len(day) == 10:
+            by_day.setdefault(day, []).append(t)
+    stored = {day: store_invoca_calls(day, tx) for day, tx in sorted(by_day.items())}
+    return {"from": frm, "to": to, "transactions": len(transactions), "days": stored}
+
+
+def calls_funnel(month=None, office=""):
+    """Calls in a month -> callers who became new patients (a loaded patient list says their first visit was on or
+    after the call) -> who started treatment (paid anything in their first-visit month) -> $ collected. Each
+    patient counts once, on their first qualifying call, which also decides the promo line / campaign credited.
+    Calls can't be split by office (Invoca reports the group), so the office filter applies from the patient step."""
+    conn = db()
+    months = [r[0] for r in conn.execute("SELECT DISTINCT substr(call_date, 1, 7) FROM invoca_calls ORDER BY 1 DESC")]
+    month = month if month in months else (months[0] if months else None)
+    lists = [dict(r) for r in conn.execute("SELECT office, COUNT(DISTINCT pat_id) AS patients, MIN(first_visit) AS lo, MAX(first_visit) AS hi FROM patient_phones GROUP BY office ORDER BY office")]
+    if not month:
+        conn.close()
+        return {"month": None, "months": [], "lists": lists, "offices": [l["office"] for l in lists]}
+    lo, hi = f"{month}-01", f"{month}-31"
+    calls = [dict(r) for r in conn.execute("SELECT transaction_id, call_date, caller_fp, connect_duration, promo_line, campaign FROM invoca_calls "
+                                           "WHERE call_date BETWEEN ? AND ? ORDER BY call_date, start_utc", (lo, hi))]
+    # Patients reached: for every caller fingerprint, the patient records (first visit on/after the call) and appointments.
+    fps = sorted({c["caller_fp"] for c in calls if c["caller_fp"]})
+    pats, appts = {}, {}
+    for i in range(0, len(fps), 500):
+        chunk = fps[i:i + 500]; q = ",".join("?" * len(chunk))
+        for r in conn.execute(f"SELECT p.fp, p.pat_id, p.office, p.first_visit, "
+                              f"(SELECT ROUND(SUM(m.collection), 2) FROM map_patients m WHERE m.pat_id = p.pat_id AND m.office = p.office "
+                              f" AND p.first_visit IS NOT NULL AND m.period_from = substr(p.first_visit, 1, 7) || '-01') AS collected "
+                              f"FROM patient_phones p WHERE p.fp IN ({q})" + (" AND p.office = ?" if office else ""), chunk + ([office] if office else [])):
+            pats.setdefault(r["fp"], []).append(dict(r))
+        for r in conn.execute(f"SELECT fp, office, appt_date FROM np_appts WHERE fp IN ({q})" + (" AND office = ?" if office else ""), chunk + ([office] if office else [])):
+            appts.setdefault(r["fp"], []).append(dict(r))
+    conn.close()
+    seen_pat, seen_booked = set(), set()
+    groups = {"promo_line": {}, "campaign": {}}
+    def bump(c, key, **inc):
+        for g in ("promo_line", "campaign"):
+            d = groups[g].setdefault(c[g] or "(none)", {"calls": 0, "answered": 0, "patients": 0, "started": 0, "collected": 0.0, "booked": 0})
+            for k, v in inc.items():
+                d[k] += v
+    total = {"calls": 0, "answered": 0, "callers": len(fps), "patients": 0, "started": 0, "collected": 0.0, "booked": 0}
+    for c in calls:
+        answered = 1 if (c["connect_duration"] or 0) > 0 else 0
+        total["calls"] += 1; total["answered"] += answered
+        bump(c, None, calls=1, answered=answered)
+        fp = c["caller_fp"]
+        if not fp:
+            continue
+        for p in pats.get(fp, []):
+            key = (p["pat_id"], p["office"])
+            if key in seen_pat or not p["first_visit"] or p["first_visit"] < c["call_date"]:
+                continue
+            seen_pat.add(key)
+            started = 1 if (p["collected"] or 0) > 0 else 0
+            total["patients"] += 1; total["started"] += started; total["collected"] += p["collected"] or 0
+            bump(c, None, patients=1, started=started, collected=p["collected"] or 0)
+        if fp not in {k for k, _ in seen_pat} and fp not in seen_booked:
+            if any(a["appt_date"] and a["appt_date"] >= c["call_date"] for a in appts.get(fp, [])) and not any(p["first_visit"] and p["first_visit"] >= c["call_date"] for p in pats.get(fp, [])):
+                seen_booked.add(fp); total["booked"] += 1; bump(c, None, booked=1)
+    total["collected"] = round(total["collected"], 2)
+    out_groups = {g: sorted(({"name": k, **{kk: (round(vv, 2) if kk == "collected" else vv) for kk, vv in v.items()}} for k, v in d.items()),
+                            key=lambda x: (-x["patients"], -x["calls"])) for g, d in groups.items()}
+    return {"month": month, "months": months, "office": office, "lists": lists, "offices": [l["office"] for l in lists], "total": total, "by": out_groups}
+
+
+def calls_info(day=None):
+    """The calls kept for a day, plus which days have been pulled."""
+    conn = db()
+    days = [dict(r) for r in conn.execute("SELECT call_date AS day, COUNT(*) AS n, MAX(pulled_at) AS pulled_at FROM invoca_calls GROUP BY call_date ORDER BY call_date DESC")]
+    rows = [dict(r) for r in conn.execute("SELECT * FROM invoca_calls WHERE call_date = ? ORDER BY start_utc, start_local", (day,))] if day else []
+    # Which callers became patients (by phone fingerprint): a patient record whose first visit is on or after the
+    # call = came in (with the $ collected that month from the Referral listing); a new-patient appointment on or
+    # after the call = booked; an earlier first visit = an existing patient.
+    appts, pats = {}, {}
+    if day:
+        for a in conn.execute("SELECT fp, office, appt_date FROM np_appts WHERE fp IN (SELECT caller_fp FROM invoca_calls WHERE call_date = ? AND caller_fp != '')", (day,)):
+            appts.setdefault(a["fp"], []).append({"office": a["office"], "appt_date": a["appt_date"]})
+        for a in conn.execute("SELECT p.fp, p.pat_id, p.office, p.first_visit, "
+                              "(SELECT ROUND(SUM(m.collection), 2) FROM map_patients m WHERE m.pat_id = p.pat_id AND m.office = p.office "
+                              " AND p.first_visit IS NOT NULL AND m.period_from = substr(p.first_visit, 1, 7) || '-01') AS collected "
+                              "FROM patient_phones p WHERE p.fp IN (SELECT caller_fp FROM invoca_calls WHERE call_date = ? AND caller_fp != '')", (day,)):
+            pats.setdefault(a["fp"], []).append({"pat_id": a["pat_id"], "office": a["office"], "first_visit": a["first_visit"], "collected": a["collected"]})
+    appts_known = conn.execute("SELECT COUNT(DISTINCT fp) FROM np_appts").fetchone()[0] + conn.execute("SELECT COUNT(DISTINCT fp) FROM patient_phones").fetchone()[0]
+    conn.close()
+    for r in rows:
+        r["signals"] = json.loads(r["signals"] or "[]"); r["custom"] = json.loads(r["custom"] or "{}")
+        fp = r.pop("caller_fp", "") or ""
+        phits, hits = pats.get(fp, []), appts.get(fp, [])
+        visited = sorted([h for h in phits if h["first_visit"] and h["first_visit"] >= day], key=lambda h: h["first_visit"])
+        existing = sorted([h for h in phits if not h["first_visit"] or h["first_visit"] < day], key=lambda h: h["first_visit"] or "")
+        after = sorted([h for h in hits if h["appt_date"] and h["appt_date"] >= day], key=lambda h: h["appt_date"])
+        before = sorted([h for h in hits if not h["appt_date"] or h["appt_date"] < day], key=lambda h: h["appt_date"] or "")
+        r["match"] = ({"status": "visited", **visited[0]} if visited else {"status": "converted", **after[0]} if after
+                      else {"status": "existing", **existing[-1]} if existing else {"status": "before", **before[-1]} if before else None)
+    # Where each caller's city is, for the ones in the map area's Census city list (name match, California only).
+    cities = {name.lower(): v["c"] for name, v in city_names().get("cities", {}).items() if v.get("c")}
+    points = {}
+    for r in rows:
+        c, st = (r.get("city") or "").strip(), (r.get("region") or "").strip()
+        key = f"{c}|{st}"
+        if c and key not in points and st.upper() in ("CA", "CALIFORNIA", "") and c.lower() in cities:
+            points[key] = cities[c.lower()]
+    return {"date": day, "rows": rows, "days": days, "connected": invoca.exists(), "points": points, "appts_known": appts_known}
+
+
+def invoca_test():
+    """Read the last 7 days of calls and summarize them by office (advertiser) and campaign: nothing about callers."""
+    from datetime import date, timedelta
+    to, frm = date.today(), date.today() - timedelta(days=6)
+    try:
+        rows = invoca.all_transactions(frm.isoformat(), to.isoformat())
+    except invoca_api.InvocaError as e:
+        invoca_state.update(last_error=str(e), last_test=datetime.now().isoformat(timespec="seconds"), last_result=None)
+        raise
+    calls = [r for r in rows if (r.get("transaction_type") or "Call") == "Call"]
+    by_adv, by_camp = {}, {}
+    for r in calls:
+        a = r.get("advertiser_name") or f"advertiser {r.get('advertiser_id')}"
+        by_adv[a] = by_adv.get(a, 0) + 1
+        k = f"{a} · {r.get('advertiser_campaign_name') or 'no campaign'}"
+        by_camp[k] = by_camp.get(k, 0) + 1
+    signals = sorted({d.get("name") for r in calls for d in (r.get("custom_data") or []) if isinstance(d, dict) and d.get("data_type") == "Signal" and d.get("name")})
+    result = {"from": frm.isoformat(), "to": to.isoformat(), "transactions": len(rows), "calls": len(calls),
+              "by_advertiser": sorted(by_adv.items(), key=lambda kv: -kv[1]), "by_campaign": sorted(by_camp.items(), key=lambda kv: -kv[1])[:30],
+              "signals": signals[:40], "columns": sorted(rows[0].keys()) if rows else []}
+    invoca_state.update(last_error=None, last_test=datetime.now().isoformat(timespec="seconds"), last_result=result)
+    return {**invoca_status(), "result": result}
 
 
 def _pick(d, *names):
@@ -1741,6 +2000,31 @@ def zip_shapes_geojson():
         {"type": "Feature", "geometry": v["g"], "properties": {"zip": z, "pop": v.get("pop")}} for z, v in zip_shapes().items()]}
 
 
+def maps_trends():
+    """New patients and $ collected per ZIP, month, office and General/Ortho type, for every month loaded: the
+    Charts tab's "ZIP trends". ZIP-level counts only, nothing per patient."""
+    conn = db()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT m.zip, substr(m.period_from, 1, 7) AS month, m.office, COALESCE(t.type, 'Unknown') AS type, COUNT(*) AS n, "
+        "SUM(CASE WHEN m.collection > 0 THEN 1 ELSE 0 END) AS n_paid, ROUND(SUM(m.collection), 2) AS total "
+        "FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND t.pat_id = m.pat_id "
+        "GROUP BY m.zip, month, m.office, type")]
+    months = sorted({r["month"] for r in rows})
+    # The latest "Thru" date loaded for each month: a month whose listings stop before its last day is partial.
+    thru = {r[0]: r[1] for r in conn.execute("SELECT substr(period_from, 1, 7), MAX(as_of) FROM map_patients GROUP BY 1")}
+    pins = [dict(r) for r in conn.execute("SELECT office, lat, lon FROM office_locations ORDER BY office")]
+    offices = known_offices(conn)
+    short = office_short_names(conn)
+    types_loaded = [r[0] for r in conn.execute("SELECT DISTINCT office FROM patient_types")]
+    conn.close()
+    cn = city_names()
+    shapes, cents = zip_shapes(), zip_centroids()
+    centers = {z: c for z in {r["zip"] for r in rows} if (c := (shapes.get(z) or {}).get("c") or cents.get(z))}
+    return {"months": months, "thru": thru, "rows": rows, "offices": offices, "short": short, "types_loaded": types_loaded,
+            "pins": pins, "centers": centers,
+            "where": {z: c for z, c in cn.get("where", {}).items() if not z.startswith("office:")}}
+
+
 def office_short_names(conn):
     """Short office names for map labels, from the names the % TO GOAL sheet uses (office_alias), e.g.
     'Dentist Of Torrance' -> 'Torrance', 'Care Dental Center' -> 'Carson'; else the name without 'Dentist(s) Of'."""
@@ -1791,6 +2075,67 @@ def save_patient_types(path, filename):
     conn.close()
     vals = list(parsed["types"].values())
     return {"office": office, "general": vals.count("General"), "ortho": vals.count("Ortho"), "patients": len(vals)}
+
+
+def save_np_appts(path, filename):
+    """Keep the new-patient appointments as phone fingerprints per office and date; nothing else from the file."""
+    parsed = parse_new_patient_appts(path)
+    conn = db()
+    now = datetime.now().isoformat(timespec="seconds")
+    out, rows, placeholders = [], [], 0
+    for o in parsed["offices"]:
+        office = map_office_name(conn, o["office"])
+        usable = 0
+        for pt in o["patients"]:
+            fps = {k: phone_fp(v) for k, v in pt["phones"].items()}
+            if pt["phones"] and not any(fps.values()):
+                placeholders += 1   # a number was there but it's a placeholder or too short
+            fps = {k: v for k, v in fps.items() if v}
+            if fps:
+                usable += 1
+            rows += [(fp, office, pt["appt_date"], kind, now) for kind, fp in fps.items()]
+        out.append({"office": office, "patients": len(o["patients"]), "with_phone": usable})
+    with conn:
+        conn.executemany("INSERT OR IGNORE INTO np_appts VALUES (?, ?, ?, ?, ?)", rows)
+        total = conn.execute("SELECT COUNT(DISTINCT fp) FROM np_appts").fetchone()[0]
+    conn.close()
+    return {"offices": out, "patients": sum(o["patients"] for o in out), "with_phone": sum(o["with_phone"] for o in out), "placeholders": placeholders,
+            "total_numbers_known": total}
+
+
+def save_patient_phones(path):
+    """Keep each new patient's phone fingerprints with their Pat ID, office and first-visit date; nothing else."""
+    parsed = parse_new_patients_list(path)
+    conn = db()
+    office = map_office_name(conn, parsed["office"])
+    now = datetime.now().isoformat(timespec="seconds")
+    rows, usable, placeholders = [], 0, 0
+    for pt in parsed["patients"]:
+        fps = {k: phone_fp(v) for k, v in pt["phones"].items()}
+        if pt["phones"] and not any(fps.values()):
+            placeholders += 1
+        fps = {k: v for k, v in fps.items() if v}
+        if fps:
+            usable += 1
+        rows += [(fp, pt["pat_id"], office, pt["first_visit"], pt["created_on"], kind, now) for kind, fp in fps.items()]
+    with conn:
+        conn.executemany("INSERT OR REPLACE INTO patient_phones VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        total = conn.execute("SELECT COUNT(DISTINCT fp) FROM patient_phones").fetchone()[0]
+    conn.close()
+    visits = sorted(p["first_visit"] for p in parsed["patients"] if p["first_visit"])
+    return {"kind": "patients", "office": office, "patients": len(parsed["patients"]), "with_phone": usable, "placeholders": placeholders,
+            "first_visits": [visits[0], visits[-1]] if visits else None, "total_numbers_known": total}
+
+
+def save_calls_upload(path, filename):
+    """The Calls tab accepts two Denticon reports: the New Patients List (preferred: Pat ID + phone + first visit)
+    and New Patients Through Appointment Book (phone + appointment date)."""
+    kind = calls_upload_kind(path)
+    if kind == "patients":
+        return save_patient_phones(path)
+    if kind == "appointments":
+        return {"kind": "appointments", **save_np_appts(path, filename)}
+    raise ParseError("Upload Denticon's New Patients List (Excel) or New Patients Through Appointment Book (Excel)")
 
 
 def set_office_location(c):
@@ -1967,6 +2312,18 @@ def pat_key(pat_id):
     return hmac.new(_patient_secret, pid.encode(), hashlib.sha256).hexdigest()[:24]
 
 
+def phone_fp(number):
+    """A keyed fingerprint of a phone number (its 10 digits): the same number always gives the same fingerprint,
+    the number can't be read back. Empty when fewer than 10 digits."""
+    digits = re.sub(r"\D", "", re.split(r"\s*(?:x|ext)\b", str(number or ""), maxsplit=1, flags=re.I)[0])   # "… x: 12" = extension
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) != 10 or len(set(digits)) == 1 or digits.startswith("000") or digits in ("1234567890", "0123456789"):
+        return ""   # too short, or a placeholder the front desk typed (000-000-0000, 999-999-9999, 123-456-7890)
+    pat_key("0")   # loads the secret
+    return hmac.new(_patient_secret, ("phone:" + digits).encode(), hashlib.sha256).hexdigest()[:24]
+
+
 def scrub_patients(entries):
     """Replace Pat IDs with keys in a list of patient entries (in place); returns the list."""
     for p in entries or []:
@@ -2138,11 +2495,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, notes_sheet_info())
         elif self.path == "/api/maps/shapes":
             self._send(200, zip_shapes_geojson())
+        elif self.path == "/api/maps/trends":
+            self._send(200, maps_trends())
         elif self.path.startswith("/api/maps"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, maps_info((q.get("month") or [None])[0]))
         elif self.path == "/api/denticon/status":
             self._send(200, denticon_status())
+        elif self.path == "/api/invoca/status":
+            self._send(200, invoca_status())
+        elif self.path.startswith("/api/calls/funnel"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._send(200, calls_funnel((q.get("month") or [None])[0], (q.get("office") or [""])[0]))
+        elif self.path.startswith("/api/calls"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._send(200, calls_info((q.get("date") or [None])[0]))
         elif self.path == "/api/audit":
             self._send(200, audit_info())
         elif self.path == "/api/checks":
@@ -2213,6 +2580,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True})
             elif self.path == "/api/denticon/test":
                 self._send(200, denticon_test())
+            elif self.path == "/api/invoca/save":
+                b = json.loads(self._body())
+                invoca.save(b.get("site"), b.get("kind"), b.get("id"), b.get("token"))
+                invoca_state.update(last_test=None, last_error=None, last_result=None)
+                self._send(200, invoca_status())
+            elif self.path == "/api/invoca/delete":
+                invoca.remove()
+                invoca_state.update(last_test=None, last_error=None, last_result=None)
+                self._send(200, invoca_status())
+            elif self.path == "/api/invoca/test":
+                self._send(200, invoca_test())
+            elif self.path == "/api/calls/pull":
+                self._send(200, pull_invoca_calls(json.loads(self._body()).get("date")))
+            elif self.path == "/api/calls/upload":
+                filename = unquote(self.headers.get("X-Filename", "upload.xlsx"))
+                with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix.lower(), delete=False) as tmp:
+                    tmp.write(self._body())
+                try:
+                    self._send(200, save_calls_upload(tmp.name, filename))
+                finally:
+                    os.unlink(tmp.name)
             elif self.path == "/api/denticon/offices":
                 self._send(200, set_denticon_office(json.loads(self._body())))
             elif self.path == "/api/save-lender-journal":
@@ -2255,7 +2643,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, run_sql(query))
             else:
                 self._send(404, {"error": "Not found"})
-        except (ParseError, PasteError, ValueError, KeyError, sqlite3.Error, denticon_api.DenticonError,
+        except (ParseError, PasteError, ValueError, KeyError, sqlite3.Error, denticon_api.DenticonError, invoca_api.InvocaError,
                 google_sheets.GoogleError, np_analysis.NPAnalysisError) as e:
             self._send(400, {"error": str(e)})
         except Exception as e:  # keep the server up, report the problem

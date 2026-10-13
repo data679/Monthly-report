@@ -38,7 +38,7 @@
   label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   input[type=date], input[type=search] { font: inherit; padding: 7px 9px; border: 1px solid var(--border);
          border-radius: 7px; background: var(--surface); color: var(--text); }
-  button.btn { font: inherit; padding: 8px 16px; border-radius: 7px; border: 1px solid var(--border);
+  button.btn, label.btn-file { font: inherit; padding: 8px 16px; border-radius: 7px; border: 1px solid var(--border);
                background: var(--surface); color: var(--text); cursor: pointer; }
   button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
   button.btn:disabled { opacity: .5; cursor: default; }
@@ -195,14 +195,7 @@
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .link-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
   .bm-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
-  /* Charts: trend over months. Series colors are the first four slots of a CVD-checked categorical
-     palette, in fixed order (total, office 1, 2, 3); dark mode has its own steps. */
-  #charts { --tr-s1: #2a78d6; --tr-s2: #eb6834; --tr-s3: #1baf7a; --tr-s4: #eda100;
-            --tr-grid: #e1e0d9; --tr-axis: #c3c2b7; --tr-muted: #6f6d68; }
-  @media (prefers-color-scheme: dark) {
-    #charts { --tr-s1: #3987e5; --tr-s2: #d95926; --tr-s3: #199e70; --tr-s4: #c98500;
-              --tr-grid: #2c2c2a; --tr-axis: #383835; --tr-muted: #a3a29b; }
-  }
+  /* The Charts report and its map share the .tr-* filter-row and title styles. */
   .tr-controls { gap: 10px 16px; margin-bottom: 14px; }
   .tr-controls label[hidden] { display: none; }   /* a filter that doesn't apply yet (e.g. General/Ortho before a patient list is loaded) */
   .tr-controls select { max-width: 260px; }
@@ -222,8 +215,6 @@
   .tr-tip .tr-row i { display: inline-block; width: 12px; height: 2px; border-radius: 1px; flex: none; }
   .tr-tip .tr-row b { font-variant-numeric: tabular-nums; }
   .tr-tip .tr-row span { color: var(--muted); }
-  .tr-table { margin-top: 6px; }
-  .tr-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   /* The map has no street tiles: a plain background, ZIP areas, city names on top. */
   .mp-map { height: min(70vh, 640px); border-radius: 8px; border: 1px solid var(--border); background: #dfe3e8; }
   .mp-map.mp-zoomed-out .mp-pin { width: 16px !important; height: 16px !important; font: 700 9px/13px system-ui, sans-serif; margin-left: -8px !important; margin-top: -8px !important; }
@@ -241,10 +232,8 @@
   .leaflet-tooltip.mp-city-big { font-size: 14px; font-weight: 700; }
   .leaflet-tooltip.mp-city-small { font-size: 11px; font-weight: 500; }
   .leaflet-tooltip.mp-city-office { color: #111827; }
-  tr.mp-far td { color: var(--muted); }
   /* The map itself stays light in dark mode: the color ramp only reads right on a light canvas. */
   .mp-step { margin: 12px 0 6px; }
-  #mp-zips tr { cursor: pointer; }
   .mp-pop { max-height: 260px; overflow: auto; font-size: 12px; min-width: 220px; }
   .mp-pop table { border-collapse: collapse; width: 100%; } .mp-pop td { padding: 2px 6px; border-bottom: 1px solid #eee; }
   .mp-pop .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -270,31 +259,74 @@
                       background: var(--surface); color: var(--text); }
   #charts > .tr-controls { margin: 0 0 12px; }
   #charts > .card + .card { margin-top: 16px; }
-  .tr-series { gap: 8px 16px; margin: 6px 0 10px; }
-  /* Status fills for bars (good / warning / critical); always shown with ● ▲ ▼ and a word. */
-  #charts { --st-good: #0ca30c; --st-warn: #fab219; --st-crit: #d03b3b; }
-  .hm-wrap table { border-collapse: separate; border-spacing: 2px; width: auto; }
-  .hm-wrap th, .hm-wrap td { padding: 0; }
-  .hm-wrap thead th { font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; padding: 2px 4px 4px;
                       text-transform: none; letter-spacing: 0; white-space: nowrap; }
-  .hm-wrap thead th.sel { color: var(--text); font-weight: 700; }
-  .hm-wrap tbody th { position: sticky; left: 0; background: var(--surface); text-align: left; font-weight: 400;
                       font-size: 13px; padding-right: 10px; white-space: nowrap; z-index: 1;
                       text-transform: none; letter-spacing: 0; color: var(--text); }
-  .hm-cell { min-width: 62px; height: 30px; border-radius: 4px; text-align: center; font-size: 12px;
              font-variant-numeric: tabular-nums; cursor: default; outline-offset: -2px; }
-  .hm-cell:hover, .hm-cell:focus { outline: 2px solid var(--text); }
-  .hm-cell.sel { box-shadow: inset 0 0 0 2px var(--accent); }
-  .hm-empty { color: var(--muted); background: var(--bg); }
   .hm-tip { position: fixed; }
   .bm-green-key { background: var(--bm-green); } .bm-yellow-key { background: var(--bm-yellow); } .bm-red-key { background: var(--bm-red); }
-  .hm-s1 { background: #cde2fb; color: #0b0b0b; } .hm-s2 { background: #9ec5f4; color: #0b0b0b; }
-  .hm-s3 { background: #6da7ec; color: #0b0b0b; } .hm-s4 { background: #2a78d6; color: #fff; } .hm-s5 { background: #184f95; color: #fff; }
-  @media (prefers-color-scheme: dark) {
-    .hm-s1 { background: #104281; color: #fff; } .hm-s2 { background: #1c5cab; color: #fff; }
-    .hm-s3 { background: #2a78d6; color: #fff; } .hm-s4 { background: #6da7ec; color: #0b0b0b; } .hm-s5 { background: #b7d3f6; color: #0b0b0b; }
-  }
-  .hm-key { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  #ch-report > .card + .card, #ch-report > .rp-grid2 + .card { margin-top: 16px; }
+  /* Calls tab: the funnel */
+  .fn-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 10px; margin: 10px 0 4px; }
+  .fn-step { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; position: relative; overflow: hidden; }
+  .fn-step .bar { position: absolute; left: 0; top: 0; bottom: 0; background: #2a78d6; opacity: .12; }
+  .fn-step .k { font-size: 11px; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; position: relative; }
+  .fn-step .v { font-size: 24px; line-height: 1.15; margin-top: 2px; font-variant-numeric: tabular-nums; position: relative; }
+  .fn-step .s { font-size: 12px; color: var(--muted); margin-top: 2px; position: relative; }
+  .fn-box { max-height: 380px; overflow: auto; } .fn-box thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  #fn-table tr.fn-fold td { cursor: pointer; color: var(--muted); } #fn-table tr.fn-fold td:first-child::before { content: "▸ "; } #fn-table tr.fn-fold.open td:first-child::before { content: "▾ "; }
+  #fn-table tr.fn-sub td { color: var(--muted); } #fn-table tr.fn-sub td:first-child { padding-left: 26px; font-variant-numeric: tabular-nums; }
+  /* Calls tab: a dense sheet */
+  label.btn-file { display: inline-block; flex-direction: row; cursor: pointer; }   /* a file picker that looks like a button, even inside a filter row */
+  .cl-tiles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 6px 0 10px; font-size: 13px; }
+  .cl-tiles span b { font-size: 18px; font-weight: 600; margin-right: 4px; font-variant-numeric: tabular-nums; }
+  .cl-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; margin: 4px 0 12px; }
+  .cl-pie svg { width: 170px; height: 170px; flex: none; }
+  .cl-pie .pt { font-size: 13px; font-weight: 600; width: 100%; margin: 0; }
+  .cl-pie ul { list-style: none; margin: 0; padding: 0; font-size: 13px; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, max-content)); gap: 3px 18px; }
+  .cl-pie li { display: flex; align-items: center; gap: 8px; white-space: nowrap; } .cl-pie li i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .cl-pie li span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .cl-pie path { cursor: default; } .cl-pie path:hover, .cl-pie path:focus { opacity: .8; outline: none; }
+  .cl-top { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(min(100%, 22rem), 1.4fr); gap: 12px 24px; align-items: start; margin-bottom: 12px; }
+  @media (max-width: 760px) { .cl-top { grid-template-columns: 1fr; } }
+  .cl-geo .pt { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
+  .cl-mapbox { height: 340px; }
+  .cl-geo .hint { margin: 6px 0 0; }
+  .leaflet-tooltip.cl-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 11px/1.1 system-ui, sans-serif; color: #1f2937;
+                             text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff; pointer-events: none; }
+  .leaflet-tooltip.cl-city::before { display: none; }
+  .cl-box { max-height: 70vh; overflow: auto; }
+  .cl-sheet { font-size: 13px; }
+  .cl-sheet th, .cl-sheet td { padding: 4px 8px; }
+  .cl-sheet thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; cursor: pointer; }
+  .cl-sheet th[aria-sort="descending"]::after { content: " ▾"; } .cl-sheet th[aria-sort="ascending"]::after { content: " ▴"; }
+  .cl-sheet tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg) 60%, transparent); }
+  .cl-sheet td.miss { color: #b91c1c; } .cl-sheet .ok { color: #15803d; font-weight: 600; white-space: nowrap; } .cl-sheet .booked { color: #1d4ed8; font-weight: 600; white-space: nowrap; } .cl-sheet .sig { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); margin-right: 3px; }
+  .rp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 12px; margin-top: 10px; }
+  .rp-tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .rp-tile .k { font-size: 11px; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
+  .rp-tile .v { font-size: 26px; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .rp-tile .s { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .rp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; margin-top: 16px; }
+  .rp-chart { position: relative; } .rp-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .rp-chart text { font-family: inherit; font-size: 12px; fill: var(--muted); } .rp-chart text.val { fill: var(--text); font-variant-numeric: tabular-nums; }
+  .rp-small text { font-family: inherit; }
+  .rp-chart .grid { stroke: var(--border); } .rp-chart .axis { stroke: var(--muted); }
+  .rp-bar { fill: #2a78d6; } .rp-bar.dim { fill: #b7cbe8; } .rp-bar.partial { opacity: .45; stroke: #2a78d6; stroke-dasharray: 4 3; }
+  @media (prefers-color-scheme: dark) { .rp-bar { fill: #3987e5; } .rp-bar.dim { fill: #2c4a73; } }
+  .rp-smalls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 10px 16px; margin-top: 8px; }
+  .rp-small .t { font-size: 12px; display: flex; justify-content: space-between; gap: 8px; } .rp-small .t b { font-weight: 600; } .rp-small .t span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .rp-tbox { max-height: 520px; overflow: auto; } .rp-tbox thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  #rp-table th[data-sort] { cursor: pointer; } #rp-table th[aria-sort="descending"]::after { content: " ▾"; } #rp-table th[aria-sort="ascending"]::after { content: " ▴"; }
+  #rp-table td.bar { min-width: 140px; } #rp-table td.bar i { display: block; height: 10px; border-radius: 3px; background: #b7cbe8; } #rp-table td.bar.top i { background: #2a78d6; }
+  .rp-offices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 12px; margin-top: 8px; }
+  .rp-office { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; min-width: 0; overflow: hidden; }
+  .rp-office .oh { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; align-items: baseline; margin-bottom: 4px; } .rp-office .oh b { font-weight: 600; } .rp-office .oh span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .rp-office .tw { overflow-x: auto; }
+  .rp-office table { font-size: 12px; width: 100%; } .rp-office td, .rp-office th { padding: 2px 6px; }
+  .rp-office td.hint { white-space: normal; } .rp-office th { font-size: 11px; }
+  .zt-zip { font-weight: 600; text-decoration: none; } .zt-zip:hover { text-decoration: underline; }
+  #zt-months th { white-space: nowrap; }
   /* Help: the ? button and the step-by-step guide. */
   .help-btn { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 44px; height: 44px; border-radius: 50%;
               border: 0; background: var(--accent); color: var(--accent-text); font: 700 22px/1 system-ui, sans-serif;
@@ -387,7 +419,7 @@
   <nav>
     <button data-tab="log" class="active">Log</button>
     <button data-tab="charts">Charts</button>
-    <button data-tab="maps">Maps</button>
+    <button data-tab="calls">Calls</button>
     <button data-tab="changes">Changes</button>
     <button data-tab="upload">Upload</button>
     <button data-tab="google">Google Sheets</button>
@@ -619,40 +651,85 @@
   <!-- Changes -->
   <!-- Charts -->
   <section id="charts">
-    <div class="row tr-controls" role="group" aria-label="Chart filters (apply to every chart below)">
-      <label>Number <select id="tr-metric"></select></label>
-      <label>Month <select id="tr-month"></select></label>
-    </div>
-
-    <div class="card">
-      <h2 class="tr-title" id="rk-title"></h2>
-      <p class="hint tr-sub" id="rk-sub"></p>
-      <div class="tr-wrap" id="rk-wrap"><div class="tr-tip" id="rk-tip" hidden></div></div>
-      <p class="hint" id="rk-note"></p>
-    </div>
-
-    <div class="card">
-      <h2 class="tr-title" id="tr-title"></h2>
-      <p class="hint tr-sub" id="tr-sub"></p>
-      <div class="row tr-series" role="group" aria-label="Lines to show">
-        <label class="tr-check"><input type="checkbox" id="tr-total" checked> Company total</label>
-        <label>Compare <select class="tr-office" aria-label="Office 1 to compare"></select></label>
-        <label><select class="tr-office" aria-label="Office 2 to compare"></select></label>
-        <label><select class="tr-office" aria-label="Office 3 to compare"></select></label>
+    <div id="ch-report">
+      <div class="row tr-controls" role="group" aria-label="Report filters (apply to the whole report)">
+        <label>Office <select id="rp-office"></select></label>
+        <label>From <select id="rp-from"></select></label>
+        <label>To <select id="rp-to"></select></label>
+        <button class="btn" id="rp-copy" style="align-self:flex-end">Copy ZIP table</button>
       </div>
-      <div class="tr-legend" id="tr-legend"></div>
-      <div class="tr-wrap" id="tr-wrap"><div class="tr-tip" id="tr-tip" hidden></div></div>
-      <p class="hint" id="tr-bench"></p>
-      <details class="tr-table"><summary>Show as a table</summary><div class="table-wrap" id="tr-table"></div></details>
+      <div class="card">
+        <h2 class="tr-title">New-patient collections by ZIP code</h2>
+        <p class="hint tr-sub" id="rp-lead"></p>
+        <div class="rp-tiles" id="rp-tiles"></div>
+      </div>
+      <div class="rp-grid2">
+        <div class="card">
+          <h2 class="tr-title">Collected per month</h2>
+          <p class="hint tr-sub" id="rp-month-note"></p>
+          <div class="rp-chart" id="rp-months"></div>
+        </div>
+        <div class="card">
+          <h2 class="tr-title">Top 25 ZIP codes by dollars collected</h2>
+          <p class="hint tr-sub">All months in the range together. Hover a bar for patients, dollars per patient and the nearest office.</p>
+          <div class="rp-chart" id="rp-top"></div>
+        </div>
+      </div>
+      <div class="card" id="mp-section">
+        <h2 class="tr-title" id="mp-title">New patients by home ZIP code</h2>
+        <p class="hint tr-sub" id="mp-sub"></p>
+        <div class="row tr-controls" role="group" aria-label="Map filters (the Office filter above applies too)" style="margin:8px 0 10px">
+          <label>Month <select id="mp-month"></select></label>
+          <label>Patients <select id="mp-type"><option value="">General + Ortho</option><option>General</option>
+            <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
+          <label>Color by <select id="mp-metric"><option value="count">new patients</option><option value="collection">$ collected</option>
+            <option value="per10k">new patients per 10k residents</option><option value="office">office they visit</option></select></label>
+          <label>Office rings <select id="mp-ring"><option value="0">none</option><option value="3">3 miles</option><option value="5" selected>5 miles</option>
+            <option value="8">8 miles</option></select></label>
+          <label class="tr-check"><input type="checkbox" id="mp-paid"> Hide $0 patients</label>
+        </div>
+        <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
+        <div id="mp-key" class="mp-key" aria-label="Office pin numbers"></div>
+        <p class="hint" id="mp-note"></p>
+      </div>
+      <div class="card">
+        <h2 class="tr-title">The top 10 ZIP codes, month by month</h2>
+        <p class="hint tr-sub" id="rp-smalls-note"></p>
+        <div class="rp-smalls" id="rp-smalls"></div>
+      </div>
+      <div class="card">
+        <h2 class="tr-title">Every ZIP code</h2>
+        <p class="hint tr-sub">Ranked by dollars collected. Click a heading to sort; type to search by ZIP, city or office. Click a ZIP to see it on the map.</p>
+        <div class="row" style="margin-bottom:8px"><input type="search" id="rp-search" placeholder="Search ZIP, city or office" aria-label="Search ZIP codes" style="width:min(300px,70vw)"><span class="hint" id="rp-count"></span></div>
+        <div class="table-wrap rp-tbox"><table id="rp-table"><thead><tr>
+          <th class="num" data-sort="rank">#</th><th data-sort="zip">ZIP</th><th data-sort="city">City</th><th class="num" data-sort="n">New patients</th>
+          <th class="num" data-sort="total">Collected</th><th></th><th class="num" data-sort="per">Per patient</th><th class="num" data-sort="share">Share</th>
+          <th class="num" data-sort="top10">Months in top 10</th><th data-sort="nearest">Nearest office</th><th class="num" data-sort="miles">Miles</th></tr></thead>
+          <tbody id="rp-rows"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2 class="tr-title">Where each office's dollars come from</h2>
+        <p class="hint tr-sub">Each office's five biggest ZIP codes by dollars collected, and that ZIP's share of the office's new-patient collections.</p>
+        <div class="rp-offices" id="rp-offices"></div>
+      </div>
+      <p class="hint" id="rp-foot"></p>
+      <div class="card" id="mp-admin" hidden style="margin-top:16px">
+      <h2 class="card-title" style="margin-top:0">Map setup (only on this computer)</h2>
+      <p class="mp-step"><strong>Step 1.</strong> <button class="btn" id="mp-shapedl">Download ZIP boundaries</button>
+        <span class="hint" id="mp-shapestate"></span></p>
+      <p class="mp-step"><strong>Step 2.</strong> Type each office's address below and click <strong>Save</strong>.</p>
+      <div class="table-wrap"><table><thead><tr><th>Office</th><th>Address</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
+        <tbody id="mp-offices"></tbody></table></div>
+      <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter, upload each office's Denticon
+        <strong>Patient List – Address</strong>: <label class="btn-file">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
+        <span class="hint" id="mp-types"></span></p>
+      <p class="mp-step"><strong>Then:</strong> on the <strong>Upload</strong> tab, upload the month's <strong>Referral Production Listing</strong>
+        (Excel, grouped by Zip Code). The map fills in by itself.</p>
+      <p class="msg" id="mp-msg"></p>
+    </div>
     </div>
 
-    <div class="card">
-      <h2 class="tr-title" id="hm-title"></h2>
-      <p class="hint tr-sub" id="hm-sub"></p>
-      <div class="tr-legend" id="hm-legend"></div>
-      <div class="table-wrap hm-wrap" id="hm-wrap"></div>
-      <div class="tr-tip hm-tip" id="hm-tip" hidden></div>
-    </div>
+    <div class="tr-tip hm-tip" id="zt-tip" hidden></div>
   </section>
 
   <!-- Audit (admin: only on the computer running the app) -->
@@ -685,49 +762,70 @@
       <p class="msg" id="dx-msg"></p>
       <div class="table-wrap" id="dx-offices"></div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h2 class="card-title" style="margin-top:0">Invoca API (call tracking)</h2>
+      <p class="hint" style="margin-top:0">Connect the app to Invoca so it can read call data (calls per office and campaign, durations, signals) with
+        the Transactions API. In Invoca: <strong>Integrations → Manage Integrations → Invoca APIs → + New API Credential</strong>. The site name
+        and ID are in your Invoca address: for <code>https://acme.invoca.net/networks/99/…</code> the site is <code>acme</code>, the type
+        Network and the ID 99. Everything is stored only on this computer (in data/, readable only by your user); the token is never shown again.
+        Callers' phone numbers are never requested.</p>
+      <p id="iv-status"></p>
+      <div class="row">
+        <label>Site <input id="iv-site" placeholder="acme" autocomplete="off" spellcheck="false" style="width:140px"></label>
+        <label>Type <select id="iv-kind"><option value="networks">Network</option><option value="advertisers">Advertiser</option></select></label>
+        <label>ID <input id="iv-id" placeholder="99" inputmode="numeric" autocomplete="off" style="width:90px"></label>
+        <label>API token <input type="password" id="iv-token" autocomplete="off" spellcheck="false" style="width:min(300px,60vw)"></label>
+        <button class="btn primary" id="iv-save">Save</button>
+        <button class="btn" id="iv-test">Test connection</button>
+        <button class="btn danger" id="iv-remove">Disconnect</button>
+      </div>
+      <p class="msg" id="iv-msg"></p>
+      <div id="iv-result"></div>
+    </div>
   </section>
 
-  <!-- Maps -->
-  <section id="maps">
-    <div class="row tr-controls" role="group" aria-label="Map filters (apply to the map and the ZIP table)">
-      <label>Month <select id="mp-month"></select></label>
-      <label>Office <select id="mp-office"></select></label>
-      <label>Patients <select id="mp-type"><option value="">General + Ortho</option><option>General</option>
-        <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
-      <label>Color by <select id="mp-metric"><option value="count">new patients</option><option value="collection">$ collected</option>
-        <option value="per10k">new patients per 10k residents</option><option value="office">office they visit</option></select></label>
-      <label>Office rings <select id="mp-ring"><option value="0">none</option><option value="3">3 miles</option><option value="5" selected>5 miles</option>
-        <option value="8">8 miles</option></select></label>
-      <label class="tr-check"><input type="checkbox" id="mp-paid"> Hide $0 patients</label>
+  <!-- Calls: one day's phone calls from Invoca, laid out like a sheet -->
+  <section id="calls">
+    <div class="card" id="fn-card">
+      <div class="row" style="justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap">
+        <h2 class="tr-title" id="fn-title">Calls to new patients</h2>
+        <div class="row tr-controls" style="margin:0;gap:8px 14px" role="group" aria-label="Funnel filters">
+          <label>Call month <select id="fn-month"></select></label>
+          <label>Office (patient side) <select id="fn-office"><option value="">All offices with a list</option></select></label>
+          <label>Break down by <select id="fn-by"><option value="promo_line">promo line</option><option value="campaign">campaign</option></select></label>
+        </div>
+      </div>
+      <p class="hint tr-sub" id="fn-sub"></p>
+      <div class="fn-steps" id="fn-steps"></div>
+      <div class="table-wrap fn-box" style="margin-top:10px"><table id="fn-table"><thead><tr><th id="fn-th">Promo line</th><th class="num">Calls</th><th class="num">Answered</th>
+        <th class="num">Became new patients</th><th class="num">Per 100 answered</th><th class="num">Started treatment</th><th class="num">$ collected</th><th class="num">$ per call</th><th class="num">Booked, not yet seen</th></tr></thead>
+        <tbody id="fn-rows"></tbody></table></div>
+      <p class="hint" id="fn-note"></p>
+    </div>
+
+    <div class="row tr-controls" role="group" aria-label="Calls filters" style="margin-top:16px">
+      <label>Day <input type="date" id="cl-date"></label>
+      <button class="btn primary" id="cl-pull" style="align-self:flex-end">Pull from Invoca</button>
+      <label>Office <select id="cl-office"><option value="">All offices</option></select></label>
+      <label>Search <input type="search" id="cl-search" placeholder="campaign, city, outcome, signal…"></label>
+      <button class="btn" id="cl-copy" style="align-self:flex-end">Copy</button>
+      <label class="btn btn-file" style="align-self:flex-end" title="Denticon's New Patients List (Pat ID + phone + first visit) or New Patients Through Appointment Book, as Excel">Upload Denticon patient list…<input type="file" id="cl-apptfile" accept=".xlsx,.xlsm" hidden></label>
     </div>
     <div class="card">
-      <h2 class="tr-title" id="mp-title">New patients by home ZIP code</h2>
-      <p class="hint tr-sub" id="mp-sub"></p>
-      <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
-      <div id="mp-key" class="mp-key" aria-label="Office pin numbers"></div>
-      <p class="hint" id="mp-note"></p>
-    </div>
-    <div class="card">
-      <div class="row" style="justify-content:space-between"><h2 class="tr-title">ZIP codes</h2>
-        <button class="btn" id="mp-copy">Copy</button></div>
-      <p class="hint tr-sub">Click a ZIP to find it on the map. Hover or click a ZIP area on the map for its patients.</p>
-      <div class="table-wrap"><table><thead><tr><th>ZIP</th><th class="num">New patients</th><th class="num">$ collected</th>
-        <th class="num">$ per patient</th><th class="num" id="mp-th-per10k">Per 10k residents</th><th>Nearest office</th><th>Offices they visit</th></tr></thead>
-        <tbody id="mp-zips"></tbody><tfoot id="mp-zips-foot"></tfoot></table></div>
-    </div>
-    <div class="card" id="mp-admin" hidden>
-      <h2 class="card-title" style="margin-top:0">Map setup (only on this computer)</h2>
-      <p class="mp-step"><strong>Step 1.</strong> <button class="btn" id="mp-shapedl">Download ZIP boundaries</button>
-        <span class="hint" id="mp-shapestate"></span></p>
-      <p class="mp-step"><strong>Step 2.</strong> Type each office's address below and click <strong>Save</strong>.</p>
-      <div class="table-wrap"><table><thead><tr><th>Office</th><th>Address</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
-        <tbody id="mp-offices"></tbody></table></div>
-      <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter, upload each office's Denticon
-        <strong>Patient List – Address</strong>: <label class="btn" style="display:inline-block">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
-        <span class="hint" id="mp-types"></span></p>
-      <p class="mp-step"><strong>Then:</strong> on the <strong>Upload</strong> tab, upload the month's <strong>Referral Production Listing</strong>
-        (Excel, grouped by Zip Code). The map fills in by itself.</p>
-      <p class="msg" id="mp-msg"></p>
+      <h2 class="tr-title" id="cl-title">Calls</h2>
+      <p class="hint tr-sub" id="cl-sub"></p>
+      <div class="cl-tiles" id="cl-tiles"></div>
+      <div class="cl-top">
+        <div class="cl-pie" id="cl-pie"></div>
+        <div class="cl-geo" id="cl-geo"><p class="pt">Where the callers are</p><div id="cl-map" class="mp-map cl-mapbox" role="region" aria-label="Map of callers' cities"></div><p class="hint" id="cl-geo-note"></p></div>
+      </div>
+      <p class="msg" id="cl-msg"></p>
+      <div class="table-wrap cl-box"><table id="cl-table" class="cl-sheet"><thead><tr>
+        <th data-sort="start_utc">Time</th><th data-sort="advertiser">Office</th><th data-sort="campaign">Campaign</th><th data-sort="promo_line">Promo line</th>
+        <th data-sort="city">City</th><th data-sort="region">State</th><th data-sort="mobile">Phone</th><th data-sort="repeat_caller">Repeat</th>
+        <th class="num" data-sort="duration">Rang + talked</th><th class="num" data-sort="connect_duration">Talked</th><th data-sort="result">Outcome</th><th data-sort="match">New patient?</th><th data-sort="signals">Signals</th></tr></thead>
+        <tbody id="cl-rows"></tbody></table></div>
+      <p class="hint" id="cl-note"></p>
     </div>
   </section>
 
@@ -867,12 +965,19 @@ ORDER BY period_thru DESC, office;</textarea>
           calculated from the totals, not averaged).</li>
         <li>Hover or click a dotted number to see the sheet rows behind it. <em>“as of 09/28”</em> is the date that number was last updated.</li>
         <li><strong>Copy</strong> puts the rows and columns shown on your clipboard for Excel or Google Sheets.</li>
-        <li>The <strong>Charts</strong> tab, for the <em>Number</em> and <em>Month</em> you pick: an <strong>office ranking</strong> (best
-          first, benchmark colors), the <strong>trend over months</strong> (company total plus up to three offices), and a
-          <strong>heatmap</strong> of every office by month (click a cell to rank that month). Hover any bar, point or cell for the exact number.</li>
-        <li>The <strong>Maps</strong> tab shows where each month's new patients live: each ZIP code area is colored by the measure you
-          pick, with your offices as numbered pins and only the cities that have patients or an office named. Hover a ZIP area for its
-          Pat IDs and $ collected. It fills from the Referral Production Listing when it's run <em>grouped by Zip Code</em> and saved as Excel.</li>
+        <li>The <strong>Charts</strong> tab is a collections report by ZIP code for any office and month range: headline totals,
+          dollars per month, the top ZIPs, the map, the top 10 month by month, every ZIP as a sortable table, and each office's biggest
+          ZIPs. A month loaded only part-way is marked and left out of the counts. Hover a bar for what's behind it; click a ZIP to see
+          it on the map.</li>
+        <li>The <strong>map</strong> shows where a month's new patients live: each ZIP code area is colored by the measure you pick, with
+          your offices as numbered pins and only the cities that have patients or an office named. Hover a ZIP area for its Pat IDs and
+          $ collected. It fills from the Referral Production Listing when it's run <em>grouped by Zip Code</em> and saved as Excel.</li>
+        <li>The <strong>Calls</strong> tab starts with the funnel for a call month: calls, answered, callers who became new patients,
+          who started treatment, and $ collected, broken down by promo line or campaign. Below it, one day's phone calls from Invoca as a sheet: pick the day, click <strong>Pull from
+          Invoca</strong> once, then sort, filter, search and Copy. Upload Denticon's <em>New Patients List</em> for each office now and
+          then (or the <em>New Patients Through Appointment Book</em>) and the "New patient?" column shows which callers came in as new
+          patients, with the $ collected, or booked a first appointment (phone numbers are matched as fingerprints, never kept).
+          Invoca is connected on the Audit tab (this computer only).</li>
         <li>The <strong>Changes</strong> tab lists every number that was added or changed, when, and from which report.</li>
         <li class="help-edit">A Google Sheet copy of the Log can be kept up to date for notes (Google Sheets tab › Notes sheet, on the
           computer that runs the app). Type notes in its <em>Notes</em> column; they stay with the right office and month.</li>
@@ -925,10 +1030,10 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   b.classList.add("active"); $(b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
-  if (b.dataset.tab === "maps") loadMaps($("mp-month").value || undefined);
-  if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); }
+  if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); }
   if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
   if (b.dataset.tab === "changes") loadChanges();
+  if (b.dataset.tab === "calls") { loadFunnel(); loadCalls(); }
 });
 
 // Upload + parse
@@ -2347,341 +2452,150 @@ $("sql-csv").onclick = () => {
   a.click(); URL.revokeObjectURL(a.href);
 };
 
-// Charts: one number over the months, as the company total and up to three offices to compare.
-// Drawn as plain SVG. Company totals of rates are calculated from the summed parts, as in the Log's Total row.
-const TR_COLORS = ["var(--tr-s1)", "var(--tr-s2)", "var(--tr-s3)", "var(--tr-s4)"];
-let trSel = {metric: "start_tx_rate", total: true, offices: ["", "", ""]};
-try { Object.assign(trSel, JSON.parse(localStorage.getItem("trendSel")) || {}); } catch {}
-const saveTrSel = () => { try { localStorage.setItem("trendSel", JSON.stringify(trSel)); } catch {} };
+// Charts tab: the collections report, from the same per-ZIP data as the Maps tab (/api/maps/trends: per ZIP ×
+// month × office × General/Ortho: patients, paid patients, $ collected). ZIP totals only, nothing per patient.
+let ztData = null;
 async function loadCharts() {
-  if (!logRows.length) await loadLog();
-  const numeric = LOG_COLS.filter(c => ["money", "count", "pct"].includes(c.kind) && !c.internal);
-  if (!numeric.some(c => c.key === trSel.metric)) trSel.metric = "start_tx_rate";
-  $("tr-metric").innerHTML = SECTIONS.map(sec => `<optgroup label="${esc(sec.label)}">${sec.keys.filter(k => numeric.some(c => c.key === k))
-    .map(k => `<option value="${k}">${esc(labelOf(k))}</option>`).join("")}</optgroup>`).join("")
-    + `<optgroup label="Other">${numeric.filter(c => !sectionOf[c.key]).map(c => `<option value="${c.key}">${esc(c.label)}</option>`).join("")}</optgroup>`;
-  $("tr-metric").value = trSel.metric;
-  const offices = [...new Set(logRows.map(r => r.office))].sort();
-  document.querySelectorAll(".tr-office").forEach((sel, i) => {
-    sel.innerHTML = `<option value="">${i === 0 ? "— office —" : "— none —"}</option>` + offices.map(o => `<option>${esc(o)}</option>`).join("");
-    sel.value = offices.includes(trSel.offices[i]) ? trSel.offices[i] : "";
-    sel.onchange = () => { trSel.offices[i] = sel.value; saveTrSel(); renderTrend(); };
+  try { ztData = await api("/api/maps/trends"); }
+  catch (e) { $("rp-lead").textContent = e.message; return; }
+  renderReport();
+  if (!document.body.classList.contains("viewer")) loadMaps($("mp-month").value || undefined);   // the map (not on view-only links)
+}
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Charts tab, view 1: the collections report (the same report as the shared ZIP Collections Report page), from the
+// same per-ZIP data as the trends, with its own Office and month-range filters.
+let rpSel = {office: "", from: "", to: ""}, rpSort = {key: "rank", dir: 1}, rpQuery = "", rpRows = [];
+try { Object.assign(rpSel, JSON.parse(localStorage.getItem("zipReportSel")) || {}); } catch {}
+const saveRpSel = () => { try { localStorage.setItem("zipReportSel", JSON.stringify(rpSel)); } catch {} };
+["rp-office", "rp-from", "rp-to"].forEach(id => $(id).onchange = () => { rpSel[id.slice(3)] = $(id).value; saveRpSel(); renderReport(); });
+$("rp-search").oninput = () => { rpQuery = $("rp-search").value.trim().toLowerCase(); renderReportTable(); };
+$("rp-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
+  const k = th.dataset.sort; if (rpSort.key === k) rpSort.dir = -rpSort.dir; else rpSort = {key: k, dir: ["zip", "city", "nearest", "rank"].includes(k) ? 1 : -1}; renderReportTable(); };
+const rpMoney = v => "$" + Math.round(v).toLocaleString();
+const rpCompact = v => "$" + new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1}).format(v);
+const rpTip = (el, html) => { const tip = $("zt-tip"); el.onmouseenter = el.onfocus = () => { tip.innerHTML = html(); const r = el.getBoundingClientRect(); tip.hidden = false;
+    tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - tip.offsetWidth - 12)) + "px"; tip.style.top = (r.bottom + 6 + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 6 : r.bottom + 6) + "px"; };
+  el.onmouseleave = el.onblur = () => tip.hidden = true; };
+function renderReport() {
+  if (!ztData) return;
+  const all = ztData.months, zShort = o => ztData.short[o] || o, city = z => ztData.where[z] || "";
+  const opt = (v, t) => `<option value="${v}">${esc(t)}</option>`;
+  $("rp-office").innerHTML = opt("", "All offices") + ztData.offices.map(o => opt(o, zShort(o))).join("");
+  $("rp-from").innerHTML = all.map(m => opt(m, monthName(m))).join(""); $("rp-to").innerHTML = all.slice().reverse().map(m => opt(m, monthName(m))).join("");
+  if (!ztData.offices.includes(rpSel.office)) rpSel.office = "";
+  if (!all.includes(rpSel.from)) rpSel.from = all[0] || ""; if (!all.includes(rpSel.to) || rpSel.to < rpSel.from) rpSel.to = all[all.length - 1] || "";
+  $("rp-office").value = rpSel.office; $("rp-from").value = rpSel.from; $("rp-to").value = rpSel.to;
+  const months = all.filter(m => m >= rpSel.from && m <= rpSel.to), office = rpSel.office;
+  const lastDay = m => { const [y, mo] = m.split("-").map(Number); return `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`; };
+  const partial = m => !!ztData.thru[m] && ztData.thru[m] < lastDay(m);
+  const thruTxt = m => ztData.thru[m].slice(5).replace("-", "/");
+  // Aggregate the filtered rows per ZIP, per month and per office.
+  const zipA = {}, monA = {}, offA = {};
+  ztData.rows.filter(r => months.includes(r.month) && (!office || r.office === office)).forEach(r => {
+    const z = zipA[r.zip] ||= {zip: r.zip, n: 0, n_paid: 0, total: 0, byMonth: {}, byOffice: {}};
+    z.n += r.n; z.n_paid += r.n_paid; z.total += r.total;
+    const bm = z.byMonth[r.month] ||= {n: 0, total: 0}; bm.n += r.n; bm.total += r.total;
+    z.byOffice[r.office] = (z.byOffice[r.office] || 0) + r.total;
+    const m = monA[r.month] ||= {n: 0, total: 0, zips: new Set()}; m.n += r.n; m.total += r.total; m.zips.add(r.zip);
+    const o = offA[r.office] ||= {n: 0, total: 0, zips: {}}; o.n += r.n; o.total += r.total;
+    const oz = o.zips[r.zip] ||= {n: 0, total: 0}; oz.n += r.n; oz.total += r.total;
   });
-  $("tr-total").checked = trSel.total;
-  const months = dataMonths();
-  if (!months.includes(trSel.month)) trSel.month = months[months.length - 1] || "";
-  $("tr-month").innerHTML = months.slice().reverse().map(ym => `<option value="${ym}">${monthName(ym)}</option>`).join("");
-  $("tr-month").value = trSel.month;
-  renderCharts();
-}
-function renderCharts() { renderRanking(); renderTrend(); renderHeatmap(); }
-$("tr-metric").onchange = () => { trSel.metric = $("tr-metric").value; saveTrSel(); renderCharts(); };
-$("tr-month").onchange = () => { trSel.month = $("tr-month").value; saveTrSel(); renderRanking(); renderHeatmap(); };
-$("tr-total").onchange = () => { trSel.total = $("tr-total").checked; saveTrSel(); renderTrend(); };
-// Axis numbers: short and round ($120k, 25%, 1,200).
-function trTick(v, kind) {
-  if (kind === "pct") return `${+(v * 100).toFixed(Math.abs(v) < 0.1 && v ? 1 : 0)}%`;
-  if (kind === "money") {
-    const a = Math.abs(v), sign = v < 0 ? "-" : "";
-    return a >= 1e6 ? `${sign}$${+(a / 1e6).toFixed(1)}M` : a >= 1e3 ? `${sign}$${+(a / 1e3).toFixed(0)}k` : `${sign}$${+a.toFixed(0)}`;
-  }
-  return Number(v).toLocaleString();
-}
-function niceTicks(lo, hi, count = 5) {
-  if (lo === hi) { hi = lo + (lo ? Math.abs(lo) : 1); }
-  const raw = (hi - lo) / count, pow = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(f => f * pow).find(st => raw <= st);
-  const start = Math.floor(lo / step) * step, ticks = [];
-  for (let t = start; t <= hi + step * 1e-9; t += step) ticks.push(+t.toFixed(10));
-  if (ticks[ticks.length - 1] < hi) ticks.push(+(ticks[ticks.length - 1] + step).toFixed(10));
-  return ticks;
-}
-function trendSeries(col, months) {
-  const k = col.key, out = [];
-  if (trSel.total) {
-    out.push({name: "Company total", values: months.map(ym => {
-      const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym && r[k] != null);
-      if (!rows.length) return {v: null, n: 0};
-      const v = col.ratio ? totalRatio(logRows.filter(r => r.period_from.slice(0, 7) === ym), col.ratio)
-                          : rows.reduce((a, r) => a + r[k], 0);
-      return {v, n: rows.length};
-    })});
-  }
-  trSel.offices.filter(Boolean).forEach(o => out.push({name: o, values: months.map(ym => {
-    const r = logRows.find(x => x.office === o && x.period_from.slice(0, 7) === ym);
-    return {v: r?.[k] ?? null};
-  })}));
-  return out.map((s, i) => ({...s, color: TR_COLORS[i]}));
-}
-function renderTrend() {
-  const col = colOf(trSel.metric); if (!col) return;
-  const months = dataMonths(), series = trendSeries(col, months);
-  const offCount = new Set(logRows.map(r => r.office)).size;
-  $("tr-title").textContent = `${col.label} by month`;
-  $("tr-sub").textContent = (col.title ? col.title + ". " : "") + (trSel.total ? (col.ratio
-    ? "Company total is calculated from the offices' combined numbers, not an average of their rates."
-    : "Company total adds up the offices that have this number for the month.") : "");
-  const legend = $("tr-legend"); legend.textContent = "";
-  if (series.length > 1) series.forEach(s => {
-    const item = document.createElement("span"), key = document.createElement("i");
-    key.style.background = s.color; item.append(key, document.createTextNode(s.name)); legend.append(item);
-  });
-  const wrap = $("tr-wrap"), tip = $("tr-tip");
-  wrap.querySelector("svg")?.remove();
-  const all = series.flatMap(s => s.values.map(p => p.v)).filter(v => v != null);
-  if (!series.length || !all.length) {
-    wrap.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 600 60" role="img"><text x="0" y="30" fill="var(--muted)" font-size="14">${
-      series.length ? "No data for this number yet." : "Turn on Company total or pick an office to compare."}</text></svg>`);
-    $("tr-table").innerHTML = ""; $("tr-bench").textContent = ""; return;
-  }
-  // Scale: include zero for amounts and counts; include the benchmark cut-offs so the bands show.
-  const b = benchFor(col.key);
-  let lo = Math.min(...all, ...(b ? [b.green, b.yellow] : [])), hi = Math.max(...all, ...(b ? [b.green, b.yellow] : []));
-  if (lo > 0) lo = 0;
-  const ticks = niceTicks(lo, hi), y0 = ticks[0], y1 = ticks[ticks.length - 1];
-  const W = Math.max(320, wrap.clientWidth || 800), H = W < 560 ? 260 : 320, m = {l: 58, r: 20, t: 10, b: 30};
-  const pw = W - m.l - m.r, ph = H - m.t - m.b;
-  const x = i => m.l + (months.length === 1 ? pw / 2 : (i * pw) / (months.length - 1));
-  const y = v => m.t + ph - ((v - y0) / (y1 - y0)) * ph;
-  const ns = "http://www.w3.org/2000/svg", el = (tag, attrs, parent) => {
-    const e = document.createElementNS(ns, tag); for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, v); parent?.append(e); return e;
+  const ranked = Object.values(zipA).sort((a, b) => b.total - a.total || b.n - a.n);
+  ranked.forEach((z, i) => z.rank = i + 1);
+  const grand = ranked.reduce((a, z) => a + z.total, 0), patients = ranked.reduce((a, z) => a + z.n, 0), paid = ranked.reduce((a, z) => a + z.n_paid, 0);
+  let run = 0, half = 0; for (const z of ranked) { run += z.total; half++; if (run >= grand / 2) break; }
+  const top10 = ranked.slice(0, 10).reduce((a, z) => a + z.total, 0);
+  const top10Months = {};
+  months.forEach(m => ranked.filter(z => (z.byMonth[m]?.total || 0) > 0).sort((a, b) => b.byMonth[m].total - a.byMonth[m].total).slice(0, 10).forEach(z => top10Months[z.zip] = (top10Months[z.zip] || 0) + 1));
+  const pins = ztData.pins || [], centers = ztData.centers || {};
+  const nearest = z => { const c = centers[z]; if (!c || !pins.length) return null; let best = null;
+    pins.forEach(p => { const d = miles(c, [p.lat, p.lon]); if (!best || d < best.miles) best = {office: zShort(p.office), miles: d}; }); return best; };
+  ranked.forEach(z => { z.city = city(z.zip); z.per = z.n ? z.total / z.n : 0; z.share = grand ? z.total / grand * 100 : 0; z.top10 = top10Months[z.zip] || 0;
+    const nr = nearest(z.zip); z.nearest = nr ? nr.office : ""; z.miles = nr ? nr.miles : null; });
+  const pct = v => (v * 100).toFixed(1) + "%";
+  const range = months.length ? (months.length === 1 ? monthName(months[0]) : `${monthName(months[0])} to ${monthName(months[months.length - 1])}`) : "no months";
+  const who = office ? `patients of ${zShort(office)}` : "all offices";
+  // Lead and tiles
+  $("rp-lead").textContent = grand || patients ? `${range}, ${who}: ${rpMoney(grand)} collected from ${patients.toLocaleString()} new patients living in ${ranked.length.toLocaleString()} ZIP codes. The ten biggest ZIPs account for ${grand ? pct(top10 / grand) : "0%"} of that, and ${half} ZIPs account for half.`
+    : "No ZIP data for this range: upload the months' Referral Production Listings (grouped by Zip Code) on the Upload tab.";
+  $("rp-tiles").innerHTML = [["Collected from new patients", rpMoney(grand), range], ["New patients", patients.toLocaleString(), `${paid.toLocaleString()} paid something (${patients ? pct(paid / patients) : "0%"})`],
+    ["ZIP codes", ranked.length.toLocaleString(), "home ZIPs of those patients"], ["ZIPs that bring half the dollars", String(half), `the top 10 ZIPs bring ${grand ? pct(top10 / grand) : "0%"}`]]
+    .map(([k, v, s]) => `<div class="rp-tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join("");
+  // Collected per month and new patients per month: two bar charts, sized to fill the card beside the top-25 chart.
+  const mrows = months.map(m => ({m, label: MONTH_ABBR[+m.slice(5, 7) - 1], ...(monA[m] || {n: 0, total: 0, zips: new Set()}), partial: partial(m)}));
+  const W = Math.max(320, $("rp-months").clientWidth || 640), ML = 8, MR = 8, MT = 26, MB = 26;
+  const barChart = (H, key, fmtV, title) => {
+    const maxV = Math.max(1, ...mrows.map(r => r[key])), bw = (W - ML - MR) / Math.max(1, mrows.length), yV = v => MT + (H - MT - MB) * (1 - v / maxV);
+    return `<div class="hint" style="margin:6px 0 0">${esc(title)}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">
+      ${[0.25, 0.5, 0.75, 1].map(f => `<line class="grid" x1="${ML}" x2="${W - MR}" y1="${yV(f * maxV)}" y2="${yV(f * maxV)}"/>`).join("")}
+      ${mrows.map((r, i) => { const x = ML + i * bw + bw * 0.15, w = bw * 0.7; return `<g data-i="${i}" tabindex="0"><rect class="rp-bar${r.partial ? " partial" : ""}" x="${x}" width="${w}" y="${yV(r[key])}" height="${yV(0) - yV(r[key])}" rx="4"/>
+        <text class="val" x="${x + w / 2}" y="${yV(r[key]) - 6}" text-anchor="middle">${fmtV(r[key])}</text><text x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${r.label}${r.partial ? "*" : ""}</text></g>`; }).join("")}
+      <line class="axis" x1="${ML}" x2="${W - MR}" y1="${yV(0)}" y2="${yV(0)}"/></svg>`;
   };
-  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", tabindex: "0",
-    "aria-label": `${col.label} by month, ${months.length} months. Use the left and right arrow keys to read each month; the table below has every value.`});
-  // Benchmark bands behind everything (washes; the rule is also written out under the chart).
-  if (b) {
-    const hiGood = b.direction === "higher";
-    const bands = hiGood ? [[b.green, y1, "--bm-green"], [b.yellow, b.green, "--bm-yellow"], [y0, b.yellow, "--bm-red"]]
-                         : [[y0, b.green, "--bm-green"], [b.green, b.yellow, "--bm-yellow"], [b.yellow, y1, "--bm-red"]];
-    bands.forEach(([a, z, c]) => {
-      const top = y(Math.min(Math.max(a, z), y1)), bot = y(Math.max(Math.min(a, z), y0));
-      if (bot > top) el("rect", {x: m.l, y: top, width: pw, height: bot - top, fill: `var(${c})`, opacity: 0.55}, svg);
-    });
-    $("tr-bench").textContent = `Background: ${benchText(col.key)}.`;
-  } else $("tr-bench").textContent = "";
-  // Gridlines and y labels.
-  ticks.forEach(t => {
-    el("line", {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--tr-axis)" : "var(--tr-grid)", "stroke-width": 1}, svg);
-    const lab = el("text", {x: m.l - 8, y: y(t) + 4, "text-anchor": "end", "font-size": 12, fill: "var(--tr-muted)",
-      style: "font-variant-numeric: tabular-nums"}, svg);
-    lab.textContent = trTick(t, col.kind);
-  });
-  // Month labels: short names; the year where it starts or changes.
-  const every = Math.ceil(months.length / Math.max(1, Math.floor(pw / 56)));
-  months.forEach((ym, i) => {
-    if (i % every) return;
-    const edge = months.length > 1 && i === months.length - 1 ? "end" : months.length > 1 && i === 0 ? "start" : "middle";
-    const t = el("text", {x: x(i), y: H - 8, "text-anchor": edge, "font-size": 12, fill: "var(--tr-muted)"}, svg);
-    const yr = i === 0 || ym.slice(0, 4) !== months[i - every]?.slice(0, 4);
-    t.textContent = MONTH_NAMES[+ym.slice(5) - 1].slice(0, 3) + (yr ? ` ${ym.slice(2, 4)}` : "");
-  });
-  // Lines (a gap where a month has no number), with an end dot.
-  series.forEach(s => {
-    let d = "", pen = false;
-    s.values.forEach((p, i) => {
-      if (p.v == null) { pen = false; return; }
-      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`; pen = true;
-    });
-    el("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}, svg);
-    s.values.forEach((p, i) => {   // a lone month (no neighbours) still needs a visible dot
-      const alone = p.v != null && s.values[i - 1]?.v == null && s.values[i + 1]?.v == null;
-      const last = p.v != null && s.values.slice(i + 1).every(q => q.v == null);
-      if (alone || last) el("circle", {cx: x(i), cy: y(p.v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2}, svg);
-    });
-  });
-  // Hover / keyboard: a crosshair snaps to the nearest month; one readout lists every series.
-  const hair = el("line", {y1: m.t, y2: m.t + ph, stroke: "var(--tr-muted)", "stroke-width": 1, visibility: "hidden"}, svg);
-  const dots = series.map(s => el("circle", {r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden"}, svg));
-  const hit = el("rect", {x: m.l - 12, y: m.t, width: pw + 24, height: ph, fill: "transparent"}, svg);
-  let at = -1;
-  const show = i => {
-    at = i; const xi = x(i);
-    hair.setAttribute("x1", xi); hair.setAttribute("x2", xi); hair.setAttribute("visibility", "visible");
-    series.forEach((s, j) => {
-      const v = s.values[i].v;
-      dots[j].setAttribute("visibility", v == null ? "hidden" : "visible");
-      if (v != null) { dots[j].setAttribute("cx", xi); dots[j].setAttribute("cy", y(v)); }
-    });
-    tip.textContent = "";
-    const head = document.createElement("div"); head.className = "tr-tip-head"; head.textContent = monthName(months[i]); tip.append(head);
-    series.forEach(s => {
-      const p = s.values[i], row = document.createElement("div"), key = document.createElement("i"),
-            val = document.createElement("b"), name = document.createElement("span");
-      row.className = "tr-row"; key.style.background = s.color;
-      val.textContent = p.v == null ? "—" : fmtVal(p.v, col.kind);
-      name.textContent = s.name + (p.n != null && p.v != null && p.n < offCount ? ` (${p.n} of ${offCount} offices)` : "");
-      row.append(key, val, name); tip.append(row);
-    });
-    tip.hidden = false;
-    const scale = wrap.clientWidth / W, left = xi * scale;
-    tip.style.left = `${Math.min(Math.max(0, left + 14), wrap.clientWidth - tip.offsetWidth)}px`;
-    if (left + 14 + tip.offsetWidth > wrap.clientWidth) tip.style.left = `${Math.max(0, left - tip.offsetWidth - 14)}px`;
+  const drawMonths = (H1, H2) => {
+    $("rp-months").innerHTML = mrows.length ? barChart(H1, "total", rpCompact, "Dollars collected") + barChart(H2, "n", v => v.toLocaleString(), "New patients") : "";
+    $("rp-months").querySelectorAll("g[data-i]").forEach(g => { const r = mrows[+g.dataset.i]; rpTip(g, () => `<div class="tr-tip-head">${esc(monthName(r.m))}${r.partial ? " · through " + thruTxt(r.m) : ""}</div><div class="tr-row"><b>${rpMoney(r.total)}</b><span>collected</span></div><div class="tr-row"><b>${r.n.toLocaleString()}</b><span>new patients · ${r.zips.size} ZIPs · ${r.n ? rpMoney(r.total / r.n) : "—"} per patient</span></div>`); });
   };
-  const hide = () => { at = -1; hair.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.hidden = true; };
-  hit.addEventListener("pointermove", e => {
-    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
-    let best = 0; months.forEach((_, i) => { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
-    show(best);
-  });
-  hit.addEventListener("pointerleave", hide);
-  svg.addEventListener("keydown", e => {
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      show(Math.max(0, Math.min(months.length - 1, (at < 0 ? months.length - 1 : at + (e.key === "ArrowRight" ? 1 : -1)))));
-    } else if (e.key === "Escape") hide();
-  });
-  svg.addEventListener("blur", hide);
-  wrap.prepend(svg);
-  // Table view: every value without hovering.
-  $("tr-table").innerHTML = `<table><thead><tr><th>Month</th>${series.map(s => `<th class="num">${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${
-    months.map((ym, i) => `<tr><td>${monthName(ym)}</td>${series.map(s => `<td class="num">${s.values[i].v == null ? "—" : fmtVal(s.values[i].v, col.kind)}</td>`).join("")}</tr>`).join("")
-  }</tbody></table>`;
+  drawMonths(230, 200);
+  const partials = mrows.filter(r => r.partial);
+  $("rp-month-note").textContent = "New-patient collections and new patients by month" + (office ? ` for ${zShort(office)}` : ", all ZIP codes") + "." + (partials.length ? ` * ${partials.map(r => `${monthName(r.m)} is loaded through ${thruTxt(r.m)} only`).join("; ")}.` : "");
+  // Top 25 ZIPs
+  const top = ranked.slice(0, 25), rowH = 22, TL = 150, TR = 70, TH = top.length * rowH + 8, maxT = Math.max(1, ...top.map(z => z.total));
+  const TW = Math.max(320, $("rp-top").clientWidth || 640), xT = v => TL + (TW - TL - TR) * v / maxT;
+  $("rp-top").innerHTML = top.length ? `<svg viewBox="0 0 ${TW} ${TH}" role="img" aria-label="Top 25 ZIP codes by dollars collected">${top.map((z, i) => { const y = 4 + i * rowH, label = (z.zip + (z.city ? " " + z.city : "")).slice(0, 22);
+      return `<g data-i="${i}" tabindex="0"><text class="val" x="${TL - 8}" y="${y + 15}" text-anchor="end">${esc(label)}</text><rect class="rp-bar${i < 10 ? "" : " dim"}" x="${TL}" y="${y + 3}" width="${Math.max(1, xT(z.total) - TL)}" height="${rowH - 6}" rx="3"/><text class="val" x="${xT(z.total) + 6}" y="${y + 15}">${rpCompact(z.total)}</text></g>`; }).join("")}</svg>` : "";
+  $("rp-top").querySelectorAll("g[data-i]").forEach(g => { const z = top[+g.dataset.i]; rpTip(g, () => `<div class="tr-tip-head">ZIP ${z.zip}${z.city ? " · " + esc(z.city) : ""}</div><div class="tr-row"><b>${rpMoney(z.total)}</b><span>collected · ${z.share.toFixed(1)}% of all</span></div><div class="tr-row"><b>${z.n.toLocaleString()}</b><span>new patients · ${rpMoney(z.per)} per patient</span></div><div class="tr-row"><span>Nearest office: ${esc(z.nearest || "—")}${z.miles != null ? ` (${z.miles.toFixed(1)} mi)` : ""}</span></div>`); });
+  // Side by side with the top-25 card: grow the two month charts so the cards end level (nothing to do when stacked).
+  requestAnimationFrame(() => { const box = $("rp-months"), mc = box.closest(".card"), tc = $("rp-top").closest(".card");
+    if (Math.abs(mc.getBoundingClientRect().top - tc.getBoundingClientRect().top) > 4) return;   // stacked (narrow screen)
+    const extra = mc.getBoundingClientRect().bottom - parseFloat(getComputedStyle(mc).paddingBottom) - box.getBoundingClientRect().bottom, cw = box.clientWidth || W;
+    if (extra > 24) { const add = extra * W / cw / 2; drawMonths(230 + add, 200 + add); } });
+  // Top 10 month by month
+  const ten = ranked.slice(0, 10), maxS = Math.max(1, ...ten.flatMap(z => months.map(m => z.byMonth[m]?.total || 0)));
+  const SW = 200, SH = 70, sbw = (SW - 4) / Math.max(1, months.length), yS = v => 4 + (SH - 18) * (1 - v / maxS);
+  $("rp-smalls").innerHTML = ten.map((z, zi) => `<div class="rp-small"><div class="t"><b>${z.zip}</b> <span>${esc(z.city)}</span><span>${rpMoney(z.total)}</span></div>
+    <svg viewBox="0 0 ${SW} ${SH}" role="img" aria-label="ZIP ${z.zip} by month">${months.map((m, i) => { const v = z.byMonth[m]?.total || 0, x = 2 + i * sbw + sbw * 0.1;
+      return `<rect class="rp-bar" data-z="${zi}" data-m="${m}" x="${x}" width="${sbw * 0.8}" y="${yS(v)}" height="${yS(0) - yS(v)}" rx="2" tabindex="0"/>`; }).join("")}
+    <line class="axis" x1="2" x2="${SW - 2}" y1="${yS(0)}" y2="${yS(0)}"/>${[0, months.length - 1].filter((v, i, a) => a.indexOf(v) === i && months[v]).map(i => `<text x="${2 + i * sbw + sbw / 2}" y="${SH - 3}" text-anchor="middle" font-size="9">${MONTH_ABBR[+months[i].slice(5, 7) - 1]}</text>`).join("")}</svg></div>`).join("");
+  $("rp-smalls").querySelectorAll("rect[data-z]").forEach(r => { const z = ten[+r.dataset.z], m = r.dataset.m, c = z.byMonth[m] || {n: 0, total: 0};
+    rpTip(r, () => `<div class="tr-tip-head">${esc(monthName(m))} · ZIP ${z.zip}</div><div class="tr-row"><b>${rpMoney(c.total)}</b><span>· ${c.n.toLocaleString()} new patients</span></div>`); });
+  $("rp-smalls-note").textContent = ten.length ? `Dollars collected each month from each of the ten biggest ZIP codes, on one shared scale (tallest bar ${rpMoney(maxS)}).` : "";
+  // Every ZIP (table) and each office's top ZIPs
+  rpRows = ranked; renderReportTable();
+  const offs = Object.entries(offA).sort((a, b) => b[1].total - a[1].total);
+  $("rp-offices").innerHTML = offs.map(([o, v]) => { const tz = Object.entries(v.zips).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+    return `<div class="rp-office"><div class="oh"><b>${esc(zShort(o))}</b><span>${rpMoney(v.total)} · ${v.n.toLocaleString()} new patients</span></div>
+      <div class="tw"><table><thead><tr><th>ZIP</th><th>City</th><th class="num">Patients</th><th class="num">Collected</th><th class="num">Of office</th></tr></thead><tbody>${tz.map(([z, t]) => `<tr><td><a href="#" class="zt-zip" data-zip="${z}">${z}</a></td><td class="hint">${esc(city(z))}</td><td class="num">${t.n.toLocaleString()}</td><td class="num">${rpMoney(t.total)}</td><td class="num">${v.total ? (t.total / v.total * 100).toFixed(1) : "0.0"}%</td></tr>`).join("")}</tbody></table></div></div>`; }).join("");
+  $("rp-foot").textContent = "Dollars are each new patient's collection in the month of their first visit, from the Referral Production Listing grouped by ZIP code; patients who paid nothing count as patients but add no dollars. "
+    + (partials.length ? `${partials.map(r => monthName(r.m)).join(", ")} is loaded only part-way, so its figures are low. ` : "") + "One patient with a large payment can lift a small ZIP: a ZIP with one or two patients is a case, not a pattern.";
+  bindZipLinks();
+  // The map follows the report: its month stays inside the range, and the Office filter applies to it too.
+  if (mapData && mapView) { if (mapData.month && (mapData.month < rpSel.from || mapData.month > rpSel.to)) loadMaps(rpSel.to); else renderMap(true); }
+  $("rp-copy").onclick = e => copyGrid([["#", "ZIP", "City", "New patients", "Collected", "Per patient", "Share %", "Months in top 10", "Nearest office", "Miles"],
+    ...ranked.map(z => [z.rank, z.zip, z.city, z.n, z.total.toFixed(2), z.per.toFixed(2), z.share.toFixed(2), z.top10, z.nearest, z.miles == null ? "" : z.miles.toFixed(1)])], "ZIP collections", e.currentTarget);
 }
-let trResize;
-window.addEventListener("resize", () => { clearTimeout(trResize); trResize = setTimeout(() => {
-  if ($("charts").classList.contains("active")) { renderRanking(); renderTrend(); } }, 150); });
-
-// A number short enough for a heatmap cell or an axis.
-const shortVal = (v, kind) => kind === "pct" ? `${+(v * 100).toFixed(Math.abs(v) < 0.1 ? 1 : 0)}%` : trTick(v, kind);
-// Company total for a month: rates from the offices' combined parts, amounts and counts added up.
-function companyValue(col, ym) {
-  const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym), have = rows.filter(r => r[col.key] != null);
-  if (!have.length) return null;
-  return col.ratio ? totalRatio(rows, col.ratio) : have.reduce((a, r) => a + r[col.key], 0);
+let rpResizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(rpResizeTimer); rpResizeTimer = setTimeout(() => { if (ztData && $("rp-months").clientWidth) renderReport(); }, 200); });
+function renderReportTable() {
+  const numeric = new Set(["rank", "n", "total", "per", "share", "top10", "miles"]);
+  let rows = rpRows.slice();
+  if (rpQuery) rows = rows.filter(z => `${z.zip} ${z.city} ${z.nearest}`.toLowerCase().includes(rpQuery));
+  const k = rpSort.key, val = z => numeric.has(k) ? (z[k] ?? -Infinity) : String(z[k] || "");
+  rows.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * rpSort.dir);
+  const max = Math.max(1, ...rpRows.map(z => z.total));
+  $("rp-rows").innerHTML = rows.map(z => `<tr><td class="num">${z.rank}</td><td><a href="#" class="zt-zip" data-zip="${z.zip}">${z.zip}</a></td><td class="hint">${esc(z.city)}</td><td class="num">${z.n.toLocaleString()}</td>
+    <td class="num">${rpMoney(z.total)}</td><td class="bar${z.rank <= 10 ? " top" : ""}"><i style="width:${Math.max(1, z.total / max * 100).toFixed(1)}%"></i></td><td class="num">${rpMoney(z.per)}</td><td class="num">${z.share.toFixed(1)}%</td>
+    <td class="num">${z.top10}</td><td>${esc(z.nearest)}</td><td class="num">${z.miles == null ? "" : z.miles.toFixed(1)}</td></tr>`).join("") || `<tr><td colspan="11" class="hint">No ZIP codes match.</td></tr>`;
+  $("rp-count").textContent = rpRows.length ? `${rows.length.toLocaleString()} of ${rpRows.length.toLocaleString()} ZIP codes` : "";
+  $("rp-table").querySelectorAll("th[data-sort]").forEach(th => th.setAttribute("aria-sort", th.dataset.sort === k ? (rpSort.dir === 1 ? "ascending" : "descending") : "none"));
+  bindZipLinks();
 }
-const ST_FILL = {green: "var(--st-good)", yellow: "var(--st-warn)", red: "var(--st-crit)"};
-function chartTip(tip, lines) {   // lines: [[strong value, label], ...]; first entry may be a heading string
-  tip.textContent = "";
-  lines.forEach(l => {
-    if (typeof l === "string") { const h = document.createElement("div"); h.className = "tr-tip-head"; h.textContent = l; tip.append(h); return; }
-    const row = document.createElement("div"), b = document.createElement("b"), sp = document.createElement("span");
-    row.className = "tr-row"; b.textContent = l[0]; sp.textContent = l[1]; row.append(b, sp); tip.append(row);
-  });
-  tip.hidden = false;
-}
-
-// Office ranking: one month, offices sorted best first (by the benchmark's direction, else highest first).
-function renderRanking() {
-  const col = colOf(trSel.metric), ym = trSel.month; if (!col || !ym) return;
-  const k = col.key, b = benchFor(k), lowGood = b?.direction === "lower";
-  const rows = logRows.filter(r => r.period_from.slice(0, 7) === ym && r[k] != null)
-    .sort((a, z) => (lowGood ? a[k] - z[k] : z[k] - a[k]) || collator.compare(a.office, z.office));
-  const missing = allOffices().filter(o => !rows.some(r => r.office === o));
-  // The company line only makes sense next to one office for rates and averages; a sum goes in the note.
-  const company = companyValue(col, ym), total = col.ratio ? company : null;
-  $("rk-title").textContent = `Office ranking · ${col.label} · ${monthName(ym)}`;
-  $("rk-sub").textContent = b ? `Best first (${lowGood ? "lower" : "higher"} is better). Colors follow the benchmark; the lines mark its cut-offs.`
-                              : "Highest first. This number has no benchmark, so all bars are one color.";
-  $("rk-note").textContent = (company != null && !col.ratio ? `Company total: ${fmtVal(company, col.kind)}. ` : "")
-    + (missing.length ? `No number for ${monthName(ym)} yet: ${missing.join(", ")}.` : "");
-  const wrap = $("rk-wrap"), tip = $("rk-tip");
-  wrap.querySelector("svg")?.remove(); tip.hidden = true;
-  if (!rows.length) {
-    wrap.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 600 40" role="img"><text x="0" y="24" fill="var(--muted)" font-size="14">No offices have this number for ${monthName(ym)}.</text></svg>`);
-    return;
-  }
-  const W = Math.max(320, wrap.clientWidth || 800), narrow = W < 560;
-  const labelW = narrow ? 0 : Math.min(220, W * 0.3), valueW = 92, band = narrow ? 44 : 30, top = 22, bottom = 20;
-  const H = top + rows.length * band + bottom;
-  const vals = rows.map(r => r[k]).concat(b ? [b.green, b.yellow] : [], total != null ? [total] : []);
-  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals) || 1;
-  const x0 = labelW + 4, x1 = W - valueW, x = v => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
-  const ns = "http://www.w3.org/2000/svg", el = (tag, attrs, parent) => {
-    const e = document.createElementNS(ns, tag); for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, v); parent?.append(e); return e;
-  };
-  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img",
-    "aria-label": `${col.label}, ${monthName(ym)}: ${rows.length} offices ranked. Tab to each bar to read it.`});
-  // Reference lines: benchmark cut-offs (labelled at the top) and the company total (labelled at the bottom).
-  const vline = (v, label, y, anchor) => {
-    el("line", {x1: x(v), x2: x(v), y1: top - 4, y2: H - bottom + 4, stroke: "var(--tr-muted)", "stroke-width": 1, opacity: 0.7}, svg);
-    const t = el("text", {x: x(v), y, "text-anchor": anchor, "font-size": 11, fill: "var(--tr-muted)"}, svg); t.textContent = label;
-  };
-  if (lo < 0) el("line", {x1: x(0), x2: x(0), y1: top - 4, y2: H - bottom, stroke: "var(--tr-axis)", "stroke-width": 1}, svg);
-  if (b) {
-    const far = Math.abs(x(b.green) - x(b.yellow)) < 70;
-    vline(b.green, `${BENCH_MARK.green} ${benchShow(k, b.green)}`, 12, far ? (lowGood ? "end" : "start") : "middle");
-    vline(b.yellow, `${BENCH_MARK.yellow} ${benchShow(k, b.yellow)}`, 12, far ? (lowGood ? "start" : "end") : "middle");
-  }
-  if (total != null) vline(total, `Company ${shortVal(total, col.kind)}`, H - 4, x(total) > W - 120 ? "end" : "middle");
-  rows.forEach((r, i) => {
-    const v = r[k], level = benchLevel(k, v), yTop = top + i * band, barT = 16;
-    const by = narrow ? yTop + 20 : yTop + (band - barT) / 2;
-    const g = el("g", {tabindex: "0", role: "img",
-      "aria-label": `${i + 1}. ${r.office}: ${fmtVal(v, col.kind)}${level ? `, ${BENCH_WORD[level]}` : ""}`}, svg);
-    el("rect", {x: 0, y: yTop, width: W, height: band, fill: "transparent"}, g);   // hit area: the whole row
-    const name = el("text", narrow ? {x: x0, y: yTop + 14, "font-size": 12, fill: "var(--text)"}
-                                   : {x: labelW - 8, y: by + barT / 2 + 4, "text-anchor": "end", "font-size": 13, fill: "var(--text)"}, g);
-    name.textContent = r.office;
-    // Bar from zero with a 4px rounded data end (square at the baseline).
-    const a = x(Math.min(0, v)), z = x(Math.max(0, v)), w = Math.max(z - a, 1), rr = Math.min(4, w);
-    const d = v >= 0
-      ? `M${a},${by}H${z - rr}Q${z},${by} ${z},${by + rr}V${by + barT - rr}Q${z},${by + barT} ${z - rr},${by + barT}H${a}Z`
-      : `M${z},${by}H${a + rr}Q${a},${by} ${a},${by + rr}V${by + barT - rr}Q${a},${by + barT} ${a + rr},${by + barT}H${z}Z`;
-    el("path", {d, fill: level ? ST_FILL[level] : "var(--tr-s1)"}, g);
-    const lab = el("text", {x: (v >= 0 ? z : a) + (v >= 0 ? 6 : -6), y: by + barT / 2 + 4, "text-anchor": v >= 0 ? "start" : "end",
-      "font-size": 12, fill: "var(--text)", style: "font-variant-numeric: tabular-nums"}, g);
-    lab.textContent = `${level ? BENCH_MARK[level] + " " : ""}${fmtVal(v, col.kind)}`;
-    const show = () => {
-      chartTip(tip, [`#${i + 1} of ${rows.length} · ${monthName(ym)}`, [fmtVal(v, col.kind), r.office],
-        ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : []),
-        ...(total != null ? [[fmtVal(total, col.kind), "Company total"]] : [])]);
-      const scale = wrap.clientWidth / W;
-      tip.style.top = `${(yTop + band) * scale + 4}px`;
-      tip.style.left = `${Math.min(Math.max(0, x0 * scale), wrap.clientWidth - tip.offsetWidth)}px`;
-    };
-    g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
-    g.addEventListener("pointerleave", () => tip.hidden = true); g.addEventListener("blur", () => tip.hidden = true);
-  });
-  wrap.prepend(svg);
-}
-
-// Heatmap: every office (in the Log's office order) by every month, colored by benchmark, or by size when
-// the number has no benchmark. Click a cell to rank that month.
-function renderHeatmap() {
-  const col = colOf(trSel.metric); if (!col) return;
-  const k = col.key, b = benchFor(k), months = dataMonths(), offices = allOffices();
-  const cell = (o, ym) => logRows.find(r => r.office === o && r.period_from.slice(0, 7) === ym)?.[k] ?? null;
-  const grid = offices.map(o => months.map(ym => cell(o, ym)));
-  const company = months.map(ym => companyValue(col, ym));
-  $("hm-title").textContent = `Every office by month · ${col.label}`;
-  $("hm-sub").textContent = "Hover a cell for the exact number; click one to rank that month above. Offices follow the Log's Office order.";
-  // Size steps (no benchmark): 5 equal steps between the smallest and largest office value.
-  const vals = grid.flat().filter(v => v != null), lo = Math.min(...vals), hi = Math.max(...vals);
-  const step = v => hi > lo ? Math.min(5, 1 + Math.floor(((v - lo) / (hi - lo)) * 5)) : 3;
-  const legend = $("hm-legend");
-  legend.innerHTML = b
-    ? ["green", "yellow", "red"].map(l => `<span><span class="hm-key bm-${l}-key"></span>${BENCH_MARK[l]} ${BENCH_WORD[l]}</span>`).join("")
-      + `<span class="hint">${esc(benchText(k))}</span>`
-    : vals.length ? `<span>Lower</span>${[1, 2, 3, 4, 5].map(i => `<span class="hm-key hm-s${i}"></span>`).join("")}<span>Higher</span>`
-      + `<span class="hint">${esc(shortVal(lo, col.kind))} to ${esc(shortVal(hi, col.kind))}</span>` : "";
-  const td = (v, o, ym, j) => {
-    const sel = ym === trSel.month ? " sel" : "";
-    if (v == null) return `<td class="hm-cell hm-empty${sel}" tabindex="0" data-o="${esc(o)}" data-m="${ym}">—</td>`;
-    const level = benchLevel(k, v);
-    const cls = level ? `bm-${level}` : b ? "" : `hm-s${step(v)}`;
-    return `<td class="hm-cell ${cls}${sel}" tabindex="0" data-o="${esc(o)}" data-m="${ym}" data-v="${v}">${level ? `<span aria-hidden="true">${BENCH_MARK[level]}</span> ` : ""}${esc(shortVal(v, col.kind))}</td>`;
-  };
-  $("hm-wrap").innerHTML = vals.length ? `<table><thead><tr><th></th>${months.map(ym =>
-      `<th class="${ym === trSel.month ? "sel" : ""}" scope="col">${MONTH_NAMES[+ym.slice(5) - 1].slice(0, 3)}${ym.endsWith("-01") || ym === months[0] ? ` ${ym.slice(2, 4)}` : ""}</th>`).join("")}</tr></thead>
-    <tbody>${offices.map((o, i) => `<tr><th scope="row">${esc(o)}</th>${grid[i].map((v, j) => td(v, o, months[j], j)).join("")}</tr>`).join("")}
-    <tr><th scope="row"><strong>Company total</strong></th>${company.map((v, j) => {
-      const level = v == null ? null : benchLevel(k, v);
-      return v == null ? `<td class="hm-cell hm-empty">—</td>`
-        : `<td class="hm-cell ${level ? `bm-${level}` : ""}${months[j] === trSel.month ? " sel" : ""}" tabindex="0" data-o="Company total" data-m="${months[j]}" data-v="${v}"><strong>${level ? BENCH_MARK[level] + " " : ""}${esc(shortVal(v, col.kind))}</strong></td>`;
-    }).join("")}</tr></tbody></table>` : `<p class="hint">No data for this number yet.</p>`;
-  const tip = $("hm-tip");
-  $("hm-wrap").querySelectorAll(".hm-cell[data-m]").forEach(c => {
-    const show = () => {
-      const v = c.dataset.v === undefined ? null : +c.dataset.v, level = v == null ? null : benchLevel(k, v);
-      chartTip(tip, [`${c.dataset.o} · ${monthName(c.dataset.m)}`, [v == null ? "—" : fmtVal(v, col.kind), v == null ? "no number yet" : col.label],
-        ...(level ? [[BENCH_MARK[level], BENCH_WORD[level][0].toUpperCase() + BENCH_WORD[level].slice(1)]] : [])]);
-      const r = c.getBoundingClientRect();
-      tip.style.left = `${Math.min(r.left, window.innerWidth - tip.offsetWidth - 8)}px`;
-      tip.style.top = `${r.bottom + 6 + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 6 : r.bottom + 6}px`;
-    };
-    c.addEventListener("pointerenter", show); c.addEventListener("focus", show);
-    c.addEventListener("pointerleave", () => tip.hidden = true); c.addEventListener("blur", () => tip.hidden = true);
-    c.addEventListener("click", () => { trSel.month = c.dataset.m; $("tr-month").value = trSel.month; saveTrSel(); renderRanking(); renderHeatmap(); });
+// A ZIP link anywhere on the Charts tab scrolls to the map and zooms it on that ZIP.
+function bindZipLinks() {
+  document.querySelectorAll("#charts .zt-zip").forEach(a => a.onclick = e => {
+    e.preventDefault();
+    const z = a.dataset.zip, m = a.dataset.month || ztData.months.slice().reverse().find(mm => ztData.rows.some(r => r.zip === z && r.month === mm));
+    mapFocusZip = z; $("mp-section").scrollIntoView({block: "start", behavior: "smooth"}); loadMaps(m);
   });
 }
 
@@ -2760,6 +2674,214 @@ async function loadDenticon() {
           msg($("dx-msg"), "Saved.", true); } catch (e) { msg($("dx-msg"), e.message, false); }
   });
 }
+// Calls tab, the funnel: calls in a month -> callers who became new patients -> started treatment -> $ collected.
+let fnData = null, fnSel = {month: "", office: "", by: "promo_line"};
+try { Object.assign(fnSel, JSON.parse(localStorage.getItem("callFunnelSel")) || {}); } catch {}
+async function loadFunnel() {
+  try { fnData = await api(`/api/calls/funnel?month=${encodeURIComponent(fnSel.month)}&office=${encodeURIComponent(fnSel.office)}`); }
+  catch (e) { $("fn-note").textContent = e.message; return; }
+  const d = fnData;
+  $("fn-month").innerHTML = d.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No calls pulled yet</option>`;
+  $("fn-office").innerHTML = `<option value="">All offices with a list</option>` + d.offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  fnSel.month = d.month || ""; if (!d.offices.includes(fnSel.office)) fnSel.office = "";
+  $("fn-month").value = fnSel.month; $("fn-office").value = fnSel.office; $("fn-by").value = fnSel.by;
+  try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {}
+  renderFunnel();
+}
+["fn-month", "fn-office"].forEach(id => $(id).onchange = () => { fnSel[id.slice(3)] = $(id).value; loadFunnel(); });
+$("fn-by").onchange = () => { fnSel.by = $("fn-by").value; try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {} renderFunnel(); };
+function renderFunnel() {
+  const d = fnData; if (!d) return;
+  if (!d.month) { $("fn-sub").textContent = "Pull some days of calls first."; $("fn-steps").innerHTML = ""; $("fn-rows").innerHTML = ""; $("fn-note").textContent = ""; return; }
+  const t = d.total, pct = (a, b) => b ? `${(a / b * 100).toFixed(a / b * 100 < 10 ? 1 : 0)}%` : "—";
+  const who = d.office || (d.offices.length === 1 ? d.offices[0] : d.offices.length ? `${d.offices.length} offices with a list` : "no office list yet");
+  $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}`;
+  $("fn-sub").textContent = `Every call that month, then the callers whose number is on a Denticon new-patient list with a first visit on or after the call (${who}). Started treatment = paid anything in the first-visit month, from the Referral Production Listing.`;
+  const steps = [["Calls", t.calls, `${t.callers.toLocaleString()} different numbers`], ["Answered", t.answered, pct(t.answered, t.calls) + " of calls"],
+    ["Became new patients", t.patients, `${pct(t.patients, t.answered)} of answered` + (t.booked ? ` · +${t.booked} booked, not yet seen` : "")],
+    ["Started treatment", t.started, pct(t.started, t.patients) + " of new patients"], ["$ collected", `$${money(t.collected)}`, t.patients ? `$${money(t.collected / t.patients)} per new patient` : ""]];
+  const max = Math.max(1, t.calls);
+  $("fn-steps").innerHTML = steps.map(([k, v, s_], i) => `<div class="fn-step"><div class="bar" style="width:${i === 4 ? 0 : Math.max(2, (typeof v === "number" ? v : 0) / max * 100).toFixed(1)}%"></div><div class="k">${esc(k)}</div><div class="v">${typeof v === "number" ? v.toLocaleString() : esc(v)}</div><div class="s">${esc(s_)}</div></div>`).join("");
+  const all = d.by[fnSel.by] || [];
+  $("fn-th").textContent = fnSel.by === "campaign" ? "Campaign" : "Promo line";
+  // Lines that are just a phone number (no description in Invoca) fold into one row; click it to see them.
+  const bare = g => /^\+?\d{10,}$/.test(g.name), named = all.filter(g => !bare(g)), unnamed = all.filter(bare);
+  const sum = unnamed.reduce((a, g) => { Object.keys(a).forEach(k => a[k] += g[k] || 0); return a; }, {calls: 0, answered: 0, patients: 0, started: 0, collected: 0, booked: 0});
+  const cells = g => `<td class="num">${g.calls.toLocaleString()}</td><td class="num">${g.answered.toLocaleString()}</td><td class="num">${g.patients}</td>
+      <td class="num">${g.answered ? (g.patients / g.answered * 100).toFixed(1) : "—"}</td><td class="num">${g.started}</td><td class="num">${g.collected ? "$" + money(g.collected) : ""}</td>
+      <td class="num">${g.calls && g.collected ? "$" + money(g.collected / g.calls) : ""}</td><td class="num">${g.booked || ""}</td>`;
+  $("fn-rows").innerHTML = (named.map(g => `<tr><td>${esc(g.name)}</td>${cells(g)}</tr>`).join("")
+    + (unnamed.length ? `<tr class="fn-fold"><td>${unnamed.length} unnamed tracking numbers (no description in Invoca)</td>${cells(sum)}</tr>`
+      + unnamed.map(g => `<tr class="fn-sub" hidden><td>${esc(g.name)}</td>${cells(g)}</tr>`).join("") : "")) || `<tr><td colspan="9" class="hint">No calls that month.</td></tr>`;
+  const fold = $("fn-rows").querySelector("tr.fn-fold");
+  if (fold) fold.onclick = () => { const open = fold.classList.toggle("open"); $("fn-rows").querySelectorAll("tr.fn-sub").forEach(tr => tr.hidden = !open); };
+  const lists = d.lists.map(l => `${l.office} (${l.patients} patients, first visits ${l.lo ? l.lo.slice(5).replace("-", "/") : "?"}–${l.hi ? l.hi.slice(5).replace("-", "/") : "?"})`).join("; ");
+  $("fn-note").textContent = (d.lists.length ? `Patient lists loaded: ${lists}. Conversions can only be seen for those offices and first-visit months; upload each office's New Patients List for the months after these calls to complete the picture. ` : "No New Patients List uploaded yet, so no conversions can be seen. ")
+    + "Invoca reports every call under the group, so calls and answered are for all offices; each patient counts once, credited to their first call's promo line and campaign.";
+}
+// Calls tab: one day's calls from Invoca, kept once pulled; a flat sheet with sort, filter, search and Copy.
+let clData = null, clSort = {key: "start_utc", dir: 1};
+const clMMSS = sec => sec == null ? "—" : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+const clYesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+async function loadCalls(day) {
+  const dt = $("cl-date");
+  dt.max = today(); if (!dt.value) dt.value = clYesterday();
+  day = day || dt.value;
+  try { clData = await api(`/api/calls?date=${day}`); } catch (e) { $("cl-note").textContent = e.message; return; }
+  const cur = $("cl-office").value;
+  const offices = [...new Set(clData.rows.map(r => r.advertiser || ""))].filter(Boolean).sort();
+  $("cl-office").innerHTML = `<option value="">All offices</option>` + offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  if (offices.includes(cur)) $("cl-office").value = cur;
+  renderCalls();
+}
+$("cl-date").onchange = () => loadCalls($("cl-date").value);
+$("cl-apptfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  msg($("cl-msg"), `Reading ${f.name}…`, true);
+  try { const r = await api("/api/calls/upload", f, {"X-Filename": encodeURIComponent(f.name)});
+        const ph = r.placeholders ? `, ${r.placeholders} with a placeholder like 000-000-0000 (skipped)` : "";
+        msg($("cl-msg"), r.kind === "patients"
+          ? `${r.office}: ${r.patients} new patients read${r.first_visits ? ` (first visits ${r.first_visits[0]} to ${r.first_visits[1]})` : ""}: ${r.with_phone} with a real phone number${ph}. Calls from those numbers now show "came in" with the $ collected. ${r.total_numbers_known.toLocaleString()} patients' numbers known in all.`
+          : `${r.patients} new-patient appointment(s) read across ${r.offices.length} office(s): ${r.with_phone} with a real phone number${ph}. The app now knows ${r.total_numbers_known.toLocaleString()} distinct numbers from every upload so far.`, true);
+        loadCalls($("cl-date").value); loadFunnel(); }
+  catch (err) { msg($("cl-msg"), err.message, false); }
+  e.target.value = "";
+};
+$("cl-office").onchange = renderCalls; $("cl-search").oninput = renderCalls;
+$("cl-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
+  const k = th.dataset.sort; if (clSort.key === k) clSort.dir = -clSort.dir; else clSort = {key: k, dir: ["duration", "connect_duration", "repeat_caller"].includes(k) ? -1 : 1}; renderCalls(); };
+$("cl-pull").onclick = async () => {
+  const day = $("cl-date").value || clYesterday();
+  msg($("cl-msg"), `Pulling ${day}'s calls from Invoca…`, true);
+  try { const r = await api("/api/calls/pull", JSON.stringify({date: day}), {"Content-Type": "application/json"});
+        msg($("cl-msg"), `${r.calls.toLocaleString()} calls pulled for ${monthDay(day)}.`, true); clData = r; renderCalls(); loadCalls(day); loadFunnel(); }
+  catch (e) { msg($("cl-msg"), e.message, false); }
+};
+const monthDay = d => new Date(d + "T12:00:00").toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric", year: "numeric"});
+const clMD = d => esc((d || "").slice(5).replace("-", "/"));
+function clMatchCell(m) {
+  if (!m) return "";
+  if (m.status === "visited") return `<span class="ok" title="Pat ${esc(m.pat_id)}">came in ${clMD(m.first_visit)} · ${esc(m.office)}${m.collected != null ? ` · $${money(m.collected)}` : ""}</span>`;
+  if (m.status === "converted") return `<span class="booked">booked ${clMD(m.appt_date)} · ${esc(m.office)}</span>`;
+  if (m.status === "existing") return `<span class="hint" title="Pat ${esc(m.pat_id)}">existing patient${m.first_visit ? ` (first visit ${clMD(m.first_visit)})` : ""}</span>`;
+  return `<span class="hint">booked earlier${m.appt_date ? ` (${clMD(m.appt_date)})` : ""}</span>`;
+}
+function renderCalls() {
+  if (!clData) return;
+  const day = clData.date, office = $("cl-office").value, q = $("cl-search").value.trim().toLowerCase();
+  const pulled = clData.days.find(d => d.day === day);
+  $("cl-title").textContent = `Calls · ${monthDay(day)}`;
+  let rows = clData.rows.filter(r => (!office || r.advertiser === office)
+    && (!q || `${r.advertiser} ${r.campaign} ${r.promo_line} ${r.city} ${r.region} ${r.result} ${r.signals.join(" ")} ${Object.values(r.custom).join(" ")}`.toLowerCase().includes(q)));
+  const k = clSort.key, val = r => k === "signals" ? r.signals.join(",") : k === "match" ? (r.match ? (r.match.status === "converted" ? "2" : "1") + (r.match.appt_date || "") : "0") : (r[k] ?? (typeof r[k] === "number" ? -Infinity : ""));
+  rows.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * clSort.dir);
+  const answered = rows.filter(r => (r.connect_duration || 0) > 0).length, talk = rows.reduce((a, r) => a + (r.connect_duration || 0), 0);
+  const visited = rows.filter(r => r.match && r.match.status === "visited"), booked = rows.filter(r => r.match && r.match.status === "converted").length;
+  const converted = visited.length + booked, visitedAmt = visited.reduce((a, r) => a + (r.match.collected || 0), 0);
+  const sigCounts = {}; rows.forEach(r => r.signals.forEach(sg => sigCounts[sg] = (sigCounts[sg] || 0) + 1));
+  $("cl-sub").textContent = !clData.connected ? "Invoca isn't connected yet: on the computer running the app, open the Audit tab and fill in the Invoca API card."
+    : pulled ? `Pulled ${when(pulled.pulled_at)} · ${pulled.n.toLocaleString()} calls that day${office ? ` · showing ${rows.length} for ${office}` : q ? ` · ${rows.length} match` : ""}. Click a heading to sort.`
+    : `Not pulled yet. Click Pull from Invoca.${clData.days.length ? ` Days already pulled: ${clData.days.slice(0, 8).map(d => monthDay(d.day).replace(/, \d{4}$/, "")).join(", ")}${clData.days.length > 8 ? "…" : ""}.` : ""}`;
+  $("cl-tiles").innerHTML = rows.length ? `<span><b>${rows.length.toLocaleString()}</b>calls</span><span><b>${answered.toLocaleString()}</b>answered (${Math.round(answered / rows.length * 100)}%)</span>
+    <span><b>${clMMSS(answered ? Math.round(talk / answered) : 0)}</b>avg talk time</span><span><b>${rows.filter(r => r.repeat_caller).length}</b>repeat callers</span>
+    ${clData.appts_known ? `<span><b>${converted}</b>became new patients${answered ? ` (${Math.round(converted / answered * 100)}% of answered)` : ""}${visited.length ? `: ${visited.length} came in ($${money(visitedAmt)} collected), ${booked} booked` : ""}</span>` : ""}
+    ${Object.entries(sigCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([sg, n]) => `<span><b>${n}</b>${esc(sg)}</span>`).join("")}` : "";
+  // Pie: calls by promo line (the number the caller dialled), for the rows shown; small slices fold into "Other".
+  const byLine = {}; rows.forEach(r => { const k = r.promo_line || "(no promo line)"; byLine[k] = (byLine[k] || 0) + 1; });
+  let slices = Object.entries(byLine).sort((a, b) => b[1] - a[1]);
+  if (slices.length > 8) slices = [...slices.slice(0, 7), ["Other", slices.slice(7).reduce((a, [, n]) => a + n, 0)]];
+  const R = 80, C = 85, totalN = rows.length; let ang = -Math.PI / 2, paths = "";
+  slices.forEach(([name, n], i) => { const a2 = ang + 2 * Math.PI * n / totalN, big = a2 - ang > Math.PI ? 1 : 0;
+    const x1 = C + R * Math.cos(ang), y1 = C + R * Math.sin(ang), x2 = C + R * Math.cos(a2), y2 = C + R * Math.sin(a2);
+    const d = slices.length === 1 ? `M${C - R},${C} a${R},${R} 0 1,0 ${2 * R},0 a${R},${R} 0 1,0 ${-2 * R},0` : `M${C},${C} L${x1},${y1} A${R},${R} 0 ${big},1 ${x2},${y2} Z`;
+    paths += `<path d="${d}" fill="${OFFICE_COLORS[i % OFFICE_COLORS.length]}" stroke="var(--surface)" stroke-width="2" tabindex="0"><title>${esc(name)}: ${n} call${n === 1 ? "" : "s"} (${Math.round(n / totalN * 100)}%)</title></path>`; ang = a2; });
+  $("cl-pie").innerHTML = rows.length ? `<p class="pt">Calls by promo line</p><svg viewBox="0 0 170 170" role="img" aria-label="Calls by promo line">${paths}<circle cx="${C}" cy="${C}" r="34" fill="var(--surface)"/>
+      <text x="${C}" y="${C + 5}" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text)">${totalN}</text></svg>
+    <ul>${slices.map(([name, n], i) => `<li><i style="background:${OFFICE_COLORS[i % OFFICE_COLORS.length]}"></i>${esc(name)} <span>${n} · ${Math.round(n / totalN * 100)}%</span></li>`).join("")}</ul>` : "";
+  drawCallsMap(rows);
+  $("cl-rows").innerHTML = rows.map(r => `<tr><td>${esc((r.start_local || "").replace(/^\d{4}-\d{2}-\d{2}[T ]?/, "").replace(/[-+]\d{2}:?\d{2}$|Z$/, "").slice(0, 8))}</td><td>${esc(r.advertiser || "")}</td><td>${esc(r.campaign || "")}</td><td>${esc(r.promo_line || "")}</td>
+    <td>${esc(r.city || "")}</td><td>${esc(r.region || "")}</td><td>${esc(r.mobile || "")}</td><td>${r.repeat_caller ? "yes" : ""}</td><td class="num">${clMMSS(r.duration)}</td>
+    <td class="num${(r.connect_duration || 0) > 0 ? "" : " miss"}">${(r.connect_duration || 0) > 0 ? clMMSS(r.connect_duration) : "not answered"}</td><td>${esc(r.result || "")}</td>
+    <td>${clMatchCell(r.match)}</td>
+    <td>${r.signals.map(sg => `<span class="sig">${esc(sg)}</span>`).join("")}${Object.entries(r.custom).map(([n, v]) => `<span class="sig" title="${esc(n)}">${esc(n)}: ${esc(v)}</span>`).join("")}</td></tr>`).join("")
+    || `<tr><td colspan="13" class="hint">${clData.rows.length ? "No calls match." : pulled ? "No calls that day." : ""}</td></tr>`;
+  $("cl-table").querySelectorAll("th[data-sort]").forEach(th => th.setAttribute("aria-sort", th.dataset.sort === k ? (clSort.dir === 1 ? "ascending" : "descending") : "none"));
+  $("cl-note").textContent = rows.length ? `Rang + talked is the whole call; Talked is the time connected to the office. Signals are Invoca's call outcomes. "New patient?" matches the caller's number against the Denticon patient lists uploaded (${(clData.appts_known || 0).toLocaleString()} numbers known): "came in" = a first visit on or after the call, with that month's $ collected; "booked" = a first appointment on or after the call; "existing patient" = seen before the call. Numbers are kept only as fingerprints, never as digits.` : "";
+  $("cl-copy").onclick = e => copyGrid([["Time", "Office", "Campaign", "Promo line", "City", "State", "Phone", "Repeat caller", "Rang + talked (s)", "Talked (s)", "Outcome", "New patient?", "Signals", "Marketing data"],
+    ...rows.map(r => [r.start_local || "", r.advertiser || "", r.campaign || "", r.promo_line || "", r.city || "", r.region || "", r.mobile || "", r.repeat_caller ? "yes" : "", r.duration ?? "", r.connect_duration ?? "", r.result || "",
+      r.match ? ({visited: `came in ${r.match.first_visit} ${r.match.office}${r.match.collected != null ? " $" + r.match.collected.toFixed(2) : ""}`, converted: `booked ${r.match.appt_date} ${r.match.office}`, existing: `existing patient ${r.match.first_visit || ""}`, before: `booked earlier ${r.match.appt_date || ""}`})[r.match.status] : "", r.signals.join("; "), Object.entries(r.custom).map(([n, v]) => `${n}: ${v}`).join("; ")])], "Calls", e.currentTarget);
+}
+// The callers' map: one circle per city (sized and shaded by calls) on the ZIP-outline background; cities the
+// Census list doesn't cover (other states, spellings) are named in the note instead.
+let clMap = null, clMapLayers = [], clShapesLayer = null;
+async function drawCallsMap(rows) {
+  const box = $("cl-map");
+  const byCity = {};
+  rows.forEach(r => { const c = (r.city || "").trim(), st = (r.region || "").trim(); if (!c) return; const k = `${c}|${st}`;
+    const b = byCity[k] ||= {city: c, st, n: 0, answered: 0, booked: 0}; b.n++; if ((r.connect_duration || 0) > 0) b.answered++; if (r.signals.some(sg => /book|appoint/i.test(sg))) b.booked++; });
+  const points = clData.points || {};
+  const on = Object.values(byCity).filter(b => points[`${b.city}|${b.st}`]).sort((a, b) => b.n - a.n);
+  const off = Object.values(byCity).filter(b => !points[`${b.city}|${b.st}`]).sort((a, b) => b.n - a.n);
+  const noCity = rows.filter(r => !(r.city || "").trim()).length;
+  $("cl-geo-note").textContent = [off.length ? `Not on the map (${off.reduce((a, b) => a + b.n, 0)} calls): ${off.slice(0, 10).map(b => `${b.city}${b.st ? ", " + b.st : ""} ${b.n}`).join(" · ")}${off.length > 10 ? " …" : ""}.` : "",
+    noCity ? `${noCity} call(s) came with no city.` : "", on.length ? "Circle size and shade = calls from that city; hover for answered and booked." : ""].filter(Boolean).join(" ");
+  if (!rows.length) { box.hidden = true; return; }
+  box.hidden = false;
+  try { await loadLeaflet(); } catch (e) { $("cl-geo-note").textContent = e.message; return; }
+  if (!clMap) {
+    // The view is set at once, so layers go onto a map that is already laid out (adding them before the first view
+    // leaves the vector renderer without bounds and nothing draws).
+    clMap = L.map("cl-map", {scrollWheelZoom: false, maxZoom: 12, minZoom: 6, attributionControl: false}).setView([34.0, -118.2], 9);
+    clMap.createPane("labels").style.zIndex = 450;
+    if (!mapShapes) { try { mapShapes = await api("/api/maps/shapes"); } catch { mapShapes = null; } }
+    if (mapShapes && mapShapes.features?.length) clShapesLayer = L.geoJSON(mapShapes, {style: {color: "#d1d5db", weight: 0.6, fillColor: "#f3f4f6", fillOpacity: 0.9}, interactive: false}).addTo(clMap);
+  }
+  await new Promise(r => { const t = setTimeout(r, 150); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); r(); })); });
+  clMap.invalidateSize();
+  clMapLayers.forEach(l => l.remove()); clMapLayers = [];
+  if (!on.length) { clMap.setView([34.0, -118.2], 8); return; }
+  const vals = on.map(b => b.n).sort((a, b) => a - b), breaks = classBreaks(vals, true);
+  const shade = v => { const i = breaks.findIndex(b => v <= b); return RAMP[breaks.length < 2 ? 2 : Math.round((i < 0 ? breaks.length - 1 : i) * (RAMP.length - 1) / (breaks.length - 1))]; };
+  on.forEach((b, i) => {
+    const p = points[`${b.city}|${b.st}`];
+    const c = L.circleMarker(p, {radius: 6 + Math.sqrt(b.n) * 4, color: "#111827", weight: 1, fillColor: shade(b.n), fillOpacity: 0.85});
+    c.bindTooltip(`<b>${esc(b.city)}</b> · ${b.n} call${b.n === 1 ? "" : "s"} · ${b.answered} answered${b.booked ? ` · ${b.booked} booked` : ""}`, {direction: "top", offset: [0, -4]});
+    clMapLayers.push(c.addTo(clMap));
+    if (i < 12) clMapLayers.push(L.tooltip({permanent: true, direction: "bottom", offset: [0, 6 + Math.sqrt(b.n) * 4], className: "cl-city", interactive: false, opacity: 1, pane: "labels"}).setLatLng(p).setContent(esc(b.city)).addTo(clMap));
+  });
+  clMap.fitBounds(on.map(b => points[`${b.city}|${b.st}`]), {padding: [30, 30], maxZoom: 11});
+}
+// Invoca (call tracking): site + type + id + token, kept on this computer; a test reads the last 7 days of calls.
+async function loadInvoca() {
+  let st; try { st = await api("/api/invoca/status"); } catch { return; }
+  const c = st.config || {};
+  $("iv-status").innerHTML = st.connected
+    ? `Connected to <strong>${esc(c.site)}.invoca.net</strong> (${c.kind === "networks" ? "network" : "advertiser"} ${esc(c.id)}).${st.last_test ? ` Last test ${when(st.last_test)}: ${st.last_error ? `<span class="err-text">${esc(st.last_error)}</span>` : "connected"}.` : " Click Test connection."}`
+    : "Not connected yet. Fill in the site, type, ID and token, then click Save.";
+  if (st.connected) { $("iv-site").value = c.site || ""; $("iv-kind").value = c.kind || "networks"; $("iv-id").value = c.id || ""; }
+  $("iv-remove").hidden = !st.connected; $("iv-test").hidden = !st.connected;
+  const r = st.last_result;
+  $("iv-result").innerHTML = r ? `<p class="hint">${esc(r.from)} to ${esc(r.to)}: <strong>${r.calls.toLocaleString()}</strong> calls (${r.transactions.toLocaleString()} transactions).
+      ${r.signals.length ? `Signals seen: ${r.signals.map(esc).join(", ")}.` : "No signals in these calls."}</p>
+    <div class="table-wrap"><table><thead><tr><th>Office (advertiser)</th><th class="num">Calls</th></tr></thead><tbody>${r.by_advertiser.map(([a, n]) => `<tr><td>${esc(a)}</td><td class="num">${n}</td></tr>`).join("") || '<tr><td colspan="2" class="hint">No calls in the last 7 days.</td></tr>'}</tbody></table></div>
+    ${r.by_campaign.length ? `<details style="margin-top:8px"><summary class="hint">By campaign</summary><div class="table-wrap"><table><thead><tr><th>Office · campaign</th><th class="num">Calls</th></tr></thead><tbody>${r.by_campaign.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td></tr>`).join("")}</tbody></table></div></details>` : ""}` : "";
+}
+$("iv-save").onclick = async () => {
+  try { await api("/api/invoca/save", JSON.stringify({site: $("iv-site").value, kind: $("iv-kind").value, id: $("iv-id").value, token: $("iv-token").value}), {"Content-Type": "application/json"});
+        $("iv-token").value = ""; msg($("iv-msg"), "Saved. Click Test connection.", true); loadInvoca(); }
+  catch (e) { msg($("iv-msg"), e.message, false); }
+};
+$("iv-test").onclick = async () => {
+  msg($("iv-msg"), "Reading the last 7 days of calls from Invoca…", true);
+  try { const r = await api("/api/invoca/test", "{}", {"Content-Type": "application/json"});
+        msg($("iv-msg"), `Connected: ${r.result.calls.toLocaleString()} calls in the last 7 days across ${r.result.by_advertiser.length} office(s).`, true); }
+  catch (e) { msg($("iv-msg"), e.message, false); }
+  loadInvoca();
+};
+$("iv-remove").onclick = async () => {
+  if (!confirm("Disconnect Invoca and remove the token from this computer?")) return;
+  await api("/api/invoca/delete", "{}", {"Content-Type": "application/json"}); msg($("iv-msg"), "Disconnected.", true); loadInvoca();
+};
 $("dx-save").onclick = async () => {
   try { await api("/api/denticon/key", JSON.stringify({key: $("dx-key").value}), {"Content-Type": "application/json"});
         $("dx-key").value = ""; msg($("dx-msg"), "Key saved. Click Test connection.", true); loadDenticon(); }
@@ -2814,7 +2936,7 @@ $("ns-disconnect").onclick = async () => {
 // Zip Code). ZIP boundaries come from the US Census; each area is filled by the chosen measure. No street tiles:
 // a plain background with city names on top. Numbered office pins with a key, optional distance rings, an inset
 // for offices outside the main view. Leaflet loads only when the tab is opened.
-let mapData = null, mapShapes = null, mapRegion = null, mapView = null, mapCityTiles = null, mapCityLabels = [], mapLayers = [], mapLegend = null, mapInset = null, mapInsetRect = null,
+let mapData = null, mapShapes = null, mapRegion = null, mapView = null, mapCityTiles = null, mapCityLabels = [], mapFocusZip = null, mapLayers = [], mapLegend = null, mapInset = null, mapInsetRect = null,
     mapNotes = [], mapShown = [], mapMonthShown, mapZipLabels = [];   // mapMonthShown starts undefined: the first load always fits
 const RAMP = ["#fed976", "#feb24c", "#fd8d3c", "#f03b20", "#bd0026"];   // light -> dark, one hue family; the lightest is a clear yellow
 const NO_PATIENTS = "#f3f4f6", NO_FIGURE = "#9ca3af";   // ZIP with no new patients this month; ZIP with no population figure
@@ -2893,9 +3015,6 @@ async function loadMaps(month) {
   const per10k = $("mp-metric").querySelector('[value="per10k"]'); per10k.hidden = per10k.disabled = !mapData.pop_data;
   if (!mapData.pop_data && $("mp-metric").value === "per10k") $("mp-metric").value = "count";
   $("mp-month").value = mapData.month || "";
-  const cur = $("mp-office").value;
-  $("mp-office").innerHTML = `<option value="">All offices</option>` + mapData.offices.map(o => `<option value="${esc(o)}">${esc(shortName(o))}</option>`).join("");
-  if (mapData.offices.includes(cur)) $("mp-office").value = cur;
   if (!mapView) {
     // Zoom runs from "the whole office area fits" (set below, once the area is known) to neighborhood level; panning
     // can't leave the area, so there's never a screen of empty gray.
@@ -2930,12 +3049,16 @@ async function loadMaps(month) {
   const monthChanged = mapData.month !== mapMonthShown;
   mapMonthShown = mapData.month;
   renderMap(monthChanged);
+  if (mapFocusZip) {   // sent here from the Charts tab: zoom to that ZIP
+    const z = mapData.zips.find(x => x.zip === mapFocusZip); mapFocusZip = null;
+    if (z && !(mapRegion && !mapRegion.contains([z.lat, z.lon]))) mapView.setView([z.lat, z.lon], 12);
+  }
   loadMapAdmin();
 }
-["mp-office", "mp-type", "mp-metric", "mp-ring", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(id === "mp-office"));
+["mp-type", "mp-metric", "mp-ring", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(false));
 $("mp-month").onchange = () => loadMaps($("mp-month").value);
 function mapZips() {   // the ZIPs after the filters, each with its matching patients and its measures
-  const office = $("mp-office").value, type = $("mp-type").value, paidOnly = $("mp-paid").checked;
+  const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked;   // office: the report's filter
   const pins = mapData.pins.filter(p => !office || p.office === office);   // the same offices the rings are drawn for
   return mapData.zips.map(z => {
     const ps = z.patients.filter(p => (!office || p.office === office) && (!type || p.type === type) && (!paidOnly || p.collection > 0));
@@ -2979,7 +3102,7 @@ function renderMap(fit) {
   if (!mapData || !mapView) return;
   mapLayers.forEach(l => l.remove()); mapLayers = [];
   const zips = mapZips(), metric = $("mp-metric").value, ringMi = +$("mp-ring").value;
-  const officeSel = $("mp-office").value;
+  const officeSel = rpSel.office;
   const pins = mapData.pins.filter(p => !officeSel || p.office === officeSel);
   // Color classes from the data (see classBreaks); each class gets a shade of the ramp, spread out when there are fewer than 5.
   const vals = zips.map(z => measure(z, metric)).filter(v => v != null).sort((a, b) => a - b);
@@ -3093,23 +3216,6 @@ function renderMap(fit) {
   if (farN) notes.push(`${farN} patient(s) from ${far.length} ZIP(s) live outside the map area (other counties or states): ${far.map(z => z.zip).join(", ")}. They count in the totals and the table.`);
   if (metric === "per10k") { const noPop = zips.filter(z => z.per10k == null).length; if (noPop) notes.push(`${noPop} ZIP(s) have no population figure (shown gray).`); }
   mapNotes = notes; mapShown = zips; updateOutNote(); drawZipLabels(); drawCityLabels();
-  // ZIP table
-  $("mp-th-per10k").hidden = !mapData.pop_data;
-  $("mp-zips").innerHTML = zips.map((z, i) => `<tr data-i="${i}"${z.outside ? ' class="mp-far" title="Outside the map area"' : ""}><td>${z.zip}${z.outside ? ' <span class="chk-flag" title="Outside the map area (other county or state)">outside map</span>' : ""}</td><td class="num">${z.n}</td><td class="num">${money(z.total)}</td><td class="num">${money(z.total / z.n)}</td>
-      <td class="num" ${mapData.pop_data ? "" : "hidden"}>${z.per10k == null ? '<span class="none">—</span>' : z.per10k.toFixed(1)}</td>
-      <td>${z.nearest ? `${esc(shortName(z.nearest.office))} · ${z.nearest.miles.toFixed(1)} mi${ringMi && z.nearest.miles > ringMi ? ' <span class="chk-flag" title="Outside every office ring">outside</span>' : ""}` : '<span class="none">—</span>'}</td>
-      <td>${Object.entries(z.per).sort((a, b) => b[1] - a[1]).map(([o, c]) => `${esc(shortName(o))} ${c}`).join(" · ")}${z.mixed ? ' <span class="hint">(2+ offices)</span>' : ""}${z.passes ? ` <span class="chk-flag" title="Most of this ZIP's patients visit ${esc(shortName(z.topOffice))} rather than the nearer ${esc(shortName(z.nearest.office))}">not nearest</span>` : ""}</td></tr>`).join("")
-    || `<tr><td colspan="7" class="hint">No new patients for these filters.</td></tr>`;
-  $("mp-zips-foot").innerHTML = zips.length ? `<tr><td>Total</td><td class="num">${total}</td><td class="num">${money(totalAmt)}</td><td class="num">${money(totalAmt / Math.max(total, 1))}</td>
-      <td class="num" ${mapData.pop_data ? "" : "hidden"}></td><td></td><td></td></tr>` : "";
-  document.querySelectorAll("#mp-zips tr[data-i]").forEach(tr => tr.onclick = () => {
-    const z = zips[+tr.dataset.i]; if (z.outside) return;   // not on the map
-    mapView.setView([z.lat, z.lon], 12); document.querySelector(".mp-map").scrollIntoView({block: "center", behavior: "smooth"});
-  });
-  $("mp-copy").onclick = e => copyGrid([["ZIP", "New patients", "$ collected", "$ per patient", "Per 10k residents", "Nearest office", "Miles to nearest office", "Offices they visit"],
-    ...zips.map(z => [z.zip + (z.outside ? " (outside map area)" : ""), z.n, z.total.toFixed(2), (z.total / z.n).toFixed(2), z.per10k == null ? "" : z.per10k.toFixed(1),
-                      z.nearest ? shortName(z.nearest.office) : "", z.nearest ? z.nearest.miles.toFixed(1) : "",
-                      Object.entries(z.per).sort((a, b) => b[1] - a[1]).map(([o, c]) => `${shortName(o)} ${c}`).join("; ")])], "ZIP codes", e.currentTarget);
 }
 // City names, only for cities that matter: the ones an office is in, or that hold the ZIPs of the patients on show.
 // Zoomed out, only the bigger of those are named (by population); zoomed in, all of them. Names never overlap

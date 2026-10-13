@@ -355,6 +355,129 @@ def parse_patient_types(path):
     return {"office": office, "types": types}
 
 
+def parse_new_patient_appts(path):
+    """Denticon's "New Patients Through Appointment Book" (one sheet per office): for each new patient, the office,
+    the appointment date and the phone numbers' digits. Names, dates of birth and emails are never read into the
+    result; the caller hashes the digits at once and keeps only the hashes."""
+    from datetime import datetime, timedelta
+    if not str(path).lower().endswith((".xlsx", ".xlsm")):
+        raise ParseError("Upload the New Patients Through Appointment Book report as an Excel file (.xlsx)")
+    wb = np_analysis.Workbook(path)
+    offices, seen_title = [], False
+    for sheet in wb.sheets:
+        rows = wb.rows(sheet)
+        keys = sorted(rows)
+        if any("through appointment" in v.lower() for r in keys[:4] for v in rows[r].values()):
+            seen_title = True
+        office = next((re.sub(r"^office\s*:\s*", "", v, flags=re.I).strip() for r in keys[:6] for v in rows[r].values()
+                       if re.match(r"\s*office\s*:", v, re.I)), None)
+        head_r = next((r for r in keys[:12] if any(re.sub(r"\s+", "", v).lower() == "cellphone" for v in rows[r].values())), None)
+        if not office or head_r is None:
+            continue
+        head = {re.sub(r"\s+", "", v).lower(): c for c, v in rows[head_r].items()}
+        phone_cols = [(k, head[k]) for k in ("cellphone", "homephone", "workphone") if k in head]
+        date_c = head.get("apptdate")
+        patients = []
+        for r in keys:
+            if r <= head_r:
+                continue
+            row = rows[r]
+            # "310-555-0100 x: 12" = a number plus an extension: keep the number only
+            digits = lambda v: re.sub(r"\D", "", re.split(r"\s*(?:x|ext)\b", v, maxsplit=1, flags=re.I)[0])
+            phones = {k[:-5]: digits(row.get(c, "")) for k, c in phone_cols if digits(row.get(c, ""))}
+            raw = row.get(date_c, "") if date_c else ""
+            appt = None
+            if re.fullmatch(r"\d+(\.\d+)?", raw):
+                appt = (datetime(1899, 12, 30) + timedelta(days=float(raw))).date().isoformat()
+            elif (m := re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", raw)):
+                appt = f"{m.group(3)}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+            if phones or appt:
+                patients.append({"phones": phones, "appt_date": appt})
+        offices.append({"office": office, "patients": patients})
+    if not seen_title and not offices:
+        raise ParseError("This doesn't look like Denticon's New Patients Through Appointment Book report")
+    if not offices:
+        raise ParseError("No office sheets with a CellPhone column were found in this report")
+    return {"report_type": "np_appointments", "offices": offices}
+
+
+PHONE_KIND_RE = re.compile(r"\(([HCW])\)\s*:\s*([^\n(]*)", re.I)
+
+
+def _phone_digits(text):
+    """Digits of one phone number, with an extension ("x: 12") dropped."""
+    return re.sub(r"\D", "", re.split(r"\s*(?:x|ext)\b", text or "", maxsplit=1, flags=re.I)[0])
+
+
+def excel_date(raw):
+    """YYYY-MM-DD from an Excel serial or m/d/yyyy text, else None."""
+    from datetime import datetime, timedelta
+    raw = (raw or "").strip()
+    if re.fullmatch(r"\d+(\.\d+)?", raw):
+        return (datetime(1899, 12, 30) + timedelta(days=float(raw))).date().isoformat()
+    if (m := re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", raw)):
+        return f"{m.group(3)}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+    return None
+
+
+def parse_new_patients_list(path):
+    """Denticon's "New Patients List" (one office per file): Pat ID, phone digits (home/cell/work from the one
+    "(H) : … (C) : … (W) : …" cell), first visit, created-on and General/Ortho for each new patient. Names, dates of
+    birth and emails are never read into the result; the caller keeps only phone fingerprints."""
+    if not str(path).lower().endswith((".xlsx", ".xlsm")):
+        raise ParseError("Upload the New Patients List as an Excel file (.xlsx)")
+    wb = np_analysis.Workbook(path)
+    rows = wb.rows(next(iter(wb.sheets)))
+    keys = sorted(rows)
+    if not any("new patients list" in v.lower() for r in keys[:6] for v in rows[r].values()):
+        raise ParseError("This doesn't look like Denticon's New Patients List report")
+    office = next((v.strip() for r in keys[:4] for v in rows[r].values() if v.strip() and "new patients" not in v.lower() and "lastname" not in v.lower()), None)
+    head_r = next((r for r in keys[:20] if any(re.sub(r"\s+", " ", v).strip().lower() == "pat id" for v in rows[r].values())), None)
+    if not office or head_r is None:
+        raise ParseError("Couldn't find the office name or the header row (Pat ID) in this New Patients List")
+    head = {re.sub(r"\s+", " ", v).strip().lower(): c for c, v in rows[head_r].items()}
+    pid_c, phone_c = head.get("pat id"), next((c for h, c in head.items() if h.startswith("phone")), None)
+    fv_c, cr_c = head.get("first visit"), head.get("created on")
+    type_c = next((c for h, c in head.items() if "general" in h or "ortho" in h), None)
+    if not phone_c:
+        raise ParseError("This New Patients List has no Phone column")
+    patients = []
+    for r in keys:
+        if r <= head_r:
+            continue
+        row = rows[r]
+        pid = row.get(pid_c, "").split(".")[0]
+        if not pid.isdigit():
+            continue
+        cell = row.get(phone_c, "")
+        phones = {k.lower().replace("h", "home").replace("c", "cell").replace("w", "work"): _phone_digits(v) for k, v in PHONE_KIND_RE.findall(cell)}
+        if not phones and _phone_digits(cell):
+            phones = {"cell": _phone_digits(cell)}
+        phones = {k: v for k, v in phones.items() if v}
+        t = row.get(type_c, "").strip().lower() if type_c else ""
+        patients.append({"pat_id": pid, "phones": phones, "first_visit": excel_date(row.get(fv_c)) if fv_c else None,
+                         "created_on": excel_date(row.get(cr_c)) if cr_c else None, "type": "Ortho" if t.startswith("ortho") else "General" if t.startswith("gen") else ""})
+    if not patients:
+        raise ParseError("No patients found in this New Patients List")
+    return {"report_type": "new_patients_list", "office": office, "patients": patients}
+
+
+def calls_upload_kind(path):
+    """Which of the two Denticon patient reports this is: 'appointments' or 'patients' (or None)."""
+    try:
+        wb = np_analysis.Workbook(path)
+    except Exception:
+        return None
+    for sheet in list(wb.sheets)[:2]:
+        rows = wb.rows(sheet)
+        text = " ".join(v.lower() for r in sorted(rows)[:6] for v in rows[r].values())
+        if "through appointment" in text:
+            return "appointments"
+        if "new patients list" in text:
+            return "patients"
+    return None
+
+
 # ---------------------------------------------------------------- Daily Journal (Ortho)
 
 SUMMARY_FOR_RE = re.compile(r"\bSummary for\s+(.+)$")
