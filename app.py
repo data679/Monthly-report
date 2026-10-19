@@ -16,6 +16,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import subprocess
 import sys
 import tempfile
 from datetime import datetime
@@ -46,7 +47,7 @@ CSV_PATH = DATA_DIR / "office_summary.csv"
 HOST, PORT = os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", 8765))
 PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the password itself
 # Only from the computer running the app: SQL, the Google key, and the Denticon audit (admin view).
-LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
+LOCAL_ONLY_PATHS = {"/api/sql", "/api/inbox", "/api/robot", "/api/robot/pull", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
                     "/api/denticon/key", "/api/denticon/key/delete", "/api/denticon/test", "/api/denticon/offices",
                     "/api/invoca/status", "/api/invoca/save", "/api/invoca/delete", "/api/invoca/test",
                     "/api/google/notes-sheet", "/api/google/notes-sheet/delete", "/api/google/notes-sheet/write",
@@ -54,7 +55,7 @@ LOCAL_ONLY_PATHS = {"/api/sql", "/api/google/key", "/api/audit", "/api/save-lend
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
-VIEWER_PATHS = {"/", "/index.html", "/api/log", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends"}
+VIEWER_PATHS = {"/", "/index.html", "/api/log", "/api/log/days", "/api/days", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends"}
 VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
   body.viewer nav button[data-tab="sql"], body.viewer nav button[data-tab="calls"], body.viewer a[href="/api/export.csv"],
@@ -103,6 +104,76 @@ CREATE TABLE IF NOT EXISTS office_summary (
     source_file                 TEXT,
     logged_at                   TEXT NOT NULL,
     UNIQUE (office, period_from)
+);
+
+-- Day-by-day history: Executive Summary reports run for a single day (From = Thru). Any date range is the sum
+-- of its days. Uploading the same day again replaces that day. Separate from the monthly rows above.
+CREATE TABLE IF NOT EXISTS office_daily (
+    id                          INTEGER PRIMARY KEY,
+    office                      TEXT NOT NULL,
+    day                         TEXT NOT NULL,   -- YYYY-MM-DD, the one day the report was run for
+    total_collection            REAL NOT NULL,
+    insurance_collection        REAL NOT NULL,
+    new_patients                INTEGER NOT NULL,
+    np_first_visit              INTEGER NOT NULL,
+    existing_patient_referrals  INTEGER NOT NULL,
+    total_production            REAL NOT NULL,
+    source_file                 TEXT,
+    logged_at                   TEXT NOT NULL,
+    UNIQUE (office, day)
+);
+
+-- Every day a one-day Executive Summary was imported for, even one with no activity (a Sunday): an office with no
+-- row on such a day was closed (zero), while a day missing here was never pulled.
+CREATE TABLE IF NOT EXISTS daily_imports (
+    day         TEXT PRIMARY KEY,                -- YYYY-MM-DD
+    offices     INTEGER NOT NULL,                -- offices with activity in that report
+    source      TEXT,
+    logged_at   TEXT NOT NULL
+);
+
+-- New Patient Analysis counts by the day each sheet row is listed under (from the sheet's date lines), so the
+-- sheet columns can be added up for any run of days. Replaced whenever that office's month tab is read again.
+CREATE TABLE IF NOT EXISTS np_daily (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,                  -- the sheet month, YYYY-MM-01
+    day          TEXT NOT NULL,                  -- YYYY-MM-DD ('' for rows above the first date line)
+    metric       TEXT NOT NULL,
+    value        REAL NOT NULL,
+    as_of        TEXT NOT NULL,
+    PRIMARY KEY (office, period_from, day, metric)
+);
+
+-- Every day each other one-day report was imported for (an empty day too), so a month's coverage can be checked per report.
+CREATE TABLE IF NOT EXISTS daily_report_imports (
+    day         TEXT NOT NULL,
+    report      TEXT NOT NULL,                   -- referral | ortho_journal | ortho_referrals
+    logged_at   TEXT NOT NULL,
+    PRIMARY KEY (day, report)
+);
+
+-- The other Denticon reports run for a single day: NP collection, ortho collection, ortho referrals.
+CREATE TABLE IF NOT EXISTS daily_metrics (
+    id          INTEGER PRIMARY KEY,
+    office      TEXT NOT NULL,
+    day         TEXT NOT NULL,                   -- YYYY-MM-DD
+    metric      TEXT NOT NULL,
+    value       REAL NOT NULL,
+    source      TEXT,
+    logged_at   TEXT NOT NULL,
+    UNIQUE (office, day, metric)
+);
+
+-- Files picked up from data/inbox (dropped there by a person or the report robot) and what happened to them.
+CREATE TABLE IF NOT EXISTS inbox_log (
+    id           INTEGER PRIMARY KEY,
+    seen_at      TEXT NOT NULL,
+    file         TEXT NOT NULL,
+    status       TEXT NOT NULL,                  -- imported | review | failed
+    report_type  TEXT,
+    period_from  TEXT,
+    period_thru  TEXT,
+    note         TEXT
 );
 
 -- Audit trail: every row that was replaced by a newer upload or deleted.
@@ -271,6 +342,16 @@ CREATE TABLE IF NOT EXISTS invoca_calls (
     caller_fp        TEXT              -- keyed fingerprint of the caller's number (the number itself is never kept)
 );
 CREATE INDEX IF NOT EXISTS invoca_calls_date ON invoca_calls (call_date);
+CREATE INDEX IF NOT EXISTS invoca_calls_fp ON invoca_calls (caller_fp);
+CREATE INDEX IF NOT EXISTS map_patients_pat ON map_patients (pat_id, office, period_from);
+
+-- Invoca promo lines (tracking numbers / named lines) -> the office they belong to, typed in once on the Calls tab.
+CREATE TABLE IF NOT EXISTS promo_lines (
+    line        TEXT PRIMARY KEY,      -- the promo line as Invoca sends it (a description, or the number itself)
+    office      TEXT NOT NULL DEFAULT '',
+    label       TEXT NOT NULL DEFAULT '',
+    updated_at  TEXT NOT NULL
+);
 
 -- Patients' phone numbers from Denticon's "New Patients List" (Pat ID + first visit), as keyed fingerprints only:
 -- lets a caller be linked to the patient record the app already holds (first visit, $ collected).
@@ -284,6 +365,7 @@ CREATE TABLE IF NOT EXISTS patient_phones (
     loaded_at   TEXT NOT NULL,
     PRIMARY KEY (fp, pat_id, office, phone_kind)
 );
+CREATE INDEX IF NOT EXISTS patient_phones_fp ON patient_phones (fp);
 
 -- New-patient appointments from Denticon's "New Patients Through Appointment Book": only a keyed fingerprint of
 -- each phone number, the office and the appointment date, to tell which callers became new patients.
@@ -295,6 +377,7 @@ CREATE TABLE IF NOT EXISTS np_appts (
     loaded_at   TEXT NOT NULL,
     PRIMARY KEY (fp, office, appt_date, phone_kind)
 );
+CREATE INDEX IF NOT EXISTS np_appts_fp ON np_appts (fp);
 
 -- The notes sheet: a Google Sheet the app keeps a copy of the Log in (one way), with a Notes column people type in.
 CREATE TABLE IF NOT EXISTS notes_sheet (
@@ -568,6 +651,14 @@ def _setup(conn):
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
     if "caller_fp" not in {r["name"] for r in conn.execute("PRAGMA table_info(invoca_calls)")}:
         conn.execute("ALTER TABLE invoca_calls ADD COLUMN caller_fp TEXT")
+    if not conn.execute("SELECT 1 FROM daily_report_imports LIMIT 1").fetchone():
+        for kind, pat in (("referral", "%ReferralRefProdList 20__-__-__.xlsx"), ("ortho_journal", "%OrthoDailyJournal 20__-__-__.doc"),
+                          ("ortho_referrals", "%TreatPlanStatus 20__-__-__.xlsx")):
+            conn.execute("INSERT OR IGNORE INTO daily_report_imports (day, report, logged_at) SELECT period_from, ?, MAX(seen_at) "
+                         "FROM inbox_log WHERE status = 'imported' AND file LIKE ? AND period_from = period_thru GROUP BY period_from", (kind, pat))
+    # Days imported before daily_imports existed: every day with office rows counts as imported.
+    conn.execute("INSERT OR IGNORE INTO daily_imports (day, offices, source, logged_at) "
+                 "SELECT day, COUNT(*), MAX(source_file), MAX(logged_at) FROM office_daily GROUP BY day")
     conn.executescript(log_view_sql())
 
 
@@ -788,6 +879,28 @@ def save_metrics(payload):
                         [(office, period_from, as_of, str(p["pat_id"]), str(p["zip"])[:5], p.get("referral_type") or "",
                           int(p.get("visits") or 0), float(p.get("production") or 0), float(p["collection"]))
                          for p in map_rows if str(p.get("zip", "")).isdigit()])
+            by_row = (row.get("details") or {}).get("_by_row")
+            if by_row is not None:
+                newer = conn.execute("SELECT 1 FROM np_daily WHERE office = ? AND period_from = ? AND as_of > ? LIMIT 1",
+                                     (office, period_from, as_of)).fetchone()
+                if not newer:
+                    # A row without a date line above it takes the patient's first visit from the uploaded Denticon
+                    # New Patients List (matched by Pat ID, or by its key when only the key came), else the 1st.
+                    first = {}
+                    for r_ in conn.execute("SELECT pat_id, MIN(first_visit) AS fv FROM patient_phones WHERE office = ? AND "
+                                           "first_visit >= ? AND first_visit < date(?, '+2 months') GROUP BY pat_id",
+                                           (office, (date.fromisoformat(period_from) - timedelta(31)).isoformat(), period_from)):
+                        first[str(r_["pat_id"])] = r_["fv"]; first[pat_key(str(r_["pat_id"]))] = r_["fv"]
+                    who = {str(p_.get("row")): str(p_.get("pat_id") or p_.get("pk") or "") for p_ in (row.get("details") or {}).get("_patients") or []}
+                    merged = {}
+                    for rn, info in by_row.items():
+                        d = info.get("day") or first.get(who.get(str(rn), ""), "")   # '' = no date found (not in any list)
+                        for m, v in (info.get("m") or {}).items():
+                            if m in METRIC_NAMES and v:
+                                merged[(d, m)] = merged.get((d, m), 0) + float(v)
+                    conn.execute("DELETE FROM np_daily WHERE office = ? AND period_from = ?", (office, period_from))
+                    conn.executemany("INSERT INTO np_daily VALUES (?, ?, ?, ?, ?, ?)",
+                                     [(office, period_from, d, m, v, as_of) for (d, m), v in merged.items() if v])
             patients = (row.get("details") or {}).get("_patients")
             if patients is not None:
                 newer = conn.execute("SELECT as_of FROM office_metrics WHERE office = ? AND period_from = ? AND "
@@ -840,6 +953,532 @@ def save_lender_journal(payload):
             counts["replaced" if old else "added"] += 1
     conn.close()
     return counts
+
+
+# ------------------------------------------------------------------ day-by-day history and the inbox folder
+
+DAY_COLUMNS = ["total_collection", "insurance_collection", "new_patients", "np_first_visit",
+               "existing_patient_referrals", "total_production"]
+DAY_REPORT_TYPES = {"executive_summary", "referral", "ortho_journal", "ortho_referrals"}   # can be run for one day
+INBOX_DIR = DATA_DIR / "inbox"            # drop a report here and it is imported (git-ignored with data/)
+INBOX_TYPES = {".pdf", ".xlsx", ".xlsm", ".doc", ".docx"}
+INBOX_EVERY = int(os.environ.get("INBOX_SECONDS", 60))
+
+
+def _log_change(conn, now, office, day, metric, old, new, via, source):
+    if old is None or round(float(old), 2) != round(float(new), 2):
+        conn.execute("INSERT INTO change_log (changed_at, office, period_from, as_of, metric, old_value, new_value, via, source) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (now, office, day, day, metric, old, round(float(new), 2), via, source))
+
+
+def is_day_report(payload, report_type):
+    """True when the dates say one day (From = Thru) for a report that can be run per day."""
+    try:
+        frm = to_iso(payload.get("period_from"))
+        thru = to_iso(payload.get("period_thru") or payload.get("as_of"))
+    except ValueError:
+        return False
+    return frm == thru and report_type in DAY_REPORT_TYPES
+
+
+def save_daily(payload):
+    """One day's Executive Summary (the report run with From = Thru): one row per office per day. Uploading the
+    same day again replaces it. The monthly Log is not touched."""
+    day = to_iso(payload.get("period_from"))
+    if to_iso(payload.get("period_thru")) != day:
+        raise ValueError("A day-by-day report has From = Thru (the same day)")
+    check_not_future(day, "report")
+    offices = payload.get("offices") or []
+    if not offices and not payload.get("empty"):
+        raise ValueError("Nothing to save")
+    now = datetime.now().isoformat(timespec="seconds")
+    counts = {"daily": True, "day": day, "added": 0, "replaced": 0, "unchanged": 0, "skipped": [], "closed": not offices}
+    conn = db()
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO daily_imports (day, offices, source, logged_at) VALUES (?, ?, ?, ?)",
+                     (day, len(offices), payload.get("source_file"), now))
+        for o in offices:
+            office = str(o["office"]).strip()
+            npfv, refs = int(o["np_first_visit"]), int(o["existing_patient_referrals"])
+            new = {"total_collection": round(float(o["total_collection"]), 2),
+                   "insurance_collection": round(float(o["insurance_collection"]), 2),
+                   "new_patients": npfv - refs, "np_first_visit": npfv, "existing_patient_referrals": refs,
+                   "total_production": round(float(o["total_production"]), 2)}
+            existing = conn.execute("SELECT * FROM office_daily WHERE office = ? AND day = ?", (office, day)).fetchone()
+            if existing and all(round(float(existing[k]), 2) == v for k, v in new.items()):
+                counts["unchanged"] += 1
+                continue
+            for k, v in new.items():
+                _log_change(conn, now, office, day, k, existing[k] if existing else None, v, "daily report", payload.get("source_file"))
+            if existing:
+                conn.execute(f"UPDATE office_daily SET {', '.join(k + ' = ?' for k in new)}, source_file = ?, logged_at = ? WHERE id = ?",
+                             (*new.values(), payload.get("source_file"), now, existing["id"]))
+                counts["replaced"] += 1
+            else:
+                conn.execute(f"INSERT INTO office_daily (office, day, {', '.join(new)}, source_file, logged_at) "
+                             f"VALUES (?, ?, {', '.join('?' for _ in new)}, ?, ?)",
+                             (office, day, *new.values(), payload.get("source_file"), now))
+                counts["added"] += 1
+    conn.close()
+    return counts
+
+
+def save_daily_metrics(payload):
+    """One day's Referral Production Listing, ortho Daily Journal or Treatment Plan Status (From = Thru): one value
+    per office, day and metric. ZIP rows and patient details are not kept per day."""
+    day = to_iso(payload.get("as_of"))
+    if to_iso(payload.get("period_from")) != day:
+        raise ValueError("A day-by-day report has From = Thru (the same day)")
+    check_not_future(day, "report")
+    rows = payload.get("rows") or []
+    if not rows and not payload.get("empty"):
+        raise ValueError("Nothing to save")
+    now = datetime.now().isoformat(timespec="seconds")
+    counts = {"daily": True, "day": day, "added": 0, "replaced": 0, "unchanged": 0, "skipped": [], "closed": not rows}
+    conn = db()
+    with conn:
+        if payload.get("report_type"):
+            conn.execute("INSERT OR REPLACE INTO daily_report_imports (day, report, logged_at) VALUES (?, ?, ?)",
+                         (day, payload["report_type"], now))
+        for row in rows:
+            office = str(row.get("office") or "").strip()
+            if not office:
+                raise ValueError(f"Choose which office '{row.get('sheet_office')}' is")
+            for metric, value in (row.get("values") or {}).items():
+                if metric not in METRIC_NAMES or value is None:
+                    continue
+                value = round(float(value), 2)
+                existing = conn.execute("SELECT id, value FROM daily_metrics WHERE office = ? AND day = ? AND metric = ?",
+                                        (office, day, metric)).fetchone()
+                if existing and round(existing["value"], 2) == value:
+                    counts["unchanged"] += 1
+                    continue
+                _log_change(conn, now, office, day, metric, existing["value"] if existing else None, value,
+                            "daily report", payload.get("source"))
+                if existing:
+                    conn.execute("UPDATE daily_metrics SET value = ?, source = ?, logged_at = ? WHERE id = ?",
+                                 (value, payload.get("source"), now, existing["id"]))
+                    counts["replaced"] += 1
+                else:
+                    conn.execute("INSERT INTO daily_metrics (office, day, metric, value, source, logged_at) "
+                                 "VALUES (?, ?, ?, ?, ?, ?)", (office, day, metric, value, payload.get("source"), now))
+                    counts["added"] += 1
+    conn.close()
+    return counts
+
+
+DAY_REPORT_METRICS = {"referral": "np_collection", "ortho_journal": "ortho_collection", "ortho_referrals": "ortho_referrals"}
+
+
+def _covered_through(days):
+    """The last day of an unbroken run from the 1st of the month, or None (no 1st, or a gap)."""
+    if not days:
+        return None
+    days = sorted(days)
+    first = date.fromisoformat(days[0][:8] + "01")
+    have, last = set(days), None
+    d = first
+    while d.isoformat() in have:
+        last = d.isoformat(); d += timedelta(1)
+    return last if last == days[-1] else None
+
+
+def month_rows_from_days(rows):
+    """For months whose one-day reports run unbroken from the 1st through the last day pulled, the Log's month row
+    takes the Executive Summary numbers (and NP collection, ortho collection, ortho referrals, each when its own
+    report is unbroken too) from the days added up. Refunds and the New Patient Analysis columns stay as uploaded.
+    Months not pulled day by day are left alone."""
+    conn = db()
+    es_days, rep_days = {}, {}
+    for r in conn.execute("SELECT day FROM daily_imports"):
+        es_days.setdefault(r["day"][:7], []).append(r["day"])
+    for r in conn.execute("SELECT day, report FROM daily_report_imports"):
+        rep_days.setdefault((r["day"][:7], r["report"]), []).append(r["day"])
+    covered = {m: _covered_through(ds) for m, ds in es_days.items()}
+    covered = {m: t for m, t in covered.items() if t}
+    if not covered:
+        conn.close()
+        return rows
+    by_key = {(r["office"], r["period_from"][:7]): r for r in rows}
+    sums = ", ".join(f"SUM({c}) AS {c}" for c in DAY_COLUMNS)
+    for month, thru in covered.items():
+        frm = month + "-01"
+        n_days = (date.fromisoformat(thru) - date.fromisoformat(frm)).days + 1
+        es = {r["office"]: r for r in conn.execute(f"SELECT office, {sums} FROM office_daily WHERE day BETWEEN ? AND ? GROUP BY office", (frm, thru))}
+        mets = {}
+        for report, metric in DAY_REPORT_METRICS.items():
+            mt = _covered_through(rep_days.get((month, report), []))
+            if mt == thru:   # this report runs as far as the Executive Summary: use it
+                for r in conn.execute("SELECT office, SUM(value) AS v FROM daily_metrics WHERE metric = ? AND day BETWEEN ? AND ? GROUP BY office", (metric, frm, thru)):
+                    mets.setdefault(r["office"], {})[metric] = r["v"]
+                for o in es:
+                    mets.setdefault(o, {}).setdefault(metric, 0)
+        for office, e in es.items():
+            row = by_key.get((office, month))
+            if row is None:
+                row = {c: None for c in LOG_COLUMNS}
+                row.update({m + "_detail": None for m in DETAIL_METRICS})
+                row.update({"office": office, "period_from": frm})
+                rows.append(row); by_key[(office, month)] = row
+            row["period_thru"] = thru
+            for c in DAY_COLUMNS:
+                row[c] = int(e[c] or 0) if c in ("new_patients", "np_first_visit", "existing_patient_referrals") else round(e[c] or 0, 2)
+            for metric, v in mets.get(office, {}).items():
+                row[metric] = int(v) if metric in COUNT_METRICS else round(v, 2)
+                row[metric + "_as_of"] = thru
+            row["source_file"] = f"from {n_days} daily report{'s' if n_days != 1 else ''}"
+            row["from_days"] = n_days
+            tc, np_ = row["total_collection"], row["new_patients"]
+            ref, npc = row.get("refunds"), row.get("np_collection")
+            row["net_collections"] = round(tc - ref, 2) if ref is not None else None
+            row["refund_rate"] = round(ref / tc, 4) if ref is not None and tc else None
+            row["existing_pt_collection"] = round(tc - npc, 2) if npc is not None else None
+            irr = [row.get(k) for k in ("medi_cal_patients", "hmo_patients", "no_ssn_itin_patients")]
+            row["irrelevant_rate"] = round(sum(irr) / np_, 4) if np_ and all(v is not None for v in irr) else None
+            row["ortho_rate"] = round(row["ortho_referrals"] / np_, 4) if np_ and row.get("ortho_referrals") is not None else None
+            row["financing_rate"] = round(row["financing_applicants"] / np_, 4) if np_ and row.get("financing_applicants") is not None else None
+    conn.close()
+    rows.sort(key=lambda r: (r["period_thru"] or "", r["office"]), reverse=True)
+    return rows
+
+
+def log_days(frm, to):
+    """The Log for any run of days: each office's one-day reports added up, with how many of the days were there."""
+    frm, to = to_iso(frm), to_iso(to)
+    if frm > to:
+        raise ValueError("'From' is after 'To'")
+    d0, d1 = date.fromisoformat(frm), date.fromisoformat(to)
+    if (d1 - d0).days > 366:
+        raise ValueError("Pick a range of a year or less")
+    days = [(d0 + timedelta(i)).isoformat() for i in range((d1 - d0).days + 1)]
+    conn = db()
+    sums = ", ".join(f"SUM({c}) AS {c}" for c in DAY_COLUMNS)
+    es = conn.execute(f"SELECT office, COUNT(*) AS n, GROUP_CONCAT(day) AS have, {sums}, MAX(logged_at) AS logged_at "
+                      "FROM office_daily WHERE day BETWEEN ? AND ? GROUP BY office", (frm, to)).fetchall()
+    mets = conn.execute("SELECT office, metric, COUNT(*) AS n, SUM(value) AS value, GROUP_CONCAT(day) AS have "
+                        "FROM daily_metrics WHERE day BETWEEN ? AND ? GROUP BY office, metric", (frm, to)).fetchall()
+    imported = {r["day"] for r in conn.execute("SELECT day FROM daily_imports WHERE day BETWEEN ? AND ?", (frm, to))}
+    conn.close()
+    not_imported = [d for d in days if d not in imported]
+    rows = {}
+
+    def row(office):
+        if office not in rows:
+            r = {"office": office, "period_from": frm, "period_thru": to, "source_file": None, "logged_at": None,
+                 "days": 0, "missing": [], "closed": [], "metric_days": {}}
+            r.update({c: None for c in DAY_COLUMNS})
+            r.update({m: None for m in METRIC_NAMES})
+            r.update({f"{m}_as_of": None for m in METRIC_NAMES})
+            r.update({c: None for c in CALCULATED})
+            rows[office] = r
+        return rows[office]
+
+    for e in es:
+        r = row(e["office"])
+        have = set((e["have"] or "").split(","))
+        for c in DAY_COLUMNS:
+            r[c] = int(e[c]) if c in ("new_patients", "np_first_visit", "existing_patient_referrals") else round(e[c], 2)
+        r["missing"] = [d for d in days if d not in have and d not in imported]      # never pulled
+        r["closed"] = [d for d in days if d not in have and d in imported]        # pulled, office had nothing that day
+        r["days"] = len(days) - len(r["missing"])
+        r["source_file"] = f"{e['n']} daily reports" + (f", closed {len(r['closed'])} day{'s' if len(r['closed']) != 1 else ''}" if r["closed"] else "")
+        r["logged_at"] = e["logged_at"]
+    for m in mets:
+        r = row(m["office"])
+        have = set((m["have"] or "").split(","))
+        r[m["metric"]] = int(m["value"]) if m["metric"] in COUNT_METRICS else round(m["value"], 2)
+        r[f"{m['metric']}_as_of"] = to
+        r["metric_days"][m["metric"]] = {"days": m["n"], "missing": [d for d in days if d not in have]}
+    for r in rows.values():
+        if r["total_collection"] is not None and r.get("np_collection") is not None:
+            r["existing_pt_collection"] = round(r["total_collection"] - r["np_collection"], 2)
+        if r.get("ortho_referrals") is not None and r["new_patients"]:
+            r["ortho_rate"] = round(r["ortho_referrals"] / r["new_patients"], 4)
+    sheet_ok, sheet_months = add_month_columns(rows, frm, to)
+    if not sheet_ok:
+        add_np_days(rows, frm, to)
+    return {"from": frm, "to": to, "days": len(days), "not_imported": not_imported, "sheet_ok": sheet_ok, "sheet_months": sheet_months,
+            "rows": sorted(rows.values(), key=lambda r: r["office"])}
+
+
+DAY_FILLED = set(DAY_COLUMNS) | set(DAY_REPORT_METRICS.values())
+
+
+def add_np_days(rows, frm, to):
+    """For a Days range that isn't whole months: the New Patient Analysis columns added up from the sheet rows
+    listed under those days (np_daily). Refunds have no days, so they stay monthly. Rates are worked out again."""
+    conn = db()
+    got = conn.execute("SELECT office, metric, SUM(value) AS v, MAX(as_of) AS a FROM np_daily WHERE day BETWEEN ? AND ? "
+                       "GROUP BY office, metric", (frm, to)).fetchall()
+    months = {r["m"] for r in conn.execute("SELECT DISTINCT substr(period_from, 1, 7) AS m FROM np_daily")}
+    undated = {r["office"]: int(r["n"]) for r in conn.execute(
+        "SELECT office, SUM(value) AS n FROM np_daily WHERE day = '' AND metric = 'np_rows' AND period_from BETWEEN ? AND ? GROUP BY office",
+        (frm[:8] + "01", to[:8] + "01"))}
+    conn.close()
+    for office, n in undated.items():
+        if office in rows:
+            rows[office]["np_undated"] = n
+    need = {frm[:7], to[:7]}
+    for r in got:
+        row = rows.get(r["office"])
+        if row is None or r["metric"] in DAY_FILLED:
+            continue
+        row[r["metric"]] = int(r["v"]) if r["metric"] in COUNT_METRICS else round(r["v"], 2)
+        row[r["metric"] + "_as_of"] = r["a"]
+    if need <= months:   # the sheets were read by day for these months: a missing count means none that range
+        for row in rows.values():
+            for m in METRIC_NAMES:
+                if m not in DAY_FILLED and m != "refunds" and row.get(m) is None:
+                    row[m] = 0
+    for row in rows.values():
+        row.update(_calculated(row))
+
+
+def _calculated(values):
+    """The Log's calculated columns for one row of values, with the same SQL expressions the monthly_log view uses."""
+    s_cols = ["total_collection", "insurance_collection", "new_patients", "np_first_visit", "existing_patient_referrals", "total_production"]
+    s_sel = ", ".join(f"? AS {c}" for c in s_cols)
+    m_sel = ", ".join(f"? AS {m}" for m in METRIC_NAMES)
+    exprs = ", ".join(f"{e} AS {n}" for n, e in CALCULATED.items())
+    conn = sqlite3.connect(":memory:"); conn.row_factory = sqlite3.Row
+    r = conn.execute(f"SELECT {exprs} FROM (SELECT {s_sel}) s, (SELECT {m_sel}) m",
+                     [values.get(c) for c in s_cols] + [values.get(m) for m in METRIC_NAMES]).fetchone()
+    conn.close()
+    return dict(r)
+
+
+def add_month_columns(rows, frm, to):
+    """The columns that only come once a month (refunds, the New Patient Analysis sheets, and the rates built on
+    them) for a Days range that covers whole months to date: every month it touches from the 1st through that
+    month's latest data. Then the Days view reads exactly like the Month view. Otherwise they stay empty."""
+    months = sorted({frm[:7], to[:7]} | {f"{y:04d}-{m:02d}" for y in range(int(frm[:4]), int(to[:4]) + 1) for m in range(1, 13)
+                                         if frm[:7] <= f"{y:04d}-{m:02d}" <= to[:7]})
+    conn = db()
+    log = [dict(r) for r in conn.execute(f"SELECT {', '.join(LOG_COLUMNS + [m + '_detail' for m in DETAIL_METRICS])} FROM monthly_log "
+                                         f"WHERE substr(period_from, 1, 7) BETWEEN ? AND ?", (months[0], months[-1]))]
+    conn.close()
+    log = [r for r in month_rows_from_days(log) if r["period_from"][:7] in months]   # it can add rows for other months
+    thru = {}
+    for r in log:
+        m = r["period_from"][:7]
+        thru[m] = max(thru.get(m, ""), r["period_thru"] or "")
+    ok = all(m in thru and frm <= m + "-01" and to >= thru[m] for m in months)
+    if not ok:
+        return False, []
+    single = len(months) == 1
+    for office, r in rows.items():
+        mine = [x for x in log if x["office"] == office]
+        for metric in METRIC_NAMES:
+            if metric in DAY_FILLED:
+                continue
+            vals = [x.get(metric) for x in mine if x.get(metric) is not None]
+            if vals:
+                r[metric] = round(sum(vals), 2) if metric not in COUNT_METRICS else int(sum(vals))
+                r[metric + "_as_of"] = max((x.get(metric + "_as_of") or "") for x in mine) or None
+            if single and mine:
+                if metric in DETAIL_METRICS:
+                    r[metric + "_detail"] = mine[0].get(metric + "_detail")
+        calc = _calculated(r)
+        for k, v in calc.items():
+            r[k] = v
+    return True, months
+
+
+def days_info():
+    """Which days have a one-day report: {day: offices with activity} (0 = a closed day), plus today's date,
+    for the day pickers (blue = pick me, gray = nothing there, off = hasn't happened)."""
+    conn = db()
+    days = {r["day"]: r["offices"] for r in conn.execute("SELECT day, offices FROM daily_imports")}
+    conn.close()
+    return {"days": days, "today": date.today().isoformat()}
+
+
+DATE_IN_NAME = [re.compile(r"(\d{4})-(\d{2})-(\d{2})"), re.compile(r"(\d{1,2})-(\d{1,2})-(\d{4})"),
+                re.compile(r"(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)")]
+
+
+def dates_in_name(name):
+    """Days written in a file name: 2026-10-14, 10-14-2026 or 20261014 (an Excel export carries no dates)."""
+    stem = Path(name).stem.replace("_", "-").replace(".", "-").replace("/", "-")
+    found = []
+    for i, rx in enumerate(DATE_IN_NAME):
+        for m in rx.finditer(stem):
+            y, mo, d = (m.group(3), m.group(1), m.group(2)) if i == 1 else (m.group(1), m.group(2), m.group(3))
+            try:
+                found.append(date(int(y), int(mo), int(d)).isoformat())
+            except ValueError:
+                pass
+        if found:
+            break
+    return list(dict.fromkeys(found))
+
+
+def import_report_file(path, name):
+    """Parse a report file and save it the way the Upload tab would: a one-day report (From = Thru) to the
+    day-by-day history, a month-to-date report to the monthly Log. Returns (report_type, from, thru, result)."""
+    result = parse_report(str(path), name)
+    period = result.get("period") or {}
+    frm = to_iso(period["from"]) if period.get("from") else None
+    thru = to_iso(period["thru"]) if period.get("thru") else None
+    if not (frm and thru):
+        found = dates_in_name(name)
+        if len(found) >= 2:
+            frm, thru = found[0], found[1]
+        elif found:
+            frm = thru = found[0]
+        else:
+            raise ValueError("No dates: a PDF carries them; for an Excel file put the day in the file name, "
+                             "e.g. 'Executive Summary 2026-10-14.xlsx'")
+    rtype = result["report_type"]
+    if rtype == "executive_summary":
+        payload = {"period_from": frm, "period_thru": thru, "source_file": name, "offices": result["offices"],
+                   "empty": bool(result.get("empty"))}
+        saved = save_daily(payload) if frm == thru else save_rows(payload)
+    elif rtype == "lender_journal":
+        saved = save_lender_journal({"period_from": frm, "period_thru": thru, "source": name,
+                                     "offices": [{"office": o["office"], "by_lender": o.get("by_lender"),
+                                                  "_patients": o.get("_patients")} for o in result["offices"]]})
+    else:
+        rows = [{"sheet_office": o["office"], "office": o["office"],
+                 "values": {k: v for k, v in o.items() if k in METRIC_NAMES}, "details": o.get("details")}
+                for o in result["offices"]]
+        payload = {"as_of": thru, "period_from": frm, "source": name, "from_report": True, "report_type": rtype,
+                   "via": "inbox", "rows": rows, "empty": bool(result.get("empty"))}
+        saved = save_daily_metrics(payload) if is_day_report(payload, rtype) else save_metrics(payload)
+    return rtype, frm, thru, saved
+
+
+def inbox_scan():
+    """Import every report file waiting in data/inbox, then move it to done / review / failed."""
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    for sub in ("done", "failed", "review"):
+        (INBOX_DIR / sub).mkdir(exist_ok=True)
+    for path in sorted(INBOX_DIR.iterdir()):
+        if not path.is_file() or path.suffix.lower() not in INBOX_TYPES or path.name.startswith((".", "~$")):
+            continue
+        if time.time() - path.stat().st_mtime < 15:   # may still be downloading
+            continue
+        rtype = frm = thru = None
+        try:
+            rtype, frm, thru, saved = import_report_file(path, path.name)
+            if saved.get("needs_review"):
+                status = "review"
+                note = ("Some numbers are lower than the Log has, or a same-date report changed them. "
+                        "Upload it on the Upload tab to confirm.")
+            else:
+                parts = [f"{saved[k]} {k}" for k in ("added", "replaced", "unchanged") if saved.get(k)]
+                if saved.get("closed"):
+                    parts.append("no activity that day (recorded as a closed day)")
+                status = "imported"
+                skipped = saved.get("skipped") or []
+                note = (", ".join(parts) or "nothing changed") + (f"; {len(skipped)} skipped (the Log already has a later report)" if skipped else "")
+        except Exception as e:
+            status, note = "failed", str(e) or type(e).__name__
+        folder = {"imported": "done", "review": "review", "failed": "failed"}[status]
+        dest = INBOX_DIR / folder / f"{datetime.now():%Y%m%d-%H%M%S} {path.name}"
+        try:
+            path.replace(dest)
+            if status != "imported":
+                dest.with_name(dest.name + ".txt").write_text(note + "\n")
+        except OSError as e:
+            note += f" (could not move the file: {e})"
+        conn = db()
+        with conn:
+            conn.execute("INSERT INTO inbox_log (seen_at, file, status, report_type, period_from, period_thru, note) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (datetime.now().isoformat(timespec="seconds"), path.name, status, rtype, frm, thru, note))
+        conn.close()
+        print(f"{datetime.now():%H:%M} Inbox {path.name}: {status}. {note}")
+
+
+def inbox_loop():
+    while True:
+        try:
+            inbox_scan()
+        except Exception as e:   # never stop the app over the inbox
+            print(f"{datetime.now():%H:%M} Inbox check failed: {e}")
+        time.sleep(INBOX_EVERY)
+
+
+# ------------------------------------------------------------------ the Denticon report robot (tools/denticon_robot.js)
+
+ROBOT_SCRIPT = ROOT / "tools" / "denticon_robot.js"
+ROBOT_STATUS = DATA_DIR / "denticon-robot.json"
+ROBOT_LOG = DATA_DIR / "denticon-robot.log"
+_robot = {"proc": None, "started": None}
+
+
+def _robot_serving():
+    """True when a standing robot window (tools/denticon_robot.js serve) is running on this computer."""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ")
+        except OSError:
+            continue
+        if b"denticon_robot.js" in cmd and b" serve" in cmd:
+            return True
+    return False
+
+
+def robot_status():
+    """What the robot is doing: the status file it writes plus whether its process is still running."""
+    st = _load_json_file(ROBOT_STATUS) or {}
+    proc = _robot["proc"]
+    running = proc is not None and proc.poll() is None
+    if not running and st.get("state") in ("running", "waiting_login") and proc is not None:
+        st["state"] = "error"; st["message"] = st.get("message") or "The robot stopped before finishing."
+    serving = _robot_serving()
+    if serving and st.get("state") in ("running", "waiting_login"):
+        running = True
+    return {"running": running, "serving": serving, "started": _robot["started"], "available": ROBOT_SCRIPT.exists(), **st}
+
+
+def robot_pull(frm, to, report="exec"):
+    """Start the robot for a run of days (From..To) and report(s): exec (Executive Summary), referral (Referral
+    Production Listing) or both. It opens its own Chrome window on this computer; when Denticon asks for a login,
+    the user logs in there and the robot carries on. Files land in data/inbox."""
+    frm, to = to_iso(frm), to_iso(to)
+    if report not in ("exec", "referral", "ortho", "txplan", "both", "all"):
+        raise ValueError("Pick which report to pull")
+    if frm > to:
+        raise ValueError("'From' is after 'To'")
+    if (date.fromisoformat(to) - date.fromisoformat(frm)).days > 62:
+        raise ValueError("Pull two months at most at a time")
+    check_not_future(to, "To")
+    proc = _robot["proc"]
+    if proc is not None and proc.poll() is None:
+        raise ValueError("The robot is already running; wait for it to finish")
+    st = _load_json_file(ROBOT_STATUS) or {}
+    if st.get("state") in ("running", "waiting_login") and _robot_serving():
+        raise ValueError("The robot is already running; wait for it to finish")
+    if _robot_serving():   # the standing robot window takes the job (one login serves many pulls)
+        (DATA_DIR / "denticon-robot.report").write_text(report + "\n")
+        (DATA_DIR / "denticon-robot.cmd").write_text(f"pull {frm} {to}\n")
+        _write_json_file(ROBOT_STATUS, {**st, "state": "running", "message": "Starting in the robot window.", "days": [], "failed": [],
+                                        "started_at": datetime.now().isoformat(timespec="seconds")})
+        return robot_status()
+    env = dict(os.environ)
+    env.setdefault("DISPLAY", ":0")
+    env.setdefault("XAUTHORITY", str(Path.home() / ".Xauthority"))
+    log = open(ROBOT_LOG, "a")
+    log.write(f"\n--- {datetime.now():%Y-%m-%d %H:%M} pull {frm} to {to}\n"); log.flush()
+    _robot["proc"] = subprocess.Popen(["node", str(ROBOT_SCRIPT), "pull", "--from", frm, "--to", to, "--report", report, "--headed"],
+                                      cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT)
+    _robot["started"] = datetime.now().isoformat(timespec="seconds")
+    _write_json_file(ROBOT_STATUS, {"state": "running", "message": "Starting the Denticon window.", "days": [], "failed": [],
+                                    "started_at": _robot["started"], "updated_at": _robot["started"]})
+    return robot_status()
+
+
+def inbox_info():
+    conn = db()
+    recent = [dict(r) for r in conn.execute("SELECT * FROM inbox_log ORDER BY id DESC LIMIT 40")]
+    conn.close()
+    pending = sorted(p.name for p in INBOX_DIR.iterdir() if p.is_file() and p.suffix.lower() in INBOX_TYPES) \
+        if INBOX_DIR.exists() else []
+    return {"folder": str(INBOX_DIR), "pending": pending, "recent": recent, "every_seconds": INBOX_EVERY}
 
 
 # Sheet prime lender columns ("Care Credit", "Patient FI") by squeezed name -> the journal's lender names.
@@ -1573,8 +2212,9 @@ def pull_invoca_calls(day):
     if d > date.today():
         raise ValueError("That day hasn't happened yet.")
     transactions = invoca.all_transactions(day, day)
-    n = store_invoca_calls(day, transactions)
-    return {"date": day, "calls": n, "transactions": len(transactions), **calls_info(day)}
+    store_invoca_calls(day, transactions)
+    info = calls_info(day)
+    return {"date": day, "calls": len(info["rows"]), "transactions": len(transactions), **info}
 
 
 def pull_invoca_range(frm, to):
@@ -1593,6 +2233,53 @@ def pull_invoca_range(frm, to):
     return {"from": frm, "to": to, "transactions": len(transactions), "days": stored}
 
 
+def promo_line_map(conn):
+    """{line: {office, label}} as typed in on the Calls tab."""
+    return {r["line"]: {"office": r["office"], "label": r["label"]} for r in conn.execute("SELECT line, office, label FROM promo_lines")}
+
+
+def promo_lines_info():
+    """Every promo line seen in the pulled calls, with its call count, last call and the office/label given to it."""
+    conn = db()
+    m = promo_line_map(conn)
+    lines = [{"line": r["line"], "calls": r["n"], "last": r["last"], **m.get(r["line"], {"office": "", "label": ""})}
+             for r in conn.execute("SELECT COALESCE(promo_line, '') AS line, COUNT(*) AS n, MAX(call_date) AS last FROM invoca_calls GROUP BY 1 ORDER BY n DESC")]
+    offices = known_offices(conn)
+    short = office_short_names(conn)
+    conn.close()
+    mapped = sum(1 for l in lines if l["office"])
+    return {"lines": lines, "offices": offices, "short": short, "mapped": mapped}
+
+
+def set_promo_line(c):
+    line = str(c.get("line") or "")
+    office, label = str(c.get("office") or "").strip(), str(c.get("label") or "").strip()[:80]
+    conn = db()
+    if office and office not in known_offices(conn):
+        conn.close()
+        raise ValueError("Pick one of the Log's offices")
+    with conn:
+        conn.execute("INSERT INTO promo_lines (line, office, label, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(line) DO UPDATE SET office = excluded.office, label = excluded.label, updated_at = excluded.updated_at",
+                     (line, office, label, datetime.now().isoformat(timespec="seconds")))
+    conn.close()
+    return {"line": line, "office": office, "label": label}
+
+
+def pull_invoca_month(month):
+    """Backfill a whole month (up to today) in one paged fetch."""
+    from datetime import date
+    try:
+        y, mo = (int(x) for x in str(month).split("-")[:2])
+        first = date(y, mo, 1)
+    except (TypeError, ValueError):
+        raise ValueError("Pick a month (YYYY-MM).")
+    if first > date.today():
+        raise ValueError("That month hasn't started yet.")
+    last = min(date(y + (mo == 12), (mo % 12) + 1, 1) - __import__("datetime").timedelta(days=1), date.today())
+    r = pull_invoca_range(first.isoformat(), last.isoformat())
+    return {**r, "month": month, "calls": sum(r["days"].values()), "day_count": len(r["days"])}
+
+
 def calls_funnel(month=None, office=""):
     """Calls in a month -> callers who became new patients (a loaded patient list says their first visit was on or
     after the call) -> who started treatment (paid anything in their first-visit month) -> $ collected. Each
@@ -1606,8 +2293,28 @@ def calls_funnel(month=None, office=""):
         conn.close()
         return {"month": None, "months": [], "lists": lists, "offices": [l["office"] for l in lists]}
     lo, hi = f"{month}-01", f"{month}-31"
-    calls = [dict(r) for r in conn.execute("SELECT transaction_id, call_date, caller_fp, connect_duration, promo_line, campaign FROM invoca_calls "
-                                           "WHERE call_date BETWEEN ? AND ? ORDER BY call_date, start_utc", (lo, hi))]
+    pmap = promo_line_map(conn)
+    calls = merge_call_legs([dict(r) for r in conn.execute("SELECT transaction_id, complete_call_id, call_date, caller_fp, connect_duration, duration, promo_line, campaign, signals, custom FROM invoca_calls "
+                                                            "WHERE call_date BETWEEN ? AND ? ORDER BY call_date, start_utc", (lo, hi))])
+    answered_rule = answered_flag(calls)
+    canon = {}   # the same value in different spellings ("paid search" / "Paid Search") counts as one
+    def tidy(v):
+        v = str(v or "").strip()
+        if not v:
+            return "(not set)"
+        return canon.setdefault(v.lower(), v)
+    for c in calls:
+        pm = pmap.get(c["promo_line"] or "", {})
+        c["office"] = pm.get("office") or "(not mapped)"
+        c["promo_line"] = pm.get("label") or c["promo_line"]
+        cus = c.get("custom") or {}
+        c["channel"] = tidy(cus.get("marketing_channel"))     # Invoca's marketing channel: Paid Search, Organic Search, ...
+        c["medium"] = tidy(cus.get("utm_medium"))             # Google PPC, Organic Search, paid search, direct, ...
+        c["source"] = tidy(cus.get("utm_source"))             # Google Ad Call Extension, Google My Business, Yelp, ...
+        c["location"] = tidy(cus.get("location"))             # the office location Invoca routed the call to
+    office_calls = office and any(v["office"] == office for v in pmap.values())   # lines are mapped to this office: filter calls too
+    if office_calls:
+        calls = [c for c in calls if c["office"] == office]
     # Patients reached: for every caller fingerprint, the patient records (first visit on/after the call) and appointments.
     fps = sorted({c["caller_fp"] for c in calls if c["caller_fp"]})
     pats, appts = {}, {}
@@ -1622,15 +2329,16 @@ def calls_funnel(month=None, office=""):
             appts.setdefault(r["fp"], []).append(dict(r))
     conn.close()
     seen_pat, seen_booked = set(), set()
-    groups = {"promo_line": {}, "campaign": {}}
+    GROUPS = ("promo_line", "campaign", "office", "channel", "medium", "source", "location")
+    groups = {g: {} for g in GROUPS}
     def bump(c, key, **inc):
-        for g in ("promo_line", "campaign"):
+        for g in GROUPS:
             d = groups[g].setdefault(c[g] or "(none)", {"calls": 0, "answered": 0, "patients": 0, "started": 0, "collected": 0.0, "booked": 0})
             for k, v in inc.items():
                 d[k] += v
     total = {"calls": 0, "answered": 0, "callers": len(fps), "patients": 0, "started": 0, "collected": 0.0, "booked": 0}
     for c in calls:
-        answered = 1 if (c["connect_duration"] or 0) > 0 else 0
+        answered = 1 if c["answered"] else 0
         total["calls"] += 1; total["answered"] += answered
         bump(c, None, calls=1, answered=answered)
         fp = c["caller_fp"]
@@ -1650,14 +2358,60 @@ def calls_funnel(month=None, office=""):
     total["collected"] = round(total["collected"], 2)
     out_groups = {g: sorted(({"name": k, **{kk: (round(vv, 2) if kk == "collected" else vv) for kk, vv in v.items()}} for k, v in d.items()),
                             key=lambda x: (-x["patients"], -x["calls"])) for g, d in groups.items()}
-    return {"month": month, "months": months, "office": office, "lists": lists, "offices": [l["office"] for l in lists], "total": total, "by": out_groups}
+    mapped_offices = sorted({v["office"] for v in pmap.values() if v["office"]})
+    return {"month": month, "months": months, "office": office, "office_calls": bool(office_calls), "lists": lists,
+            "offices": sorted({l["office"] for l in lists} | set(mapped_offices)), "mapped_lines": sum(1 for v in pmap.values() if v["office"]), "total": total, "by": out_groups,
+            "answered_rule": answered_rule}
+
+
+AGENT_SIGNAL = "Answered by Agent"   # Invoca's own "a person picked up" signal; its dashboard counts answered calls by it
+
+
+def merge_call_legs(rows):
+    """One record per call. Invoca sends one transaction per leg (an overflow or transfer re-reports the same call
+    under the same complete_call_id), and its own dashboard counts the call once. The first leg gives the time,
+    promo line and campaign (what the caller dialled); durations are the longest leg's; signals are combined."""
+    by, order = {}, []
+    for r in rows:
+        key = r.get("complete_call_id") or r["transaction_id"]
+        sig = set(json.loads(r["signals"] or "[]")) if isinstance(r.get("signals"), str) else set(r.get("signals") or [])
+        cus = json.loads(r["custom"] or "{}") if isinstance(r.get("custom"), str) else dict(r.get("custom") or {})
+        if key not in by:
+            m = by[key] = dict(r); m["legs"] = 1; m["_sig"] = sig; m["_cus"] = cus; order.append(key)
+            continue
+        m = by[key]; m["legs"] += 1
+        m["duration"] = max(m.get("duration") or 0, r.get("duration") or 0)
+        m["connect_duration"] = max(m.get("connect_duration") or 0, r.get("connect_duration") or 0)
+        m["_sig"] |= sig; m["_cus"] = {**cus, **m["_cus"]}
+        if not m.get("caller_fp") and r.get("caller_fp"):
+            m["caller_fp"] = r["caller_fp"]
+        if not m.get("result") and r.get("result"):
+            m["result"] = r["result"]
+    out = []
+    for k in order:
+        m = by[k]; m["signals"] = sorted(m.pop("_sig")); m["custom"] = m.pop("_cus"); out.append(m)
+    return out
+
+
+def answered_flag(calls):
+    """Mark each merged call answered: by Invoca's own signal when the account has it, else by any connected time."""
+    uses_signal = any(AGENT_SIGNAL in c["signals"] for c in calls)
+    for c in calls:
+        c["answered"] = (AGENT_SIGNAL in c["signals"]) if uses_signal else ((c.get("connect_duration") or 0) > 0)
+    return "signal" if uses_signal else "connect"
 
 
 def calls_info(day=None):
     """The calls kept for a day, plus which days have been pulled."""
     conn = db()
-    days = [dict(r) for r in conn.execute("SELECT call_date AS day, COUNT(*) AS n, MAX(pulled_at) AS pulled_at FROM invoca_calls GROUP BY call_date ORDER BY call_date DESC")]
-    rows = [dict(r) for r in conn.execute("SELECT * FROM invoca_calls WHERE call_date = ? ORDER BY start_utc, start_local", (day,))] if day else []
+    days = [dict(r) for r in conn.execute("SELECT call_date AS day, COUNT(DISTINCT COALESCE(complete_call_id, transaction_id)) AS n, MAX(pulled_at) AS pulled_at FROM invoca_calls GROUP BY call_date ORDER BY call_date DESC")]
+    rows = merge_call_legs([dict(r) for r in conn.execute("SELECT * FROM invoca_calls WHERE call_date = ? ORDER BY start_utc, start_local", (day,))]) if day else []
+    answered_rule = answered_flag(rows)
+    pmap = promo_line_map(conn)
+    for r in rows:
+        pm = pmap.get(r["promo_line"] or "", {})
+        r["office"] = pm.get("office") or ""
+        r["promo_label"] = pm.get("label") or ""
     # Which callers became patients (by phone fingerprint): a patient record whose first visit is on or after the
     # call = came in (with the $ collected that month from the Referral listing); a new-patient appointment on or
     # after the call = booked; an earlier first visit = an existing patient.
@@ -1673,7 +2427,6 @@ def calls_info(day=None):
     appts_known = conn.execute("SELECT COUNT(DISTINCT fp) FROM np_appts").fetchone()[0] + conn.execute("SELECT COUNT(DISTINCT fp) FROM patient_phones").fetchone()[0]
     conn.close()
     for r in rows:
-        r["signals"] = json.loads(r["signals"] or "[]"); r["custom"] = json.loads(r["custom"] or "{}")
         fp = r.pop("caller_fp", "") or ""
         phits, hits = pats.get(fp, []), appts.get(fp, [])
         visited = sorted([h for h in phits if h["first_visit"] and h["first_visit"] >= day], key=lambda h: h["first_visit"])
@@ -1690,7 +2443,9 @@ def calls_info(day=None):
         key = f"{c}|{st}"
         if c and key not in points and st.upper() in ("CA", "CALIFORNIA", "") and c.lower() in cities:
             points[key] = cities[c.lower()]
-    return {"date": day, "rows": rows, "days": days, "connected": invoca.exists(), "points": points, "appts_known": appts_known}
+    return {"date": day, "rows": rows, "days": days, "connected": invoca.exists(), "points": points, "appts_known": appts_known,
+            "mapped_lines": sum(1 for v in pmap.values() if v["office"]), "answered_rule": answered_rule,
+            "legs": sum(r["legs"] for r in rows)}
 
 
 def invoca_test():
@@ -2441,7 +3196,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(401, {"error": "Password required"},
                            extra={"WWW-Authenticate": 'Basic realm="Monthly report (view only)", charset="UTF-8"'})
                 return True
-            if self.command != "GET" or self.path not in VIEWER_PATHS:
+            if self.command != "GET" or self.path.split("?", 1)[0] not in VIEWER_PATHS:
                 self._send(403, {"error": "This is a view-only link."})
                 return True
         elif APP_PASSWORD and not app_password_ok(auth, given):
@@ -2449,7 +3204,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, {"error": "Password required"},
                        extra={"WWW-Authenticate": 'Basic realm="Monthly report", charset="UTF-8"'})
             return True
-        if self.path in LOCAL_ONLY_PATHS and not self._on_this_computer():
+        if self.path.split("?", 1)[0] in LOCAL_ONLY_PATHS and not self._on_this_computer():
             self._send(403, {"error": "For safety, this only works on the computer that runs the app."})
             return True
         return False
@@ -2478,6 +3233,18 @@ class Handler(BaseHTTPRequestHandler):
                 page = page.replace(b"</head>", VIEWER_HTML.encode() + b"</head>", 1).replace(
                     b'<body class="hide-select">', b'<body class="hide-select viewer">', 1)
             self._send(200, page, "text/html; charset=utf-8", {} if VIEWER_PASSWORD else {"Cache-Control": "no-store"})
+        elif self.path.startswith("/api/log/days"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                self._send(200, log_days((q.get("from") or [""])[0], (q.get("to") or [""])[0]))
+            except ValueError as e:
+                self._send(400, {"error": str(e)})
+        elif self.path == "/api/inbox":
+            self._send(200, inbox_info())
+        elif self.path == "/api/days":
+            self._send(200, days_info())
+        elif self.path == "/api/robot":
+            self._send(200, robot_status())
         elif self.path == "/api/log":
             conn = db()
             rows = conn.execute(
@@ -2485,7 +3252,7 @@ class Handler(BaseHTTPRequestHandler):
                 "FROM monthly_log ORDER BY period_thru DESC, office"
             ).fetchall()
             conn.close()
-            self._send(200, [dict(r) for r in rows])
+            self._send(200, month_rows_from_days([dict(r) for r in rows]))
         elif self.path == "/api/benchmarks":
             conn = db()
             rows = [dict(r) for r in conn.execute("SELECT * FROM benchmarks ORDER BY metric")]
@@ -2504,6 +3271,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, denticon_status())
         elif self.path == "/api/invoca/status":
             self._send(200, invoca_status())
+        elif self.path == "/api/calls/lines":
+            self._send(200, promo_lines_info())
         elif self.path.startswith("/api/calls/funnel"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, calls_funnel((q.get("month") or [None])[0], (q.get("office") or [""])[0]))
@@ -2549,7 +3318,8 @@ class Handler(BaseHTTPRequestHandler):
                 result["source_file"] = filename
                 self._send(200, scrub_result(result))
             elif self.path == "/api/save":
-                self._send(200, save_rows(json.loads(self._body())))
+                p = json.loads(self._body())
+                self._send(200, save_daily(p) if is_day_report(p, "executive_summary") else save_rows(p))
             elif self.path == "/api/parse-paste":
                 self._send(200, read_paste(json.loads(self._body()).get("text", "")))
             elif self.path == "/api/maps/patient-types":
@@ -2593,6 +3363,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, invoca_test())
             elif self.path == "/api/calls/pull":
                 self._send(200, pull_invoca_calls(json.loads(self._body()).get("date")))
+            elif self.path == "/api/calls/pull-month":
+                self._send(200, pull_invoca_month(json.loads(self._body()).get("month")))
+            elif self.path == "/api/calls/lines":
+                self._send(200, set_promo_line(json.loads(self._body())))
             elif self.path == "/api/calls/upload":
                 filename = unquote(self.headers.get("X-Filename", "upload.xlsx"))
                 with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix.lower(), delete=False) as tmp:
@@ -2603,10 +3377,15 @@ class Handler(BaseHTTPRequestHandler):
                     os.unlink(tmp.name)
             elif self.path == "/api/denticon/offices":
                 self._send(200, set_denticon_office(json.loads(self._body())))
+            elif self.path == "/api/robot/pull":
+                b = json.loads(self._body())
+                self._send(200, robot_pull(b.get("from"), b.get("to"), b.get("report") or "exec"))
             elif self.path == "/api/save-lender-journal":
                 self._send(200, save_lender_journal(json.loads(self._body())))
             elif self.path == "/api/save-metrics":
-                self._send(200, save_metrics(json.loads(self._body())))
+                p = json.loads(self._body())
+                daily = p.get("from_report") and is_day_report(p, p.get("report_type"))
+                self._send(200, save_daily_metrics(p) if daily else save_metrics(p))
             elif self.path == "/api/delete":
                 self._send(200, {"deleted": delete_rows(json.loads(self._body())["keys"])})
             elif self.path == "/api/benchmarks":
@@ -2663,6 +3442,7 @@ if __name__ == "__main__":
         threading.Thread(target=sync_loop, daemon=True).start()
         threading.Thread(target=backup_loop, daemon=True).start()
         threading.Thread(target=notes_sheet_loop, daemon=True).start()
+        threading.Thread(target=inbox_loop, daemon=True).start()
     print(f"Executive Summary logger running at http://{HOST}:{PORT}  (Ctrl+C to stop)")
     if HOST == "0.0.0.0":
         print(f"On the office network: http://{socket.gethostname()}.local:{PORT}  (password required)")

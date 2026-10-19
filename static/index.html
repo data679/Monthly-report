@@ -3,69 +3,168 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Executive Summary Logger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b5bdb'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='-apple-system,Segoe UI,Roboto,Arial,sans-serif' font-size='14' font-weight='700' fill='%23fff'%3EES%3C/text%3E%3C/svg%3E">
 <style>
+  /* Tokens: a cool slate canvas with white cards, a committed navy sidebar, one indigo accent, state colours that do jobs. */
   :root {
-    --bg: #f6f7f9; --surface: #ffffff; --text: #1b1f24; --muted: #5f6b7a;
-    --border: #dde2e8; --accent: #2563eb; --accent-text: #ffffff;
-    --good: #15803d; --bad: #b91c1c; --hover: #f0f3f7; --code-bg: #f3f5f8;
+    --bg: #f4f6f9; --surface: #ffffff; --surface-2: #f8fafc; --text: #1a1f36; --muted: #5b6678; --faint: #687283;
+    --border: #e2e7ee; --border-strong: #c9d2dd; --hover: #f0f3f7; --code-bg: #f3f5f8;
+    --accent: #3b5bdb; --accent-hover: #3350c4; --accent-soft: #e8edfb; --accent-ink: #2b45b3; --accent-text: #ffffff;
+    --good: #177245; --good-soft: #e3f4ea; --warn: #a24e0b; --warn-soft: #fcf0e2; --bad: #b92f23; --bad-soft: #fcebe9;
+    --series: var(--accent); --series-dim: #c7d0f3;
+    --side: #121a2d; --side-2: #1b2540; --side-active: #27345a; --side-text: #c4ccdd; --side-muted: #7f8aa4;
+    --shadow: 0 12px 32px -12px rgba(16, 24, 40, .30), 0 2px 6px rgba(16, 24, 40, .08);
+    --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
+    --sec-1: #2f5fd4; --sec-2: #0b7a71; --sec-3: #b02bc4; --sec-4: #a85a05; --sec-5: #137a3c; --sec-6: #c92a2a; --sec-7: #6d3fd1; --sec-8: #086d8e;
+    --bm-green: #dff5e7; --bm-green-ink: #14532d; --bm-yellow: #fcefc7; --bm-yellow-ink: #7a4a06; --bm-red: #fde3e1; --bm-red-ink: #8a1c13;
+    --chk: #c2410c; --chk-ink: #ffffff;
+    --i-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 10l4.5-4.5 4.5 4.5'/%3E%3C/svg%3E");
+    --i-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 6l4.5 4.5L12.5 6'/%3E%3C/svg%3E");
+    --i-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5L5.5 8l4.5 4.5'/%3E%3C/svg%3E");
+    --i-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5L10.5 8 6 12.5'/%3E%3C/svg%3E");
+    --i-sort: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 6.2l3-3 3 3M5 9.8l3 3 3-3'/%3E%3C/svg%3E");
+    --i-x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E");
+    --i-target: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='8' r='5.5'/%3E%3Ccircle cx='8' cy='8' r='1.6' fill='black' stroke='none'/%3E%3C/svg%3E");
+    --i-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2.6L14.6 13.4H1.4z'/%3E%3Cpath d='M8 6.4v3.4'/%3E%3Ccircle cx='8' cy='11.9' r='.9' fill='black' stroke='none'/%3E%3C/svg%3E");
+    --i-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='8' cy='8' r='5'/%3E%3C/svg%3E");
+    --i-tri-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Cpath d='M8 3l6 10H2z'/%3E%3C/svg%3E");
+    --i-tri-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Cpath d='M8 13L2 3h12z'/%3E%3C/svg%3E");
+    --i-grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='5.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='5.5' cy='8' r='1.5'/%3E%3Ccircle cx='10.5' cy='8' r='1.5'/%3E%3Ccircle cx='5.5' cy='12.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='12.5' r='1.5'/%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111418; --surface: #1a1f25; --text: #e6e9ed; --muted: #97a2b0;
-      --border: #2d343c; --accent: #5b8def; --accent-text: #0b1220;
-      --good: #4ade80; --bad: #f87171; --hover: #222830; --code-bg: #14181d;
+      --bg: #0f141b; --surface: #171d27; --surface-2: #1c232e; --text: #e7ebf2; --muted: #9aa5b6; --faint: #8d98aa;
+      --border: #28313e; --border-strong: #3a4556; --hover: #1f2733; --code-bg: #121820;
+      --accent: #7f93ff; --accent-hover: #93a4ff; --accent-soft: #232c4a; --accent-ink: #a9b6ff; --accent-text: #0b1220;
+      --good: #4ade80; --good-soft: #15321f; --warn: #fbbf24; --warn-soft: #3a2a0c; --bad: #f87171; --bad-soft: #3d1a17;
+      --series: #7f93ff; --series-dim: #2f3a63;
+      --shadow: 0 12px 32px -12px rgba(0, 0, 0, .7), 0 0 0 1px var(--border);
+      --sec-1: #6f9cff; --sec-2: #3dd3c3; --sec-3: #e68cf5; --sec-4: #fbbf24; --sec-5: #4ade80; --sec-6: #f87171; --sec-7: #b4a0ff; --sec-8: #38d1f0;
+      --bm-green: #14532d99; --bm-green-ink: #86efac; --bm-yellow: #78350f99; --bm-yellow-ink: #fcd34d; --bm-red: #7f1d1d99; --bm-red-ink: #fca5a5;
+      --chk: #fb923c; --chk-ink: #1c1917;
     }
   }
+
+  /* Base and the browser's own surfaces */
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 20px 24px 0; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 16px; }
-  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
-  nav button { flex: none; white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
-               padding: 10px 14px; font: inherit; cursor: pointer; }
-  nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-  main { margin: 0 auto; padding: 20px 24px 48px; }
-  section { display: none; } section.active { display: block; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
-  .drop { border: 2px dashed var(--border); border-radius: 10px; padding: 36px 16px; text-align: center;
-          color: var(--muted); cursor: pointer; transition: background .15s, border-color .15s; }
-  .drop.over, .drop:hover { border-color: var(--accent); background: var(--hover); }
-  .drop strong { color: var(--text); }
-  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
-  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-  input[type=date], input[type=search] { font: inherit; padding: 7px 9px; border: 1px solid var(--border);
-         border-radius: 7px; background: var(--surface); color: var(--text); }
-  button.btn, label.btn-file { font: inherit; padding: 8px 16px; border-radius: 7px; border: 1px solid var(--border);
-               background: var(--surface); color: var(--text); cursor: pointer; }
-  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
-  button.btn:disabled { opacity: .5; cursor: default; }
-  button.danger:not(:disabled) { color: var(--bad); border-color: var(--bad); }
-  .table-wrap { overflow-x: auto; padding-bottom: 16px; }
-  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
-  th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 600; }
-  td.num, th.num { text-align: right; }
-  tbody tr:hover { background: var(--hover); }
-  tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border); }
-  tfoot .hint { font-weight: 400; }
-  .msg { margin: 12px 0 0; min-height: 1.4em; }
-  .msg.ok { color: var(--good); } .msg.err { color: var(--bad); }
+  [hidden], input[type=hidden] { display: none !important; }
+  html { scrollbar-color: var(--border-strong) transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  ::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  input, textarea, select, button { caret-color: var(--accent); accent-color: var(--accent); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a { color: var(--accent-ink); text-decoration: none; text-underline-offset: 3px; } a:hover { text-decoration: underline; }
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  p { margin: 0 0 8px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font: 12.5px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   .hint { color: var(--muted); font-size: 13px; }
-  textarea { width: 100%; min-height: 120px; font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
-             padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--code-bg); color: var(--text); }
-  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-  .examples button { font-size: 13px; padding: 4px 10px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .spacer { flex: 1; }
-  /* Compact log table so all columns fit on a wide screen. */
-  #log table { font-size: 13px; }
-  #log th, #log td { padding: 6px 7px; }
-  #log th { white-space: normal; vertical-align: bottom; line-height: 1.25; min-width: 64px; max-width: 110px; }
-  #log th.sortable button { padding: 6px 7px; }
-  #log td.src { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+  .none { color: var(--faint); }
+  .ok-text, .up { color: var(--good); } .err-text, .down { color: var(--bad); }
+
+  /* App shell: a navy sidebar that says where you are, a wide main column for the work. */
+  .side { position: relative; height: 100vh; overflow-y: auto; background: var(--side); color: var(--side-text);
+          display: flex; flex-direction: column; padding: 16px 8px 8px; scrollbar-color: var(--side-active) transparent; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 12px 16px; }
+  .brand .mark { width: 30px; height: 30px; flex: none; border-radius: 8px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: 0; }
+  .brand b { display: block; color: #fff; font-size: 14px; font-weight: 600; line-height: 1.2; }
+  .brand small { display: block; color: var(--side-muted); font-size: 12px; margin-top: 2px; }
+  .side .viewer-note { margin: 0 12px 8px; padding: 4px 8px; border-radius: 6px; font-size: 12px; color: var(--side-text); background: var(--side-2); }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav .nav-group { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--side-muted); padding: 16px 12px 4px; }
+  nav .nav-group:first-child { padding-top: 0; }
+  nav .nav-admin { display: none; } nav:has(button[data-tab="audit"]:not([hidden]), button[data-tab="google"]:not([hidden]), button[data-tab="sql"]:not([hidden])) .nav-admin { display: block; }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: none; color: var(--side-text);
+               font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; transition: background .15s, color .15s; }
+  nav button svg { width: 16px; height: 16px; flex: none; opacity: .8; }
+  nav button:hover { background: var(--side-2); color: #fff; }
+  nav button.active { background: color-mix(in srgb, var(--accent) 32%, var(--side)); color: #fff; font-weight: 600; } nav button.active svg { opacity: 1; color: #b7c4ff; }
+  nav button:focus-visible { outline-color: #fff; outline-offset: -2px; }
+  nav button[hidden] { display: none; }
+  .side-foot { margin-top: auto; padding-top: 12px; }
+  .side-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 0; border-radius: 6px; background: none; color: var(--side-text);
+              font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; text-align: left; }
+  .side-btn svg { width: 16px; height: 16px; opacity: .8; } .side-btn:hover { background: var(--side-2); color: #fff; }
+  .side-btn:focus-visible { outline-color: #fff; outline-offset: -2px; }
+  main { padding: 24px 24px 48px; min-width: 0; height: 100vh; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+  section { display: none; } section.active { display: block; flex: 1 0 auto; }
+  #log.active { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  #log .table-card { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin-bottom: 0; }
+  .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; margin: 0 0 16px; }
+  .page-head > div:not(.page-actions) { display: contents; }
+  .page-head h1 { font-size: 20px; line-height: 40px; order: 1; }
+  .page-actions { order: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+  .page-sub { order: 3; flex: 0 0 100%; margin: 0; color: var(--muted); font-size: 13px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; margin: 0 0 14px; }
+
+  /* Cards: one elevation (a hairline), one radius. Nested cards are never used. */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; min-width: 0; }
+  .card-title, .tr-title { font-size: 16px; margin: 0 0 4px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .tr-sub { margin: 0 0 12px; }
+  .table-card { padding: 0; }
+  .table-card > .toolbar { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .table-card .card-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 8px 16px; border-top: 1px solid var(--border); min-height: 40px; }
+  .table-card .card-foot p { margin: 0; }
+  .table-card .table-wrap { padding-bottom: 0; border-radius: 0 0 10px 10px; }
+
+  /* Controls: one vocabulary everywhere. 32-px height, 6-px radius, hairline border, a ring on focus. */
+  label, .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); }
+  input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+         border-radius: 6px; padding: 0 10px; height: 32px; min-width: 0; transition: border-color .15s, box-shadow .15s; }
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):hover, select:hover, textarea:hover { border-color: var(--faint); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  input[type=search] { min-width: 180px; } input[type=search]::-webkit-search-cancel-button { cursor: pointer; }
+  select { padding-right: 28px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+           background-repeat: no-repeat; background-position: right 9px center; max-width: 280px; }
+  select.needs { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
+  textarea { width: 100%; min-height: 120px; height: auto; padding: 10px; font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--code-bg); resize: vertical; }
+  .btn, label.btn, label.btn-file, a.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px;
+         border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
+         cursor: pointer; white-space: nowrap; text-decoration: none; transition: background .15s, border-color .15s, color .15s; flex-direction: row; }
+  .btn:hover:not(:disabled), label.btn:hover, label.btn-file:hover, a.btn:hover { background: var(--hover); border-color: var(--faint); text-decoration: none; }
+  .btn:active:not(:disabled) { background: var(--border); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
+  .btn.danger:not(:disabled) { color: var(--bad); }
+  .btn.danger:hover:not(:disabled) { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
+  .btn.quiet { border-color: transparent; background: none; color: var(--accent-ink); }
+  .btn.quiet:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+  .btn[aria-expanded="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent-ink); }
+  .link-btn { font: inherit; font-size: 13px; font-weight: 500; border: 0; background: none; color: var(--accent-ink); cursor: pointer; padding: 0; border-radius: 3px; }
+  .link-btn:hover { text-decoration: underline; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; }
+  .msg { margin: 10px 0 0; min-height: 1.4em; font-size: 13px; }
+  .msg.ok { color: var(--good); } .msg.err { color: var(--bad); }
+  .msg:empty { margin: 0; min-height: 0; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; }
+  .examples .btn { height: 28px; font-size: 13px; padding: 0 10px; }
+  .tag { font-size: 12px; font-weight: 500; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
+  .tag.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); background: var(--warn-soft); }
+  .or { text-align: center; color: var(--faint); font-size: 13px; margin: -4px 0 12px; }
+  details summary { cursor: pointer; color: var(--accent-ink); margin: 8px 0; font-weight: 500; }
+
+  /* Popovers: menus and the month grid. Elevation here is the shadow, nothing else. */
+  .picker { position: relative; }
+  .cal { position: absolute; z-index: 25; top: calc(100% + 6px); left: 0; background: var(--surface); border-radius: 10px; padding: 10px; width: 260px;
+         box-shadow: var(--shadow); color: var(--text); }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-weight: 600; }
+  .cal-head button { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer; width: 30px; height: 30px; border-radius: 6px; font-size: 0; display: inline-grid; place-items: center; }
+  .cal-head button[data-year]::before, .cal-head button[data-nav]::before { content: ""; --i: var(--i-left); width: 12px; height: 12px; }
+  .cal-head button[data-year]:last-child::before, .cal-head button[data-nav]:last-child::before { --i: var(--i-right); }
+  .cal-head button:hover:not(:disabled) { background: var(--hover); }
+  .cal-head button:disabled { opacity: .25; cursor: default; }
+  .cal-head button[data-nav] { color: var(--accent-ink); }
+  .cal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); gap: 8px; }
+  .cal-foot button { font: inherit; font-size: 12px; font-weight: 500; border: 0; background: none; color: var(--accent-ink); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+  .cal-foot button:hover { background: var(--accent-soft); }
   .colmenu { left: auto; right: 0; width: 300px; max-height: 70vh; overflow-y: auto; }
   .collist { list-style: none; margin: 0; padding: 0; }
   .collist li { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding: 0 2px; border: 1px solid transparent; }
@@ -73,307 +172,134 @@
   .collist li.dragging { opacity: .4; }
   .collist li.drop-before { border-top-color: var(--accent); }
   .collist li.drop-after { border-bottom-color: var(--accent); }
-  .collist label { flex: 1; }
+  .collist label { flex: 1; flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 13px; font-weight: 400; padding: 4px 2px; cursor: pointer; }
   .collist label.off { opacity: .45; }
-  .sec-tag { margin-left: auto; font-size: 10px; color: var(--sec); white-space: nowrap; }
-  .grip { cursor: grab; color: var(--muted); padding: 0 2px; user-select: none; }
-  .mv { font: inherit; font-size: 13px; width: 26px; height: 26px; border: 0; border-radius: 5px; background: none; color: var(--text); cursor: pointer; }
+  .sec-tag { margin-left: auto; font-size: 12px; color: var(--sec); white-space: nowrap; font-weight: 500; }
+  .grip { --i: var(--i-grip); width: 10px; height: 14px; margin: 0 4px 0 2px; color: var(--faint); cursor: grab; user-select: none; flex: none; }
+  .mv { font: inherit; font-size: 0; width: 26px; height: 26px; border: 0; border-radius: 5px; background: none; color: var(--text); cursor: pointer; display: inline-grid; place-items: center; }
+  .mv::before { content: ""; --i: var(--i-up); width: 12px; height: 12px; } .mv[data-move="1"]::before { --i: var(--i-down); }
   .mv:hover:not(:disabled) { background: var(--border); }
   .mv:disabled { opacity: .25; cursor: default; }
-  .mv:focus-visible { outline: 2px solid var(--accent); }
-  .colmenu label { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; padding: 4px 2px; cursor: pointer; }
   .colmenu .cal-foot { margin-top: 6px; }
-  :root { --sec-1: #2563eb; --sec-2: #0d9488; --sec-3: #c026d3; --sec-4: #d97706; --sec-5: #16a34a; --sec-6: #dc2626; --sec-7: #7c3aed; --sec-8: #0891b2; }
-  @media (prefers-color-scheme: dark) {
-    :root { --sec-1: #60a5fa; --sec-2: #2dd4bf; --sec-3: #e879f9; --sec-4: #fbbf24; --sec-5: #4ade80; --sec-6: #f87171; --sec-7: #a78bfa; --sec-8: #22d3ee; }
-  }
-  .sections { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -2px 0 12px; }
-  #section-switches { display: contents; }
-  .switch { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; background: none;
-            border: 0; padding: 3px 2px; cursor: pointer; color: var(--text); }
-  .switch .track { width: 30px; height: 17px; border-radius: 999px; background: var(--border); position: relative;
-                   transition: background .15s; flex: none; }
-  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
-                          border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
-  .switch[aria-checked="true"] .track { background: var(--sec); }
-  .switch[aria-checked="true"] .track::after { left: 15px; }
-  .switch[aria-checked="false"] { color: var(--muted); }
-  .switch .count { color: var(--muted); font-size: 12px; }
-  .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  tr.bands th { padding: 4px 8px 2px; font-size: 11px; letter-spacing: .04em; border-bottom: 0; text-transform: uppercase; }
-  tr.bands th.band { color: var(--sec); border-top: 3px solid var(--sec); text-align: left;
-                     background-color: var(--surface);
-                     background-image: linear-gradient(color-mix(in srgb, var(--sec) 8%, transparent), color-mix(in srgb, var(--sec) 8%, transparent)); }
-  /* Keep the office name visible while scrolling the log sideways. */
-  #log table th:nth-child(2), #log table td:nth-child(2) { position: sticky; left: 0; z-index: 1;
-    background: var(--surface); box-shadow: 1px 0 0 var(--border); }
-  #log tbody tr:hover td:nth-child(2) { background: var(--hover); }
-  /* Freeze the column headers (and the Total row) too: the table scrolls inside its own box. */
-  .log-wrap { max-height: calc(100vh - 110px); overflow: auto; overscroll-behavior: contain; padding-bottom: 0; }
-  #log thead th { position: sticky; z-index: 2; background-color: var(--surface); box-shadow: inset 0 -1px 0 var(--border); }
-  #log-bands th { top: 0; }
-  #log-head th { top: var(--bands-h, 0px); }
-  #log thead th:nth-child(2) { z-index: 3; }
-  #log tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 1px 0 var(--border); }
-  #log tfoot td:nth-child(2) { z-index: 3; }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-  .picker { position: relative; }
-  .picker > button.trigger { font: inherit; font-size: 15px; min-width: 150px; text-align: left; padding: 7px 9px;
-       border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text);
-       cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
-  .picker > button.trigger.empty { color: var(--muted); }
-  .cal { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; background: var(--surface);
-         border: 1px solid var(--border); border-radius: 10px; padding: 10px; width: 260px;
-         box-shadow: 0 8px 24px rgba(0,0,0,.14); color: var(--text); }
-  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-weight: 600; }
-  .cal-head button { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer;
-                     width: 30px; height: 30px; border-radius: 6px; font-size: 16px; }
-  .cal-head button:hover:not(:disabled) { background: var(--hover); }
-  .cal-head button:disabled { opacity: .25; cursor: default; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
-  .cal-grid .dow { font-size: 11px; color: var(--muted); padding: 4px 0; }
-  .cal-grid button { font: inherit; font-size: 13px; height: 32px; border: 0; border-radius: 6px;
-                     background: none; color: var(--text); cursor: pointer; font-weight: 600; }
-  .cal-grid button:hover:not(:disabled) { background: var(--hover); }
-  .cal-grid button:disabled { color: var(--muted); opacity: .4; font-weight: 400; cursor: default; }
-  .cal-grid button.sel { background: var(--accent); color: var(--accent-text); }
-  .cal-grid button:focus-visible, .cal-head button:focus-visible, .picker > button.trigger:focus-visible
-    { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .cal-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
-  .cal-foot button { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 2px 4px; }
-  th.sortable { padding: 0; }
-  th.sortable button { all: inherit; display: flex; gap: 4px; align-items: center; width: 100%;
-                       padding: 8px 10px; cursor: pointer; box-sizing: border-box; }
-  th.num.sortable button { justify-content: flex-end; }
-  th.sortable button:hover { color: var(--text); }
-  th.sortable button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  th[aria-sort] button { color: var(--text); }
-  .arrow { width: 1em; display: inline-block; text-align: center; }
-  th:not([aria-sort]) .arrow { opacity: .35; }
-  /* Row checkboxes are hidden for now; remove the "hide-select" class on <body> to bring them back. */
-  body.hide-select .sel-col, body.hide-select #delete-selected { display: none; }
-  .card-title { font-size: 16px; margin: 0 0 8px; display: flex; gap: 10px; align-items: baseline; }
-  .steps { padding-left: 20px; line-height: 1.6; }
-  .steps li { margin: 4px 0; }
-  details summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
-  .ok-text { color: var(--good); } .err-text { color: var(--bad); }
-  .up { color: var(--good); } .down { color: var(--bad); }
-  .monthnav { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+  .seg { display: inline-flex; height: 32px; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; font-weight: 500; border: 0; background: none; color: var(--muted); padding: 0 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+  .seg button:focus-visible { outline-offset: -2px; }
+  .monthnav { display: inline-flex; align-items: stretch; height: 32px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); overflow: visible; }
   .monthnav button { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer; }
-  .mn-step { padding: 0 10px; font-size: 12px; color: var(--muted) !important; }
-  .mn-step:hover:not(:disabled) { background: var(--hover); color: var(--text) !important; }
+  .mn-step { width: 30px; color: var(--muted); border-radius: 5px 0 0 5px; display: inline-grid; place-items: center; } .mn-step svg { width: 14px; height: 14px; }
+  .monthnav .picker + .mn-step { border-radius: 0 5px 5px 0; }
+  .mn-step:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .mn-step:disabled { opacity: .3; cursor: default; }
-  .mn-current { font-weight: 600 !important; padding: 7px 12px; min-width: 150px; border-left: 1px solid var(--border) !important;
-                border-right: 1px solid var(--border) !important; }
+  .mn-current { font-weight: 600; padding: 0 12px; min-width: 150px; height: 100%; border-left: 1px solid var(--border); border-right: 1px solid var(--border); font-size: 14px; }
   .mn-current:hover { background: var(--hover); }
-  .monthnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .monthnav button:focus-visible { outline-offset: -2px; }
   .mgrid { width: 250px; left: 50%; transform: translateX(-50%); }
   .mgrid .mg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-  .mgrid .mg button { font: inherit; font-size: 13px; height: 34px; border: 0; border-radius: 6px; background: none;
-                      color: var(--text); cursor: pointer; font-weight: 600; }
+  .mgrid .mg button { font: inherit; font-size: 13px; height: 34px; border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer; font-weight: 500; }
   .mgrid .mg button:hover:not(:disabled) { background: var(--hover); }
-  .mgrid .mg button:disabled { color: var(--muted); opacity: .45; font-weight: 400; cursor: default; }
-  .mgrid .mg button.sel { background: var(--accent); color: var(--accent-text); }
-  .mgrid .all { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px; border: 1px solid var(--border);
-                border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
+  .mgrid .mg button:disabled { color: var(--faint); opacity: .6; font-weight: 400; cursor: default; }
+  .mgrid .mg button.sel { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .mgrid .all { width: 100%; margin-top: 8px; font: inherit; font-size: 13px; padding: 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: none; color: var(--text); cursor: pointer; }
   .mgrid .all.sel { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-  .mgrid button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  :root { --bm-green: #dcfce7; --bm-green-ink: #166534; --bm-yellow: #fef3c7; --bm-yellow-ink: #92400e;
-          --bm-red: #fee2e2; --bm-red-ink: #991b1b; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bm-green: #14532d88; --bm-green-ink: #86efac; --bm-yellow: #78350f88; --bm-yellow-ink: #fcd34d;
-            --bm-red: #7f1d1d88; --bm-red-ink: #fca5a5; }
-  }
+  .btn.trigger { min-width: 190px; height: 32px; min-height: 32px; max-height: 32px; flex: none; align-self: flex-start; justify-content: space-between; font-weight: 500; white-space: nowrap; }
+  .field.picker { align-self: flex-end; justify-content: flex-end; }
+  .btn.trigger::after { content: ""; --i: var(--i-down); width: 12px; height: 12px; display: inline-block; background: currentColor; mask: var(--i) center / contain no-repeat; -webkit-mask: var(--i) center / contain no-repeat; opacity: .6; }
+  .cal.dp { width: 296px; }
+  .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .dp-grid .dow { font-size: 12px; color: var(--muted); padding: 4px 0; }
+  .dp-day { font: inherit; font-size: 13px; height: 34px; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: default; }
+  .dp-day.has { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+  .dp-day.has:hover { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
+  .dp-day.closed { color: var(--muted); cursor: pointer; box-shadow: inset 0 0 0 1px var(--border); }
+  .dp-day.closed:hover { background: var(--hover); }
+  .dp-day.pulled { background: var(--good-soft); color: var(--good); cursor: pointer; }
+  .dp-day.pulled:hover { background: color-mix(in srgb, var(--good) 20%, var(--surface)); }
+  .dp-day.in { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent-ink); }
+  .dp-day.sel, .dp-day.sel:hover { background: var(--accent); color: var(--accent-text); }
+  .dp-day.today { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .dp-day.off, .dp-day.none { opacity: .5; }
+  .dp-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .dp-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .dp-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+  /* Section chips: each group of Log columns, in its band colour. */
+  .sections { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+  #section-switches { display: contents; }
+  .switch { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px 0 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+            font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .switch .track { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--sec); background: transparent; flex: none; transition: background .15s; }
+  .switch[aria-checked="true"] { color: var(--text); background: color-mix(in srgb, var(--sec) 9%, var(--surface)); border-color: color-mix(in srgb, var(--sec) 40%, var(--border)); }
+  .switch[aria-checked="true"] .track { background: var(--sec); }
+  .switch:hover { border-color: color-mix(in srgb, var(--sec) 55%, var(--border)); }
+  .switch .count { color: var(--faint); font-size: 12px; font-weight: 400; }
+
+  /* Tables: hairline rows, quiet uppercase headers, numbers right-aligned in tabular figures. */
+  .table-wrap { overflow-x: auto; position: relative; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; vertical-align: middle; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tbody tr:hover > td { background: var(--hover); }
+  tfoot td { font-weight: 600; border-bottom: 0; border-top: 1px solid var(--border-strong); }
+  tfoot .hint { font-weight: 400; }
+  th.sortable { padding: 0; }
+  th.sortable button { all: inherit; display: flex; gap: 4px; align-items: center; width: 100%; padding: 8px 12px; cursor: pointer; box-sizing: border-box; border-radius: 0; }
+  th.num.sortable button { justify-content: flex-end; }
+  th.sortable button:hover { color: var(--text); background: var(--hover); }
+  th.sortable button:focus-visible { outline-offset: -2px; }
+  th[aria-sort] button { color: var(--text); }
+  .ico, .arrow, .bm-flag, .grip, .chk-flag, .bm-mark, .mv::before, .cal-head button[data-year]::before, .cal-head button[data-nav]::before, th[aria-sort]::after, tr.fn-fold td:first-child::before {
+    display: inline-block; font-size: 0; line-height: 0; background: currentColor; mask: var(--i) center / contain no-repeat; -webkit-mask: var(--i) center / contain no-repeat; vertical-align: middle; }
+  .arrow { --i: var(--i-sort); width: 12px; height: 12px; color: var(--muted); opacity: .4; flex: none; }
+  th[aria-sort="ascending"] .arrow { --i: var(--i-up); opacity: 1; color: var(--text); } th[aria-sort="descending"] .arrow { --i: var(--i-down); opacity: 1; color: var(--text); }
+  .bm-flag { --i: var(--i-target); width: 12px; height: 12px; margin-left: 4px; color: var(--accent-ink); flex: none; }
+  .asof { display: block; font-size: 12px; color: var(--faint); font-weight: 400; }
+  .has-detail { cursor: pointer; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
+  .has-detail:focus-visible { outline-offset: -2px; }
   td.bm-green { background: var(--bm-green); color: var(--bm-green-ink); }
   td.bm-yellow { background: var(--bm-yellow); color: var(--bm-yellow-ink); }
   td.bm-red { background: var(--bm-red); color: var(--bm-red-ink); }
   td.bm-green .asof, td.bm-yellow .asof, td.bm-red .asof { color: inherit; opacity: .75; }
-  .bm-mark { font-size: 10px; margin-right: 4px; }
-  #log tbody tr:hover td.bm-green, #log tbody tr:hover td.bm-yellow, #log tbody tr:hover td.bm-red { filter: brightness(.97); }
-  th .bm-flag { color: var(--accent); margin-left: 3px; font-size: 11px; }
-  .table-wrap { position: relative; }   /* keeps .sr labels inside the scroll box (else they widen the page) */
-  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .link-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; }
-  .bm-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
-  /* The Charts report and its map share the .tr-* filter-row and title styles. */
-  .tr-controls { gap: 10px 16px; margin-bottom: 14px; }
-  .tr-controls label[hidden] { display: none; }   /* a filter that doesn't apply yet (e.g. General/Ortho before a patient list is loaded) */
-  .tr-controls select { max-width: 260px; }
-  .tr-check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; align-self: flex-end; padding-bottom: 8px; }
-  .tr-title { font-size: 17px; margin: 0; }
-  .tr-sub { margin: 2px 0 8px; }
-  .tr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text); margin-bottom: 6px; min-height: 18px; }
-  .tr-legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .tr-legend i { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
-  .tr-wrap { position: relative; }
-  .tr-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .tr-wrap svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  .tr-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
-            border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.12); min-width: 150px; z-index: 5; }
-  .tr-tip .tr-tip-head { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  .tr-tip .tr-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-  .tr-tip .tr-row i { display: inline-block; width: 12px; height: 2px; border-radius: 1px; flex: none; }
-  .tr-tip .tr-row b { font-variant-numeric: tabular-nums; }
-  .tr-tip .tr-row span { color: var(--muted); }
-  /* The map has no street tiles: a plain background, ZIP areas, city names on top. */
-  .mp-map { height: min(70vh, 640px); border-radius: 8px; border: 1px solid var(--border); background: #dfe3e8; }
-  .mp-map.mp-zoomed-out .mp-pin { width: 16px !important; height: 16px !important; font: 700 9px/13px system-ui, sans-serif; margin-left: -8px !important; margin-top: -8px !important; }
-  .mp-map.mp-zoomed-out .mp-pin.mp-pin-2 { width: 26px !important; margin-left: -13px !important; }
-  .mp-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; font-size: 12px; }
-  .mp-key span { white-space: nowrap; }
-  .mp-key em, .mp-legend .key em { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #111827; color: #fff; font: 700 10px/14px system-ui, sans-serif;
-                                    border: 1px solid #fff; box-sizing: border-box; text-align: center; font-style: normal; margin-right: 4px; vertical-align: -3px; }
-  .leaflet-tooltip.mp-zipno { background: none; border: 0; box-shadow: none; padding: 0; font: 600 10px/1 system-ui, sans-serif; color: #374151;
-                              text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; pointer-events: none; }
-  .leaflet-tooltip.mp-zipno::before { display: none; }
-  .leaflet-tooltip.mp-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 12px/1.1 system-ui, sans-serif; color: #1f2937;
-                             letter-spacing: .01em; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff, 0 1px 2px #fff; pointer-events: none; text-align: center; }
-  .leaflet-tooltip.mp-city::before { display: none; }
-  .leaflet-tooltip.mp-city-big { font-size: 14px; font-weight: 700; }
-  .leaflet-tooltip.mp-city-small { font-size: 11px; font-weight: 500; }
-  .leaflet-tooltip.mp-city-office { color: #111827; }
-  /* The map itself stays light in dark mode: the color ramp only reads right on a light canvas. */
-  .mp-step { margin: 12px 0 6px; }
-  .mp-pop { max-height: 260px; overflow: auto; font-size: 12px; min-width: 220px; }
-  .mp-pop table { border-collapse: collapse; width: 100%; } .mp-pop td { padding: 2px 6px; border-bottom: 1px solid #eee; }
-  .mp-pop .num { text-align: right; font-variant-numeric: tabular-nums; }
-  /* Office pins: numbered, dark, distinct from the ZIP dots; the legend lists the numbers. */
-  .mp-pin { background: #111827; color: #fff; border: 2px solid #fff; border-radius: 50%; width: 22px; height: 22px;
-            box-shadow: 0 1px 4px rgba(0,0,0,.5); font: 700 11px/18px system-ui, sans-serif; text-align: center; }
-  .leaflet-tooltip.mp-label { font-size: 12px; padding: 2px 6px; }
-  .mp-legend { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
-               font-size: 12px; line-height: 1.4; max-width: 230px; overflow: auto; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-  .mp-legend summary { display: list-item; cursor: pointer; font-weight: 600; }
-  .mp-legend details[open] summary { margin-bottom: 4px; }
-  .mp-legend b { display: block; margin-bottom: 3px; }
-  .mp-legend .ramp { display: flex; gap: 2px; margin: 3px 0 1px; } .mp-legend .ramp i { flex: 1; height: 10px; border-radius: 2px; }
-  .mp-legend .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
-  .mp-legend .key { margin-top: 2px; } .mp-legend .key div { white-space: nowrap; }
-  .mp-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
-  .mp-legend .note { color: var(--muted); font-size: 11px; margin-top: 4px; }
-  @media (max-width: 640px) { .mp-legend { max-width: 170px; font-size: 11px; padding: 4px 8px; } .mp-inset { width: 110px; height: 80px; } }
-  .mp-inset { width: 170px; height: 120px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-  .mp-inset .leaflet-control-container { display: none; }
-  .mp-inset-dot { background: #111827; border: 1px solid #fff; border-radius: 50%; width: 7px; height: 7px; }
-  #mp-offices input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
-                      background: var(--surface); color: var(--text); }
-  #charts > .tr-controls { margin: 0 0 12px; }
-  #charts > .card + .card { margin-top: 16px; }
-                      text-transform: none; letter-spacing: 0; white-space: nowrap; }
-                      font-size: 13px; padding-right: 10px; white-space: nowrap; z-index: 1;
-                      text-transform: none; letter-spacing: 0; color: var(--text); }
-             font-variant-numeric: tabular-nums; cursor: default; outline-offset: -2px; }
-  .hm-tip { position: fixed; }
-  .bm-green-key { background: var(--bm-green); } .bm-yellow-key { background: var(--bm-yellow); } .bm-red-key { background: var(--bm-red); }
-  #ch-report > .card + .card, #ch-report > .rp-grid2 + .card { margin-top: 16px; }
-  /* Calls tab: the funnel */
-  .fn-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 10px; margin: 10px 0 4px; }
-  .fn-step { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; position: relative; overflow: hidden; }
-  .fn-step .bar { position: absolute; left: 0; top: 0; bottom: 0; background: #2a78d6; opacity: .12; }
-  .fn-step .k { font-size: 11px; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; position: relative; }
-  .fn-step .v { font-size: 24px; line-height: 1.15; margin-top: 2px; font-variant-numeric: tabular-nums; position: relative; }
-  .fn-step .s { font-size: 12px; color: var(--muted); margin-top: 2px; position: relative; }
-  .fn-box { max-height: 380px; overflow: auto; } .fn-box thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
-  #fn-table tr.fn-fold td { cursor: pointer; color: var(--muted); } #fn-table tr.fn-fold td:first-child::before { content: "▸ "; } #fn-table tr.fn-fold.open td:first-child::before { content: "▾ "; }
-  #fn-table tr.fn-sub td { color: var(--muted); } #fn-table tr.fn-sub td:first-child { padding-left: 26px; font-variant-numeric: tabular-nums; }
-  /* Calls tab: a dense sheet */
-  label.btn-file { display: inline-block; flex-direction: row; cursor: pointer; }   /* a file picker that looks like a button, even inside a filter row */
-  .cl-tiles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 6px 0 10px; font-size: 13px; }
-  .cl-tiles span b { font-size: 18px; font-weight: 600; margin-right: 4px; font-variant-numeric: tabular-nums; }
-  .cl-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; margin: 4px 0 12px; }
-  .cl-pie svg { width: 170px; height: 170px; flex: none; }
-  .cl-pie .pt { font-size: 13px; font-weight: 600; width: 100%; margin: 0; }
-  .cl-pie ul { list-style: none; margin: 0; padding: 0; font-size: 13px; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, max-content)); gap: 3px 18px; }
-  .cl-pie li { display: flex; align-items: center; gap: 8px; white-space: nowrap; } .cl-pie li i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
-  .cl-pie li span { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .cl-pie path { cursor: default; } .cl-pie path:hover, .cl-pie path:focus { opacity: .8; outline: none; }
-  .cl-top { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(min(100%, 22rem), 1.4fr); gap: 12px 24px; align-items: start; margin-bottom: 12px; }
-  @media (max-width: 760px) { .cl-top { grid-template-columns: 1fr; } }
-  .cl-geo .pt { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
-  .cl-mapbox { height: 340px; }
-  .cl-geo .hint { margin: 6px 0 0; }
-  .leaflet-tooltip.cl-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 11px/1.1 system-ui, sans-serif; color: #1f2937;
-                             text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff; pointer-events: none; }
-  .leaflet-tooltip.cl-city::before { display: none; }
-  .cl-box { max-height: 70vh; overflow: auto; }
-  .cl-sheet { font-size: 13px; }
-  .cl-sheet th, .cl-sheet td { padding: 4px 8px; }
-  .cl-sheet thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; cursor: pointer; }
-  .cl-sheet th[aria-sort="descending"]::after { content: " ▾"; } .cl-sheet th[aria-sort="ascending"]::after { content: " ▴"; }
-  .cl-sheet tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg) 60%, transparent); }
-  .cl-sheet td.miss { color: #b91c1c; } .cl-sheet .ok { color: #15803d; font-weight: 600; white-space: nowrap; } .cl-sheet .booked { color: #1d4ed8; font-weight: 600; white-space: nowrap; } .cl-sheet .sig { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); margin-right: 3px; }
-  .rp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 12px; margin-top: 10px; }
-  .rp-tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
-  .rp-tile .k { font-size: 11px; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
-  .rp-tile .v { font-size: 26px; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .rp-tile .s { font-size: 12px; color: var(--muted); margin-top: 3px; }
-  .rp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; margin-top: 16px; }
-  .rp-chart { position: relative; } .rp-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .rp-chart text { font-family: inherit; font-size: 12px; fill: var(--muted); } .rp-chart text.val { fill: var(--text); font-variant-numeric: tabular-nums; }
-  .rp-small text { font-family: inherit; }
-  .rp-chart .grid { stroke: var(--border); } .rp-chart .axis { stroke: var(--muted); }
-  .rp-bar { fill: #2a78d6; } .rp-bar.dim { fill: #b7cbe8; } .rp-bar.partial { opacity: .45; stroke: #2a78d6; stroke-dasharray: 4 3; }
-  @media (prefers-color-scheme: dark) { .rp-bar { fill: #3987e5; } .rp-bar.dim { fill: #2c4a73; } }
-  .rp-smalls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 10px 16px; margin-top: 8px; }
-  .rp-small .t { font-size: 12px; display: flex; justify-content: space-between; gap: 8px; } .rp-small .t b { font-weight: 600; } .rp-small .t span { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .rp-tbox { max-height: 520px; overflow: auto; } .rp-tbox thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
-  #rp-table th[data-sort] { cursor: pointer; } #rp-table th[aria-sort="descending"]::after { content: " ▾"; } #rp-table th[aria-sort="ascending"]::after { content: " ▴"; }
-  #rp-table td.bar { min-width: 140px; } #rp-table td.bar i { display: block; height: 10px; border-radius: 3px; background: #b7cbe8; } #rp-table td.bar.top i { background: #2a78d6; }
-  .rp-offices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 12px; margin-top: 8px; }
-  .rp-office { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; min-width: 0; overflow: hidden; }
-  .rp-office .oh { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; align-items: baseline; margin-bottom: 4px; } .rp-office .oh b { font-weight: 600; } .rp-office .oh span { color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .rp-office .tw { overflow-x: auto; }
-  .rp-office table { font-size: 12px; width: 100%; } .rp-office td, .rp-office th { padding: 2px 6px; }
-  .rp-office td.hint { white-space: normal; } .rp-office th { font-size: 11px; }
-  .zt-zip { font-weight: 600; text-decoration: none; } .zt-zip:hover { text-decoration: underline; }
-  #zt-months th { white-space: nowrap; }
-  /* Help: the ? button and the step-by-step guide. */
-  .help-btn { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 44px; height: 44px; border-radius: 50%;
-              border: 0; background: var(--accent); color: var(--accent-text); font: 700 22px/1 system-ui, sans-serif;
-              cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
-  .help-btn:hover { filter: brightness(1.08); }
-  .help-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
-  #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 1px solid var(--border);
-          border-radius: 12px; background: var(--surface); color: var(--text); }
-  #help[open] { display: flex; flex-direction: column; }
-  #help::backdrop { background: rgba(0,0,0,.45); }
-  .help-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
-  .help-head h2 { margin: 0; font-size: 19px; flex: 1; }
-  .help-x { font: inherit; font-size: 24px; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer;
-            width: 36px; height: 36px; border-radius: 8px; }
-  .help-x:hover { background: var(--border); color: var(--text); }
-  .help-steps { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
-  .help-steps button { font: inherit; font-size: 13px; border: 1px solid var(--border); background: none; color: var(--text);
-                       border-radius: 999px; padding: 5px 12px; cursor: pointer; }
-  .help-steps button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-  .help-body { overflow: auto; padding: 4px 20px 8px; overscroll-behavior: contain; }
-  .help-body h3 { font-size: 16px; margin: 14px 0 6px; }
-  .help-body p, .help-body li { font-size: 14px; line-height: 1.55; }
-  .help-body ol, .help-body ul { padding-left: 22px; margin: 6px 0 10px; }
-  .help-body li { margin: 4px 0; }
-  .help-body .swatch { white-space: nowrap; }
-  .help-report { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
-  .help-report h4 { margin: 0 0 4px; font-size: 14px; }
-  .help-report .gives { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
-  .path { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 13px; }
-  .path span { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
-  .path i { color: var(--muted); font-style: normal; }
-  .help-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
-  .help-foot .hint { flex: 1; margin: 0; }
-  @media (max-width: 600px) { .help-head, .help-steps, .help-body, .help-foot { padding-left: 16px; padding-right: 16px; } }
-  /* Data checks: values that look wrong (rates over 100%, more collected than approved). */
-  :root { --chk: #c2410c; --chk-ink: #ffffff; }
-  @media (prefers-color-scheme: dark) { :root { --chk: #fb923c; --chk-ink: #1c1917; } }
-  .chk-flag { display: inline-block; background: var(--chk); color: var(--chk-ink); border-radius: 4px; padding: 0 4px;
-              font-size: 11px; line-height: 16px; margin-right: 4px; cursor: help; }
-  .chk-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px;
-               background: var(--chk); color: var(--chk-ink); font-size: 12px; line-height: 18px; text-align: center; }
+  .bm-mark { --i: var(--i-dot); width: 8px; height: 8px; margin-right: 5px; color: currentColor; vertical-align: 0; }
+  td.bm-yellow .bm-mark { --i: var(--i-tri-up); } td.bm-red .bm-mark { --i: var(--i-tri-down); }
+  tbody tr:hover td.bm-green, tbody tr:hover td.bm-yellow, tbody tr:hover td.bm-red { filter: brightness(.96); }
+  .chk-flag { --i: var(--i-warn); width: 14px; height: 14px; color: var(--chk); margin-right: 4px; vertical-align: -2px; cursor: help; }
+  .chk-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--chk); color: var(--chk-ink); font-size: 12px; font-weight: 600; line-height: 18px; text-align: center; }
   .chk-count[hidden] { display: none; }
-  .confirm-box { border: 1px solid var(--chk); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
-  .confirm-box[hidden] { display: none; }
-  .confirm-box p { margin: 0 0 8px; }
-  .confirm-box .table-wrap { max-height: 260px; overflow: auto; }
-  .confirm-box td, .confirm-box th { padding: 4px 8px; }
+  body.hide-select .sel-col, body.hide-select #delete-selected { display: none; }
+  .empty { padding: 44px 16px; text-align: center; color: var(--muted); white-space: normal; }
+  .empty b { display: block; color: var(--text); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .skel { display: inline-block; height: .85em; width: 62%; border-radius: 4px; background: var(--hover); animation: skel 1.3s ease-in-out infinite; vertical-align: middle; }
+  td.num .skel { width: 48%; }
+  @keyframes skel { 50% { opacity: .4; } }
+
+  /* The Log: a compact table that scrolls inside its own box, with the headers and the office column pinned. */
+  #log table { font-size: 13px; }
+  #log th, #log td { padding: 6px 8px; }
+  #log th { white-space: normal; vertical-align: bottom; line-height: 1.25; min-width: 64px; max-width: 150px; }
+  #log th.sortable .lbl { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  #log th.sortable button { padding: 6px 8px; }
+  #log td.src { max-width: 130px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  #log table th:nth-child(2), #log table td:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border); font-weight: 500; }
+  #log tbody tr:hover td:nth-child(2) { background: var(--hover); }
+  .log-wrap { flex: 1 1 auto; min-height: 220px; overflow: auto; overscroll-behavior: contain; transition: opacity .18s ease-out; }
+  .log-wrap.swap { opacity: .4; transition: none; }
+  #log thead th { position: sticky; z-index: 2; background-color: var(--surface); box-shadow: inset 0 -1px 0 var(--border); }
+  #log-bands th { top: 0; }
+  #log-head th { top: var(--bands-h, 0px); }
+  #log thead th:nth-child(2) { z-index: 3; }
+  #log tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 1px 0 var(--border-strong); }
+  #log tfoot td:nth-child(2) { z-index: 3; }
+  tr.bands th { padding: 5px 8px 3px; font-size: 12px; letter-spacing: .05em; border-bottom: 0; text-transform: uppercase; }
+  tr.bands th.band { color: var(--sec); border-top: 2px solid var(--sec); text-align: left; background-color: var(--surface);
+                     background-image: linear-gradient(color-mix(in srgb, var(--sec) 7%, transparent), color-mix(in srgb, var(--sec) 7%, transparent)); }
+  .bm-panel { padding: 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .bm-panel[hidden] { display: none; }
+  .bm-table th, .bm-table td { padding: 5px 8px; }
+  .bm-table .swatch { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; }
+  .bm-green-key { background: var(--bm-green); } .bm-yellow-key { background: var(--bm-yellow); } .bm-red-key { background: var(--bm-red); }
   .chk-group { border-top: 1px solid var(--border); padding: 10px 0 4px; }
   .chk-group:first-of-type { border-top: 0; }
   .chk-group h4 { margin: 0 0 6px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
@@ -381,59 +307,266 @@
   .chk-group ul { margin: 0 0 8px; padding-left: 18px; }
   .chk-group li { margin: 3px 0; }
   .chk-ok-form { display: inline-flex; gap: 6px; align-items: center; margin-left: 6px; }
-  .chk-ok-form input { font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px;
-                       background: var(--surface); color: var(--text); width: min(260px, 60vw); }
-  .chk-contact input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
-                       background: var(--surface); color: var(--text); width: min(320px, 70vw); }
-  .bm-table th, .bm-table td { padding: 5px 8px; }
-  .bm-table .swatch { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; }
-  .or { text-align: center; color: var(--muted); font-size: 13px; margin: -4px 0 12px; }
-  #paste-text { min-height: 110px; }
-  select { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px;
-           background: var(--surface); color: var(--text); max-width: 280px; }
-  select.needs { border-color: var(--bad); }
-  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
-  .tag.warn { color: var(--bad); border-color: var(--bad); }
-  .asof { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
-  .none { color: var(--muted); }
-  .has-detail { cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
-  .has-detail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .chk-ok-form input { height: 28px; font-size: 13px; width: min(260px, 60vw); }
+  .chk-ok-form .btn { height: 28px; }
+  .chk-contact input { width: min(320px, 70vw); }
+  .confirm-box { border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border)); background: var(--warn-soft); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+  .confirm-box[hidden] { display: none; }
+  .confirm-box p { margin: 0 0 8px; }
+  .confirm-box .table-wrap { max-height: 260px; overflow: auto; }
+  .confirm-box td, .confirm-box th { padding: 4px 8px; }
+
+  /* Detail box for counts that carry a list. */
   #detail-tip { overscroll-behavior: contain; position: fixed; z-index: 50; max-width: min(640px, calc(100vw - 24px)); max-height: 60vh; overflow: auto;
-    background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 12px; font-size: 13px; line-height: 1.5;
-    white-space: pre-line; text-align: left; }
+    background: var(--surface); color: var(--text); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px; line-height: 1.5; white-space: pre-line; text-align: left; }
   #detail-tip .tip-head { font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 12px; }
   #detail-tip .tip-head span { font-weight: 400; color: var(--muted); font-size: 12px; }
-  .tip-copy { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 2px; }
+  .tip-copy { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent-ink); cursor: pointer; padding: 0 2px; }
   #detail-tip table { font-size: 12px; white-space: normal; }
-  #detail-tip th, #detail-tip td { padding: 3px 8px 3px 0; white-space: normal; vertical-align: top; border-bottom: 1px solid var(--border); }
-  #detail-tip th { font-size: 11px; position: sticky; top: -10px; background: var(--surface); }
-  #detail-tip td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } }
+  #detail-tip th, #detail-tip td { padding: 3px 8px 3px 0; white-space: normal; vertical-align: top; }
+  #detail-tip th { font-size: 12px; position: sticky; top: -10px; background: var(--surface); }
+  #detail-tip td:first-child { white-space: nowrap; }
+
+  /* Upload */
+  .drop { border: 1.5px dashed var(--border-strong); border-radius: 10px; padding: 36px 16px; text-align: center; color: var(--muted); cursor: pointer; transition: background .15s, border-color .15s; }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--text); font-size: 16px; display: block; margin-bottom: 4px; }
+  .steps { padding-left: 20px; line-height: 1.6; } .steps li { margin: 4px 0; }
+
+  /* Stat strips: one card divided by hairlines; figure under its label. */
+  .rp-tiles, .fn-steps, .cl-tiles { display: grid; gap: 0; overflow: hidden; margin: 12px 0 0; border-top: 1px solid var(--border); }
+  .rp-tile, .fn-step, .cl-tiles span { box-shadow: 1px 0 0 0 var(--border), 0 1px 0 0 var(--border); }
+  .rp-tiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+  .fn-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+  .cl-tiles { display: flex; flex-wrap: wrap; margin: 8px 0 16px; }
+  .rp-tile, .fn-step { background: var(--surface); padding: 12px 16px; position: relative; overflow: hidden; min-width: 0; }
+  .rp-tile .k, .fn-step .k { font-size: 13px; color: var(--muted); font-weight: 500; position: relative; }
+  .rp-tile .v, .fn-step .v { font-size: 24px; line-height: 1.15; margin-top: 4px; font-weight: 600; letter-spacing: -.01em; position: relative; }
+  .rp-tile .s, .fn-step .s { font-size: 12px; color: var(--faint); margin-top: 4px; position: relative; white-space: normal; }
+  .fn-step .bar { display: none; }
+  .cl-tiles span { flex: 1 1 9rem; display: flex; flex-direction: column-reverse; justify-content: end; gap: 2px; padding: 12px 16px; background: var(--surface); font-size: 12px; color: var(--muted); font-weight: 500; min-width: 0; white-space: normal; }
+  .cl-tiles span b { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -.01em; line-height: 1.15; }
+  .is-skel .skel { display: block; } .is-skel .skel.k { width: 50%; height: 11px; } .is-skel .skel.v { width: 70%; height: 22px; margin-top: 8px; } .is-skel .skel.s { width: 55%; height: 10px; margin-top: 8px; }
+
+  /* Charts (report) */
+  .tr-controls { gap: 10px 12px; margin-bottom: 14px; }
+  .tr-controls label[hidden] { display: none; }
+  .tr-controls select { max-width: 260px; }
+  .tr-check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; font-weight: 400; align-self: center; padding-top: 16px; }
+  .tr-wrap { position: relative; }
+  .tr-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: var(--shadow); min-width: 150px; z-index: 5; }
+  .tr-tip .tr-tip-head { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .tr-tip .tr-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .tr-tip .tr-row i { display: inline-block; width: 12px; height: 2px; border-radius: 1px; flex: none; }
+  .tr-tip .tr-row b { font-weight: 600; }
+  .tr-tip .tr-row span { color: var(--muted); }
+  .hm-tip { position: fixed; }
+  .rp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; margin-bottom: 16px; }
+  .rp-grid2 .card { margin-bottom: 0; }
+  .rp-chart { position: relative; } .rp-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .rp-chart text { font-family: inherit; font-size: 12px; fill: var(--muted); } .rp-chart text.val { fill: var(--text); }
+  .rp-small text { font-family: inherit; fill: var(--muted); }
+  .rp-chart .grid { stroke: var(--border); } .rp-chart .axis { stroke: var(--border-strong); }
+  .rp-bar { fill: var(--series); } .rp-bar.dim { fill: var(--series-dim); } .rp-bar.partial { opacity: .45; stroke: var(--series); stroke-dasharray: 4 3; }
+  .rp-chart g:focus-visible, .rp-small rect:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rp-smalls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 10px 16px; margin-top: 8px; }
+  .rp-small .t { font-size: 12px; display: flex; justify-content: space-between; gap: 8px; } .rp-small .t b { font-weight: 600; } .rp-small .t span { color: var(--muted); }
+  .rp-tbox { max-height: 520px; overflow: auto; } .rp-tbox thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: inset 0 -1px 0 var(--border); }
+  #rp-table th[data-sort] { cursor: pointer; } #rp-table th[data-sort]:hover { color: var(--text); }
+  #rp-table th[aria-sort="descending"]::after, #rp-table th[aria-sort="ascending"]::after { content: ""; --i: var(--i-down); width: 10px; height: 10px; margin-left: 4px; vertical-align: -1px; }
+  #rp-table th[aria-sort="ascending"]::after { --i: var(--i-up); }
+  #rp-table td.bar { min-width: 140px; } #rp-table td.bar i { display: block; height: 8px; border-radius: 3px; background: var(--series-dim); } #rp-table td.bar.top i { background: var(--series); }
+  .rp-offices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); gap: 0; margin-top: 12px; border-top: 1px solid var(--border); overflow: hidden; }
+  .rp-office { padding: 12px 16px; min-width: 0; overflow: hidden; box-shadow: 1px 0 0 0 var(--border), 0 1px 0 0 var(--border); }
+  .rp-office .oh { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; align-items: baseline; margin-bottom: 4px; } .rp-office .oh b { font-weight: 600; } .rp-office .oh span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .rp-office .tw { overflow-x: auto; }
+  .rp-office table { font-size: 12px; width: 100%; } .rp-office td, .rp-office th { padding: 3px 6px; }
+  .rp-office td.hint { white-space: normal; } .rp-office th { font-size: 12px; }
+  .zt-zip { font-weight: 600; } .zt-zip:hover { text-decoration: underline; }
+  .rp-foot { margin-top: 4px; }
+
+  /* Maps (the ZIP-area map and the callers' map). The canvas stays light in dark mode: the colour ramp needs it. */
+  .mp-map { height: min(70vh, 640px); border-radius: 8px; border: 1px solid var(--border); background: #dfe3e8; }
+  .mp-map.mp-zoomed-out .mp-pin { width: 16px !important; height: 16px !important; font: 700 9px/13px system-ui, sans-serif; margin-left: -8px !important; margin-top: -8px !important; }
+  .mp-map.mp-zoomed-out .mp-pin.mp-pin-2 { width: 26px !important; margin-left: -13px !important; }
+  .mp-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; font-size: 12px; }
+  .mp-key span { white-space: nowrap; }
+  .mp-key em, .mp-legend .key em { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #111827; color: #fff; font: 700 10px/14px system-ui, sans-serif;
+                                    border: 1px solid #fff; box-sizing: border-box; text-align: center; font-style: normal; margin-right: 4px; vertical-align: -3px; }
+  .leaflet-tooltip.mp-zipno { background: none; border: 0; box-shadow: none; padding: 0; font: 600 10px/1 system-ui, sans-serif; color: #374151; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; pointer-events: none; }
+  .leaflet-tooltip.mp-zipno::before { display: none; }
+  .leaflet-tooltip.mp-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 12px/1.1 system-ui, sans-serif; color: #1f2937; letter-spacing: .01em;
+                             text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff, 0 1px 2px #fff; pointer-events: none; text-align: center; }
+  .leaflet-tooltip.mp-city::before { display: none; }
+  .leaflet-tooltip.mp-city-big { font-size: 14px; font-weight: 700; }
+  .leaflet-tooltip.mp-city-small { font-size: 12px; font-weight: 500; }
+  .leaflet-tooltip.mp-city-office { color: #111827; }
+  .mp-step { margin: 12px 0 6px; }
+  .mp-pop { max-height: 260px; overflow: auto; font-size: 12px; min-width: 220px; }
+  .mp-pop table { border-collapse: collapse; width: 100%; } .mp-pop td { padding: 2px 6px; border-bottom: 1px solid #eee; }
+  .mp-pop .num { text-align: right; }
+  .mp-pin { background: #111827; color: #fff; border: 2px solid #fff; border-radius: 50%; width: 22px; height: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.5); font: 700 11px/18px system-ui, sans-serif; text-align: center; }
+  .leaflet-tooltip.mp-label { font-size: 12px; padding: 2px 6px; }
+  .mp-legend { background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.4; max-width: 230px; overflow: auto; box-shadow: var(--shadow); }
+  .mp-legend summary { display: list-item; cursor: pointer; font-weight: 600; margin: 0; color: var(--text); }
+  .mp-legend details[open] summary { margin-bottom: 4px; }
+  .mp-legend b { display: block; margin-bottom: 3px; }
+  .mp-legend .ramp { display: flex; gap: 2px; margin: 3px 0 1px; } .mp-legend .ramp i { flex: 1; height: 10px; border-radius: 2px; }
+  .mp-legend .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+  .mp-legend .key { margin-top: 2px; } .mp-legend .key div { white-space: nowrap; }
+  .mp-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+  .mp-legend .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  @media (max-width: 640px) { .mp-legend { max-width: 170px; font-size: 12px; padding: 4px 8px; } .mp-inset { width: 110px; height: 80px; } }
+  .mp-inset { width: 170px; height: 120px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .mp-inset .leaflet-control-container { display: none; }
+  .mp-inset-dot { background: #111827; border: 1px solid #fff; border-radius: 50%; width: 7px; height: 7px; }
+  #mp-offices input { height: 28px; font-size: 13px; }
+  #mp-offices .btn { height: 28px; }
+  #mp-section .tr-controls { margin: 8px 0 10px; }
+
+  /* Calls: the funnel, the day sheet, the promo lines. */
+  .pl-fold { margin-top: 4px; } .pl-fold > summary { font-weight: 500; }
+  .pl-fold .card { margin-top: 8px; }
+  .pl-box { max-height: 420px; overflow: auto; margin-top: 8px; } .pl-box thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: inset 0 -1px 0 var(--border); }
+  #pl-table td { padding: 4px 8px; } #pl-table select, #pl-table input { height: 28px; font-size: 13px; padding: 0 8px; }
+  #pl-table select { padding-right: 26px; }
+  #pl-table input { width: min(240px, 40vw); } #pl-table tr.unmapped td:first-child { color: var(--muted); }
+  .fn-box { max-height: 380px; overflow: auto; margin-top: 12px; } #fn-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; } .fn-box thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: inset 0 -1px 0 var(--border); }
+  #fn-table tr.fn-fold td { cursor: pointer; color: var(--muted); } #fn-table tr.fn-fold td:first-child::before { content: ""; --i: var(--i-right); width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; } #fn-table tr.fn-fold.open td:first-child::before { --i: var(--i-down); }
+  #fn-table tr.fn-sub td { color: var(--muted); } #fn-table tr.fn-sub td:first-child { padding-left: 26px; }
+  #mk-table td.share i { display: inline-block; height: 8px; border-radius: 3px; background: var(--series); vertical-align: middle; margin-right: 6px; }
+  #mk-table td.share span { color: var(--muted); font-size: 12px; }
+  #mk-table td.best { font-weight: 600; color: var(--good); }
+  .fn-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
+  .fn-head .tr-controls { margin: 0; }
+  .cl-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; margin: 4px 0 12px; }
+  .cl-pie svg { width: 170px; height: 170px; flex: none; }
+  .cl-pie .pt { font-size: 13px; font-weight: 600; width: 100%; margin: 0; }
+  .cl-pie ul { list-style: none; margin: 0; padding: 0; font-size: 13px; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, max-content)); gap: 3px 18px; }
+  .cl-pie li { display: flex; align-items: center; gap: 8px; white-space: nowrap; } .cl-pie li i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .cl-pie li span { color: var(--muted); }
+  .cl-pie path { cursor: default; } .cl-pie path:hover, .cl-pie path:focus { opacity: .8; outline: none; }
+  .cl-top { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(min(100%, 22rem), 1.4fr); gap: 12px 24px; align-items: start; margin-bottom: 12px; }
+  @media (max-width: 760px) { .cl-top { grid-template-columns: 1fr; } }
+  .cl-geo .pt { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
+  .cl-mapbox { height: 340px; }
+  .cl-geo .hint { margin: 6px 0 0; }
+  .leaflet-tooltip.cl-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 11px/1.1 system-ui, sans-serif; color: #1f2937; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff; pointer-events: none; }
+  .leaflet-tooltip.cl-city::before { display: none; }
+  .cl-box { max-height: 70vh; overflow: auto; }
+  .cl-sheet { font-size: 13px; }
+  .cl-sheet th, .cl-sheet td { padding: 5px 8px; }
+  .cl-sheet thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; cursor: pointer; box-shadow: inset 0 -1px 0 var(--border); }
+  .cl-sheet thead th:hover { color: var(--text); }
+  .cl-sheet th[aria-sort="descending"]::after, .cl-sheet th[aria-sort="ascending"]::after { content: ""; --i: var(--i-down); width: 10px; height: 10px; margin-left: 4px; vertical-align: -1px; }
+  .cl-sheet th[aria-sort="ascending"]::after { --i: var(--i-up); }
+  .cl-sheet tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+  .cl-sheet tbody tr:hover td { background: var(--hover); }
+  .cl-sheet td.miss { color: var(--bad); } .cl-sheet .ok { color: var(--good); font-weight: 600; white-space: nowrap; } .cl-sheet .booked { color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
+  .cl-sheet .sig { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); margin-right: 3px; color: var(--muted); }
+
+  /* Help: a guided dialog. */
+  #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  #help[open] { display: flex; flex-direction: column; }
+  #help::backdrop { background: rgba(10, 14, 24, .5); }
+  .help-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  .help-head h2 { margin: 0; font-size: 20px; flex: 1; }
+  .help-x { border: 0; background: none; color: var(--muted); cursor: pointer; width: 34px; height: 34px; border-radius: 8px; display: inline-grid; place-items: center; } .help-x svg { width: 16px; height: 16px; }
+  .help-x:hover { background: var(--hover); color: var(--text); }
+  .help-steps { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .help-steps button { font: inherit; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: none; color: var(--text); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .help-steps button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .help-body { overflow: auto; padding: 4px 20px 8px; overscroll-behavior: contain; }
+  .help-body h3 { font-size: 16px; margin: 14px 0 6px; }
+  .help-body h4 { font-size: 14px; }
+  .help-body p, .help-body li { font-size: 14px; line-height: 1.55; }
+  .help-body ol, .help-body ul { padding-left: 22px; margin: 6px 0 10px; }
+  .help-body li { margin: 4px 0; }
+  .help-body .swatch { white-space: nowrap; padding: 0 6px; border-radius: 4px; }
+  .help-report { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+  .help-report h4 { margin: 0 0 4px; font-size: 14px; }
+  .help-report .gives { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+  .path { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 13px; }
+  .path span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+  .path i { color: var(--faint); font-style: normal; }
+  .help-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
+  .help-foot .hint { flex: 1; margin: 0; }
+
+  /* Narrow screens: the sidebar becomes a top bar with a scrolling row of tabs; cards and tables keep their structure. */
+  @media (max-width: 900px) {
+    body { display: block; }
+    .side { position: sticky; top: 0; height: auto; z-index: 30; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand help" "note note" "nav nav";
+            padding: 8px 8px 0; gap: 0 8px; overflow: visible; }
+    .brand { grid-area: brand; padding: 4px 8px 6px; }
+    .brand .mark { width: 26px; height: 26px; }
+    .side .viewer-note { grid-area: note; margin: 0 8px 6px; }
+    .side-foot { grid-area: help; margin: 0; padding: 0; align-self: center; }
+    .side-btn { width: auto; padding: 6px 8px; } .side-btn span { display: none; }
+    nav { grid-area: nav; flex-direction: row; gap: 0; overflow-x: auto; scrollbar-width: none; margin: 0 -8px; padding: 0 8px; }
+    nav::-webkit-scrollbar { display: none; }
+    nav .nav-group { display: none !important; }
+    nav button { width: auto; flex: none; padding: 9px 12px 10px; border-radius: 0; border-bottom: 2px solid transparent; font-size: 13px; }
+    nav button svg { display: none; }
+    nav button:hover { background: none; }
+    nav button.active { background: none; border-bottom-color: #fff; }
+    main { padding: 16px 16px 48px; }
+    .page-head { margin-bottom: 12px; }
+    .page-head h1 { font-size: 20px; }
+    .log-wrap { max-height: calc(100vh - 300px); }
+    .card { padding: 16px; }
+    .table-card { padding: 0; }
+    .mn-current { min-width: 120px; }
+    .side::after { content: ""; position: absolute; right: 0; bottom: 0; width: 40px; height: 40px; background: linear-gradient(90deg, transparent, var(--side)); pointer-events: none; }
+    main { height: auto; overflow: visible; display: block; }
+    #log.active { display: block; } #log .table-card { display: block; margin-bottom: 16px; }
+    .log-wrap { max-height: calc(100vh - 220px); min-height: 240px; }
+    .page-head h1 { line-height: 32px; } .page-sub { order: 2; }
+    .page-actions { order: 3; flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 4px -16px 0; padding: 0 16px; }
+    .page-actions::-webkit-scrollbar { display: none; } .page-actions .btn, .page-actions .picker { flex: none; }
+    .sections { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .sections::-webkit-scrollbar { display: none; } .switch { flex: none; }
+    .table-card > .toolbar { align-items: end; } .table-card > .toolbar > label { flex: 1 1 150px; } .table-card > .toolbar input[type=search] { min-width: 0; width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .page-actions .btn { height: 30px; padding: 0 10px; font-size: 13px; }
+    .rp-tiles, .fn-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rp-tile .v, .fn-step .v { font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } * { transition: none !important; } }
 </style>
 </head>
 <body class="hide-select">
-<header>
-  <h1>Executive Summary Logger</h1>
-  <p class="sub">Executive Summary: total collection · insurance collection · new patients (first visit − existing-patient referrals) · total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: # of ortho referrals. New Patient Analysis: # Medi-Cal, HMO, no SSN/ITIN, financing applicants, existing finance accounts, prime applicants and approvals. From your sheet: refunds.</p>
-  <nav>
-    <button data-tab="log" class="active">Log</button>
-    <button data-tab="charts">Charts</button>
-    <button data-tab="calls">Calls</button>
-    <button data-tab="changes">Changes</button>
-    <button data-tab="upload">Upload</button>
-    <button data-tab="google">Google Sheets</button>
-    <button data-tab="sql">SQL</button>
-    <button data-tab="audit" hidden>Audit</button>
+<aside class="side">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">ES</span>
+    <span><b>Executive Summary Logger</b><small>Care Dentistry Group</small></span>
+  </div>
+  <nav aria-label="Pages">
+    <span class="nav-group">Work</span>
+    <button data-tab="log" class="active"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M6 6.5V13"/></svg>Log</button>
+    <button data-tab="changes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>Changes</button>
+    <button data-tab="upload"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10V3M5 6l3-3 3 3M3 10.5V12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1.5"/></svg>Upload</button>
+    <span class="nav-group">Reports</span>
+    <button data-tab="charts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13V8M8 13V3M13 13V6"/></svg>Charts</button>
+    <button data-tab="calls"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 2.5h2.1l1.1 2.7-1.4 1a7.6 7.6 0 0 0 4.4 4.4l1-1.4 2.7 1.1v2.1a1.2 1.2 0 0 1-1.3 1.2A10.8 10.8 0 0 1 2.4 3.8a1.2 1.2 0 0 1 1.2-1.3z"/></svg>Calls</button>
+    <span class="nav-group nav-admin">Admin · this computer</span>
+    <button data-tab="google" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M2.5 9.5h11M6.5 2.5v11"/></svg>Google Sheets</button>
+    <button data-tab="sql" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6.5 8 3 11.5M8 12h5"/></svg>SQL</button>
+    <button data-tab="audit" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2l4.5 1.8v3.6c0 3-2 5.2-4.5 6.1C5.5 12.6 3.5 10.4 3.5 7.4V3.8z"/><path d="M6 8l1.5 1.5L10 6.5"/></svg>Audit</button>
   </nav>
-</header>
+  <div class="side-foot">
+    <button type="button" class="side-btn" id="help-btn" aria-haspopup="dialog" aria-controls="help" title="Help: how to use this platform" aria-label="Help: how to use this platform"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3"/><circle cx="8" cy="11.4" r=".4" fill="currentColor"/></svg><span>Help &amp; guide</span></button>
+  </div>
+</aside>
 
 <main>
   <!-- Upload -->
   <section id="upload">
+    <div class="page-head">
+      <div><h1>Upload</h1><p class="page-sub">Executive Summary: total collection, insurance collection, new patients, total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: ortho referrals. New Patient Analysis: Medi-Cal, HMO, no SSN/ITIN, financing. Refunds come from your sheet.</p></div>
+    </div>
     <div class="card">
       <div class="drop" id="drop">
-        <strong>Drop a report here</strong><br>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx, .xlsm, or Word (.doc, .docx)
+        <strong>Drop a report here</strong>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx, .xlsm, or Word (.doc, .docx)
         <input type="file" id="file" accept=".pdf,.xlsx,.xlsm,.doc,.docx" hidden>
       </div>
       <p class="msg" id="parse-msg"></p>
@@ -443,6 +576,7 @@
       <div class="row" style="margin-bottom:14px">
         <label>Period from <input type="date" id="from"></label>
         <label>Period thru <input type="date" id="thru"></label>
+        <label>Report covers <select id="period-kind"><option value="month">The 1st through Thru (month-to-date)</option><option value="day">One day only (From = Thru)</option></select></label>
         <span class="spacer"></span>
         <button class="btn primary" id="save">Save to log</button>
       </div>
@@ -462,8 +596,8 @@
 
     <p class="or">or</p>
     <div class="card">
-      <label for="paste-text" style="color:var(--text);font-size:15px;font-weight:600;margin-bottom:6px">Paste from a spreadsheet</label>
-      <p class="hint" style="margin:0 0 8px">Copy the rows from your sheet, including the header row with
+      <h2 class="card-title"><label for="paste-text" style="color:var(--text);font-size:16px;font-weight:600">Paste from a spreadsheet</label></h2>
+      <p class="hint" style="margin:0 0 10px">Copy the rows from your sheet, including the header row with
         <strong>refunds</strong> (office names in the first column), and paste here. Only refunds are collected.</p>
       <textarea id="paste-text" spellcheck="false" placeholder="Paste rows here (Ctrl+V)"></textarea>
       <div class="row" style="margin-top:10px"><button class="btn primary" id="paste-read">Read pasted rows</button></div>
@@ -488,25 +622,34 @@
       </div>
       <p class="msg" id="paste-save-msg"></p>
     </div>
+    <div class="card" id="inbox-card" hidden>
+      <h2 class="card-title">Inbox folder <span class="hint" id="inbox-state"></span></h2>
+      <p class="hint" style="margin-top:0">Save a Denticon report into <code id="inbox-path"></code> and the app imports it within a minute, the same way as
+        the Upload box: a one-day report (From = Thru) goes to the day-by-day history, a month-to-date report to the monthly Log.
+        PDFs carry their dates; name an Excel file with the day, e.g. <em>Executive Summary 2026-10-14.xlsx</em>. Imported files move to
+        <em>done</em>; a file with a problem moves to <em>failed</em> or <em>review</em> with a note beside it.</p>
+      <div class="row" id="robot-row" hidden style="margin:4px 0 10px">
+        <div class="field picker"><span id="rb-range-label">Days to pull</span>
+          <button type="button" class="btn trigger" id="rb-range" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="rb-range-label rb-range">Pick days</button>
+          <div class="cal dp" id="rb-menu" role="dialog" aria-label="Pick the days to pull" hidden></div>
+        </div>
+        <input type="hidden" id="rb-from"><input type="hidden" id="rb-to">
+        <label>Report <select id="rb-report"><option value="exec">Executive Summary</option><option value="referral">Referral Production Listing (NP collection)</option><option value="ortho">Ortho Daily Journal (ortho collection)</option><option value="txplan">Treatment Plan Status (# of ortho referrals)</option><option value="both">Executive Summary + Referral</option><option value="all">All four</option></select></label>
+        <button class="btn primary" id="rb-pull">Pull from Denticon</button>
+        <span class="hint" id="rb-status" style="align-self:center;max-width:60ch"></span>
+      </div>
+      <p class="hint" id="rb-help" hidden style="margin:-4px 0 10px">The robot opens its own Denticon window on this computer and runs the chosen report for each day, one day at a time, into the inbox: the Executive Summary (collections, new patients, production) and/or the Referral Production Listing (NP collection, all offices, grouped by ZIP). The calendar's pulled days are the Executive Summary's.
+        Denticon logs out after 120 minutes at most, so most pulls start with a login: log in in that window when it appears, and the robot carries on.</p>
+      <div class="table-wrap"><table><thead><tr><th>When</th><th>File</th><th>Report</th><th>Dates</th><th style="min-width:26rem">Result</th></tr></thead>
+        <tbody id="inbox-rows"></tbody></table></div>
+    </div>
   </section>
 
   <!-- Log -->
   <section id="log" class="active">
-    <div class="card">
-      <div class="row" style="margin-bottom:12px">
-        <label>Office <input type="search" id="filter" placeholder="Search offices"></label>
-        <button class="btn" id="clear-filters" hidden>Clear</button>
-        <div class="field"><span id="month-label">Month</span>
-          <div class="monthnav" role="group" aria-labelledby="month-label">
-            <button type="button" class="mn-step" id="m-prev" aria-label="Previous month with data">◀</button>
-            <div class="picker">
-              <button type="button" class="mn-current" id="m-current" aria-haspopup="dialog" aria-expanded="false"></button>
-              <div class="cal mgrid" id="m-grid" role="dialog" aria-label="Choose a month" hidden></div>
-            </div>
-            <button type="button" class="mn-step" id="m-next" aria-label="Next month with data">▶</button>
-          </div>
-        </div>
-        <span class="spacer"></span>
+    <div class="page-head">
+      <div><h1>Log</h1><p class="page-sub">One row per office per month. Hover a dotted number for the sheet rows behind it; the Total row adds up the offices shown.</p></div>
+      <div class="page-actions">
         <button class="btn danger" id="delete-selected" disabled>Delete selected</button>
         <div class="picker">
           <button class="btn" id="chk-btn" aria-expanded="false" aria-controls="chk-panel">Checks<span class="chk-count" id="chk-count" hidden></span></button>
@@ -522,8 +665,34 @@
           <button class="btn" id="columns-btn" aria-haspopup="true" aria-expanded="false">Columns</button>
           <div class="cal colmenu" id="columns-menu" hidden></div>
         </div>
-        <button class="btn" id="copy-table" title="Copy the rows and columns shown, to paste into Excel or Google Sheets">Copy</button>
-        <a href="/api/export.csv"><button class="btn">Download CSV</button></a>
+        <button class="btn quiet" id="copy-table" title="Copy the rows and columns shown, to paste into Excel or Google Sheets">Copy</button>
+        <a class="btn quiet" href="/api/export.csv">Download CSV</a>
+      </div>
+    </div>
+    <div class="card table-card">
+      <div class="toolbar">
+        <label>Office <input type="search" id="filter" placeholder="Search offices"></label>
+        <button class="btn" id="clear-filters" hidden>Clear</button>
+        <div class="field"><span id="view-label">View</span>
+          <div class="seg" role="group" aria-labelledby="view-label">
+            <button type="button" id="mode-month" aria-pressed="true">Month</button><button type="button" id="mode-days" aria-pressed="false">Days</button>
+          </div>
+        </div>
+        <div class="field picker" id="d-range-f" hidden><span id="d-range-label">Days</span>
+          <button type="button" class="btn trigger" id="d-range" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="d-range-label d-range">Pick days</button>
+          <div class="cal dp" id="d-menu" role="dialog" aria-label="Pick the days" hidden></div>
+        </div>
+        <input type="hidden" id="d-from"><input type="hidden" id="d-to">
+        <div class="field" id="month-field"><span id="month-label">Month</span>
+          <div class="monthnav" role="group" aria-labelledby="month-label">
+            <button type="button" class="mn-step" id="m-prev" aria-label="Previous month with data"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg></button>
+            <div class="picker">
+              <button type="button" class="mn-current" id="m-current" aria-haspopup="dialog" aria-expanded="false"></button>
+              <div class="cal mgrid" id="m-grid" role="dialog" aria-label="Choose a month" hidden></div>
+            </div>
+            <button type="button" class="mn-step" id="m-next" aria-label="Next month with data"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button>
+          </div>
+        </div>
       </div>
       <div id="bm-panel" class="bm-panel" hidden>
         <div class="row" style="margin-bottom:8px">
@@ -552,7 +721,7 @@
         <p class="msg" id="chk-msg"></p>
       </div>
       <div class="sections" role="group" aria-labelledby="sections-label">
-        <span id="sections-label" class="hint">Sections:</span>
+        <span id="sections-label" class="hint">Sections</span>
         <span id="section-switches"></span>
       </div>
       <div class="table-wrap log-wrap">
@@ -562,13 +731,18 @@
           <tfoot id="log-foot"></tfoot>
         </table>
       </div>
-      <p class="hint" id="log-count"></p>
-      <p class="msg ok" id="copy-msg" role="status" aria-live="polite"></p>
+      <div class="card-foot">
+        <p class="hint" id="log-count"></p>
+        <p class="msg ok" id="copy-msg" role="status" aria-live="polite"></p>
+      </div>
     </div>
   </section>
 
   <!-- Google Sheets -->
   <section id="google">
+    <div class="page-head">
+      <div><h1>Google Sheets</h1><p class="page-sub">Each office's New Patient Analysis sheet is read with a read-only service account. Only counts are saved here; patient rows stay in Google.</p></div>
+    </div>
     <div class="card">
       <h2 class="card-title">1. Connect to Google <span class="hint" id="g-key-state"></span></h2>
       <p class="hint" style="margin-top:0">The app reads each office's sheet with a <strong>read-only</strong> Google service account.
@@ -593,7 +767,7 @@
           open it and use <strong>File → Save as Google Sheets</strong>, and share the new sheet.</p>
       </details>
       <div class="row" style="margin-top:12px">
-        <label class="btn" style="flex-direction:row;cursor:pointer">Add key file (.json)
+        <label class="btn btn-file">Add key file (.json)
           <input type="file" id="g-key-file" accept=".json,application/json" hidden></label>
       </div>
       <p class="msg" id="g-key-msg"></p>
@@ -621,7 +795,7 @@
       <p class="hint" style="margin-top:0" id="g-sync-info"></p>
       <div class="row"><button class="btn primary" id="g-sync">Sync now</button></div>
       <p class="msg" id="g-sync-msg"></p>
-      <h3 style="font-size:15px;margin:16px 0 4px">Load past months</h3>
+      <h3 style="font-size:14px;margin:16px 0 4px">Load past months</h3>
       <p class="hint" style="margin-top:0">The regular sync reads each sheet's newest 2 month tabs. To fill in older months, load every
         month tab from a start month on (New Patient Analysis and refunds). Past months only get the sheets' numbers; collections,
         new patients and the rates that use them need those months' Denticon reports uploaded. This can take a few minutes.</p>
@@ -648,18 +822,20 @@
     </div>
   </section>
 
-  <!-- Changes -->
   <!-- Charts -->
   <section id="charts">
     <div id="ch-report">
-      <div class="row tr-controls" role="group" aria-label="Report filters (apply to the whole report)">
+      <div class="page-head">
+        <div><h1>Charts</h1><p class="page-sub">New-patient collections by home ZIP code: the totals, the months, the biggest ZIPs, the map and every ZIP as a table.</p></div>
+        <div class="page-actions"><button class="btn quiet" id="rp-copy">Copy ZIP table</button></div>
+      </div>
+      <div class="row tr-controls toolbar" role="group" aria-label="Report filters (apply to the whole report)">
         <label>Office <select id="rp-office"></select></label>
         <label>From <select id="rp-from"></select></label>
         <label>To <select id="rp-to"></select></label>
-        <button class="btn" id="rp-copy" style="align-self:flex-end">Copy ZIP table</button>
       </div>
       <div class="card">
-        <h2 class="tr-title">New-patient collections by ZIP code</h2>
+        <h2 class="tr-title">Summary</h2>
         <p class="hint tr-sub" id="rp-lead"></p>
         <div class="rp-tiles" id="rp-tiles"></div>
       </div>
@@ -678,7 +854,7 @@
       <div class="card" id="mp-section">
         <h2 class="tr-title" id="mp-title">New patients by home ZIP code</h2>
         <p class="hint tr-sub" id="mp-sub"></p>
-        <div class="row tr-controls" role="group" aria-label="Map filters (the Office filter above applies too)" style="margin:8px 0 10px">
+        <div class="row tr-controls" role="group" aria-label="Map filters (the Office filter above applies too)">
           <label>Month <select id="mp-month"></select></label>
           <label>Patients <select id="mp-type"><option value="">General + Ortho</option><option>General</option>
             <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
@@ -700,7 +876,7 @@
       <div class="card">
         <h2 class="tr-title">Every ZIP code</h2>
         <p class="hint tr-sub">Ranked by dollars collected. Click a heading to sort; type to search by ZIP, city or office. Click a ZIP to see it on the map.</p>
-        <div class="row" style="margin-bottom:8px"><input type="search" id="rp-search" placeholder="Search ZIP, city or office" aria-label="Search ZIP codes" style="width:min(300px,70vw)"><span class="hint" id="rp-count"></span></div>
+        <div class="row" style="margin-bottom:10px"><input type="search" id="rp-search" placeholder="Search ZIP, city or office" aria-label="Search ZIP codes" style="width:min(300px,70vw)"><span class="hint" id="rp-count" style="align-self:center"></span></div>
         <div class="table-wrap rp-tbox"><table id="rp-table"><thead><tr>
           <th class="num" data-sort="rank">#</th><th data-sort="zip">ZIP</th><th data-sort="city">City</th><th class="num" data-sort="n">New patients</th>
           <th class="num" data-sort="total">Collected</th><th></th><th class="num" data-sort="per">Per patient</th><th class="num" data-sort="share">Share</th>
@@ -712,7 +888,7 @@
         <p class="hint tr-sub">Each office's five biggest ZIP codes by dollars collected, and that ZIP's share of the office's new-patient collections.</p>
         <div class="rp-offices" id="rp-offices"></div>
       </div>
-      <p class="hint" id="rp-foot"></p>
+      <p class="hint rp-foot" id="rp-foot"></p>
       <div class="card" id="mp-admin" hidden style="margin-top:16px">
       <h2 class="card-title" style="margin-top:0">Map setup (only on this computer)</h2>
       <p class="mp-step"><strong>Step 1.</strong> <button class="btn" id="mp-shapedl">Download ZIP boundaries</button>
@@ -721,7 +897,7 @@
       <div class="table-wrap"><table><thead><tr><th>Office</th><th>Address</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
         <tbody id="mp-offices"></tbody></table></div>
       <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter, upload each office's Denticon
-        <strong>Patient List – Address</strong>: <label class="btn-file">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
+        <strong>Patient List – Address</strong>: <label class="btn btn-file">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
         <span class="hint" id="mp-types"></span></p>
       <p class="mp-step"><strong>Then:</strong> on the <strong>Upload</strong> tab, upload the month's <strong>Referral Production Listing</strong>
         (Excel, grouped by Zip Code). The map fills in by itself.</p>
@@ -734,12 +910,15 @@
 
   <!-- Audit (admin: only on the computer running the app) -->
   <section id="audit">
+    <div class="page-head">
+      <div><h1>Audit</h1><p class="page-sub">Denticon checks and the API connections. Only shown on the computer that runs the app.</p></div>
+    </div>
     <div class="card">
       <h2 class="card-title" style="margin-top:0">Denticon check · NP audit sheets vs Daily Journal</h2>
       <p class="hint" style="margin-top:0">Each new patient's financing on the office's NP sheet ($Amt Coll, before the lender's fee)
         compared with what the lenders paid in Denticon (payment + fee), from the Daily Journals uploaded with Patient Type: Both.
         Only shown on this computer. Upload a journal on the Upload tab.</p>
-      <div class="row"><label>Month <select id="au-month"></select></label><span class="hint" id="au-journals"></span></div>
+      <div class="row"><label>Month <select id="au-month"></select></label><span class="hint" id="au-journals" style="align-self:center"></span></div>
       <div class="table-wrap" style="margin-top:10px"><table>
         <thead><tr><th>Office</th><th class="num">NPs checked</th><th class="num">Missing on sheet</th><th class="num">Not in Denticon</th>
           <th class="num">Amount differs</th><th class="num">Different lender</th><th class="num">Odd value</th><th class="num">Marked OK</th></tr></thead>
@@ -747,7 +926,7 @@
       <div id="au-list" style="margin-top:12px"></div>
       <p class="msg" id="au-msg"></p>
     </div>
-    <div class="card" style="margin-top:16px">
+    <div class="card">
       <h2 class="card-title" style="margin-top:0">Denticon API</h2>
       <p class="hint" style="margin-top:0">Connect the app to Denticon with your API subscription key, so it can read the offices' ledgers
         (lender payments and fees) every night instead of uploading Daily Journals. The key is stored only on this computer
@@ -762,7 +941,7 @@
       <p class="msg" id="dx-msg"></p>
       <div class="table-wrap" id="dx-offices"></div>
     </div>
-    <div class="card" style="margin-top:16px">
+    <div class="card">
       <h2 class="card-title" style="margin-top:0">Invoca API (call tracking)</h2>
       <p class="hint" style="margin-top:0">Connect the app to Invoca so it can read call data (calls per office and campaign, durations, signals) with
         the Transactions API. In Invoca: <strong>Integrations → Manage Integrations → Invoca APIs → + New API Credential</strong>. The site name
@@ -784,32 +963,55 @@
     </div>
   </section>
 
-  <!-- Calls: one day's phone calls from Invoca, laid out like a sheet -->
+  <!-- Calls: the funnel, then one day's phone calls from Invoca laid out like a sheet -->
   <section id="calls">
+    <div class="page-head">
+      <div><h1>Calls</h1><p class="page-sub">Invoca calls joined to Denticon's new-patient lists: who called, who came in, who started treatment and what was collected.</p></div>
+    </div>
     <div class="card" id="fn-card">
-      <div class="row" style="justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap">
+      <div class="fn-head">
         <h2 class="tr-title" id="fn-title">Calls to new patients</h2>
-        <div class="row tr-controls" style="margin:0;gap:8px 14px" role="group" aria-label="Funnel filters">
+        <div class="row tr-controls" role="group" aria-label="Funnel filters">
           <label>Call month <select id="fn-month"></select></label>
-          <label>Office (patient side) <select id="fn-office"><option value="">All offices with a list</option></select></label>
-          <label>Break down by <select id="fn-by"><option value="promo_line">promo line</option><option value="campaign">campaign</option></select></label>
+          <label>Office <select id="fn-office"><option value="">All offices</option></select></label>
+          <label>Break down by <select id="fn-by"><option value="channel">marketing channel</option><option value="medium">marketing medium</option><option value="source">marketing source</option><option value="location">location (Invoca)</option><option value="promo_line">promo line</option><option value="office">office</option><option value="campaign">campaign</option></select></label>
         </div>
       </div>
       <p class="hint tr-sub" id="fn-sub"></p>
       <div class="fn-steps" id="fn-steps"></div>
-      <div class="table-wrap fn-box" style="margin-top:10px"><table id="fn-table"><thead><tr><th id="fn-th">Promo line</th><th class="num">Calls</th><th class="num">Answered</th>
+      <div class="table-wrap fn-box"><table id="fn-table"><thead><tr><th id="fn-th">Promo line</th><th class="num">Calls</th><th class="num">Answered</th>
         <th class="num">Became new patients</th><th class="num">Per 100 answered</th><th class="num">Started treatment</th><th class="num">$ collected</th><th class="num">$ per call</th><th class="num">Booked, not yet seen</th></tr></thead>
         <tbody id="fn-rows"></tbody></table></div>
-      <p class="hint" id="fn-note"></p>
+      <p class="hint" id="fn-note" style="margin-top:10px"></p>
     </div>
 
-    <div class="row tr-controls" role="group" aria-label="Calls filters" style="margin-top:16px">
+    <div class="card" id="mk-card">
+      <div class="fn-head">
+        <h2 class="tr-title" id="mk-title">Marketing performance</h2>
+        <div class="row tr-controls" role="group" aria-label="Marketing view">
+          <div class="field"><span id="mk-by-label">Group by</span>
+            <div class="seg" role="group" aria-labelledby="mk-by-label">
+              <button type="button" data-mk="channel" aria-pressed="true">Channel</button><button type="button" data-mk="medium" aria-pressed="false">Medium</button><button type="button" data-mk="source" aria-pressed="false">Source</button>
+            </div>
+          </div>
+          <button class="btn quiet" id="mk-copy" style="align-self:flex-end">Copy</button>
+        </div>
+      </div>
+      <p class="hint tr-sub" id="mk-sub"></p>
+      <div class="table-wrap"><table id="mk-table"><thead><tr><th id="mk-th">Marketing channel</th><th class="num">Calls</th><th style="min-width:120px">Share of calls</th><th class="num">Answer rate</th>
+        <th class="num">New patients</th><th class="num">Per 100 answered</th><th class="num">Started treatment</th><th class="num">$ collected</th><th class="num">$ per call</th><th class="num">$ per new patient</th></tr></thead>
+        <tbody id="mk-rows"></tbody><tfoot id="mk-foot"></tfoot></table></div>
+      <p class="hint" id="mk-note" style="margin-top:10px"></p>
+    </div>
+
+    <div class="row tr-controls toolbar" role="group" aria-label="Calls filters">
       <label>Day <input type="date" id="cl-date"></label>
-      <button class="btn primary" id="cl-pull" style="align-self:flex-end">Pull from Invoca</button>
+      <button class="btn primary" id="cl-pull">Pull this day</button>
+      <button class="btn" id="cl-pull-month" title="Every day of the selected day's month, up to today">Pull whole month</button>
       <label>Office <select id="cl-office"><option value="">All offices</option></select></label>
       <label>Search <input type="search" id="cl-search" placeholder="campaign, city, outcome, signal…"></label>
-      <button class="btn" id="cl-copy" style="align-self:flex-end">Copy</button>
-      <label class="btn btn-file" style="align-self:flex-end" title="Denticon's New Patients List (Pat ID + phone + first visit) or New Patients Through Appointment Book, as Excel">Upload Denticon patient list…<input type="file" id="cl-apptfile" accept=".xlsx,.xlsm" hidden></label>
+      <button class="btn" id="cl-copy">Copy</button>
+      <label class="btn btn-file" title="Denticon's New Patients List (Pat ID + phone + first visit) or New Patients Through Appointment Book, as Excel">Upload Denticon patient list…<input type="file" id="cl-apptfile" accept=".xlsx,.xlsm" hidden></label>
     </div>
     <div class="card">
       <h2 class="tr-title" id="cl-title">Calls</h2>
@@ -821,36 +1023,56 @@
       </div>
       <p class="msg" id="cl-msg"></p>
       <div class="table-wrap cl-box"><table id="cl-table" class="cl-sheet"><thead><tr>
-        <th data-sort="start_utc">Time</th><th data-sort="advertiser">Office</th><th data-sort="campaign">Campaign</th><th data-sort="promo_line">Promo line</th>
+        <th data-sort="start_utc">Time</th><th data-sort="advertiser">Office</th><th data-sort="campaign">Campaign</th><th data-sort="promo_line">Promo line</th><th data-sort="channel">Channel</th>
         <th data-sort="city">City</th><th data-sort="region">State</th><th data-sort="mobile">Phone</th><th data-sort="repeat_caller">Repeat</th>
         <th class="num" data-sort="duration">Rang + talked</th><th class="num" data-sort="connect_duration">Talked</th><th data-sort="result">Outcome</th><th data-sort="match">New patient?</th><th data-sort="signals">Signals</th></tr></thead>
         <tbody id="cl-rows"></tbody></table></div>
-      <p class="hint" id="cl-note"></p>
+      <p class="hint" id="cl-note" style="margin-top:10px"></p>
     </div>
+    <details id="pl-card" class="pl-fold">
+      <summary class="hint">Promo lines → offices (optional: tells the app which office each Invoca line belongs to, so calls can be split by office)</summary>
+      <div class="card">
+      <h2 class="tr-title">Promo lines → offices</h2>
+      <p class="hint tr-sub">Invoca reports every call under the group. Each promo line (a tracking number, or a named line like "GP Google My Business") belongs to
+        one office's website, listing or ad: pick the office here once, and give unnamed numbers a label. Calls then carry an office in the sheet,
+        the Office filters and the funnel. Saved as you go.</p>
+      <p class="hint" id="pl-sub"></p>
+      <div class="table-wrap pl-box"><table id="pl-table"><thead><tr><th>Promo line (as Invoca sends it)</th><th class="num">Calls pulled</th><th>Last call</th><th>Office</th><th>Label</th></tr></thead>
+        <tbody id="pl-rows"></tbody></table></div>
+      <p class="msg" id="pl-msg"></p>
+      </div>
+    </details>
   </section>
 
+  <!-- Changes -->
   <section id="changes">
-    <div class="card">
-      <div class="row" style="margin-bottom:12px">
+    <div class="page-head">
+      <div><h1>Changes</h1><p class="page-sub">Every time a logged number changes, from a Google Sheets sync, an upload or a paste, it's listed here, newest first.</p></div>
+      <div class="page-actions"><button class="btn quiet" id="ch-copy">Copy</button></div>
+    </div>
+    <div class="card table-card">
+      <div class="toolbar">
         <label>Office <input type="search" id="ch-filter" placeholder="Search offices or numbers"></label>
-        <span class="spacer"></span>
-        <button class="btn" id="ch-copy">Copy</button>
       </div>
-      <p class="hint" style="margin-top:0">Every time a logged number changes — from a Google Sheets sync, an upload or a paste — it's listed here, newest first.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>When</th><th>Office</th><th>Month</th><th>Number</th><th class="num">Was</th><th class="num">Now</th><th>How</th><th>Source</th></tr></thead>
           <tbody id="ch-body"></tbody>
         </table>
       </div>
-      <p class="hint" id="ch-count"></p>
+      <div class="card-foot"><p class="hint" id="ch-count"></p></div>
     </div>
   </section>
 
   <!-- SQL -->
   <section id="sql">
+    <div class="page-head">
+      <div><h1>SQL</h1><p class="page-sub">Read-only queries against the log's tables. Ctrl+Enter runs the query.</p></div>
+    </div>
     <div class="card">
-      <p class="hint" style="margin-top:0">Read-only queries against table <code>office_summary</code>:
+      <details>
+        <summary>Tables and columns</summary>
+        <p class="hint" style="margin-top:0">Table <code>office_summary</code>:
         office, period_from, period_thru, total_collection, insurance_collection, new_patients, np_first_visit,
         existing_patient_referrals, total_production, source_file, logged_at. Dates are <code>YYYY-MM-DD</code>.
         One row per office per month. Older versions of replaced or deleted rows are in <code>office_history</code>
@@ -861,6 +1083,7 @@
         irrelevant_rate ((Medi-Cal + HMO + no SSN/ITIN) ÷ new patients, a fraction) and
         ortho_rate (ortho referrals ÷ new patients, a fraction) financing_rate (financing applicants ÷ new patients, a fraction) prime_approval_rate (prime approved ÷ prime applicants), prime_collected_rate (prime $ collected ÷ approved), and the
         averages avg_prime_per_approved_np, avg_prime_per_approved_app, avg_prime_per_app_ran and avg_prime_per_applicant. Sheet-name matches are in <code>office_alias</code>.</p>
+      </details>
       <div class="examples" id="examples"></div>
       <textarea id="query" spellcheck="false">SELECT office, period_thru, total_collection, insurance_collection, new_patients, total_production
 FROM office_summary
@@ -875,11 +1098,10 @@ ORDER BY period_thru DESC, office;</textarea>
   </section>
 </main>
 
-<button type="button" class="help-btn" id="help-btn" aria-haspopup="dialog" aria-controls="help" title="Help: how to use this platform" aria-label="Help: how to use this platform">?</button>
 <dialog id="help" aria-labelledby="help-title">
   <div class="help-head">
-    <h2 id="help-title">How to use the Monthly Report platform</h2>
-    <button type="button" class="help-x" id="help-close" aria-label="Close help">×</button>
+    <h2 id="help-title">How to use the Executive Summary Logger</h2>
+    <button type="button" class="help-x" id="help-close" aria-label="Close help"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
   <div class="help-steps" role="tablist" aria-label="Steps"></div>
   <div class="help-body">
@@ -952,6 +1174,10 @@ ORDER BY period_thru DESC, office;</textarea>
         report and its dates, then click <strong>Save anyway</strong> or <strong>Cancel</strong>.</p>
       <p>⚠ If a warning appears above <em>Save</em>, a value looks wrong (see Step 4). You can still save; it will be flagged in the log.</p>
       <p>Don't upload a New Patient Analysis for an office whose Google Sheet is connected; the sync keeps it up to date.</p>
+      <p><strong>Day by day:</strong> run the Executive Summary (and, if you want them by day, the Referral Production Listing, ortho
+        Daily Journal and Treatment Plan Status) with <em>From</em> and <em>Thru</em> set to the same day, one file per day. These go
+        to the day-by-day history, not the monthly row, and the Log's <strong>Days</strong> view adds any run of days up. The
+        <strong>Inbox folder</strong> on this tab imports files saved into it by itself.</p>
     </div>
 
     <div class="help-step" data-title="3. Read the log" role="tabpanel">
@@ -959,6 +1185,8 @@ ORDER BY period_thru DESC, office;</textarea>
       <ul>
         <li>The <strong>Log</strong> tab has one row per office per month. Use <strong>◀ Month ▶</strong> to change the month,
           or pick <em>All months</em>.</li>
+        <li><strong>Days</strong> (next to Month) shows any run of days, from one-day reports added up per office: pick From and To.
+          A row says how many of the days it has; hover the period for the missing ones. Only the numbers that come from daily reports show.</li>
         <li><strong>Sections</strong> switches show or hide groups of columns (Executive Summary, Collections, Ortho, Prime…).
           <strong>Columns</strong> and <strong>Office order</strong> let you rearrange them; your layout is remembered in this browser.</li>
         <li>Click a column header to sort. The <strong>Total</strong> row at the bottom adds up the offices shown (rates are
@@ -973,8 +1201,7 @@ ORDER BY period_thru DESC, office;</textarea>
           your offices as numbered pins and only the cities that have patients or an office named. Hover a ZIP area for its Pat IDs and
           $ collected. It fills from the Referral Production Listing when it's run <em>grouped by Zip Code</em> and saved as Excel.</li>
         <li>The <strong>Calls</strong> tab starts with the funnel for a call month: calls, answered, callers who became new patients,
-          who started treatment, and $ collected, broken down by promo line or campaign. Below it, one day's phone calls from Invoca as a sheet: pick the day, click <strong>Pull from
-          Invoca</strong> once, then sort, filter, search and Copy. Upload Denticon's <em>New Patients List</em> for each office now and
+          who started treatment, and $ collected, broken down by promo line, office or campaign. Below it, one day's phone calls from Invoca as a sheet: pick the day, click <strong>Pull this day</strong> (or <strong>Pull whole month</strong>) once, then sort, filter, search and Copy. At the bottom, <strong>Promo lines → offices</strong>: tell the app once which office each Invoca line belongs to, and calls get an office. Upload Denticon's <em>New Patients List</em> for each office now and
           then (or the <em>New Patients Through Appointment Book</em>) and the "New patient?" column shows which callers came in as new
           patients, with the $ collected, or booked a first appointment (phone numbers are matched as fingerprints, never kept).
           Invoca is connected on the Audit tab (this computer only).</li>
@@ -988,9 +1215,9 @@ ORDER BY period_thru DESC, office;</textarea>
       <h3>Step 4 · Benchmarks and data checks</h3>
       <h4 style="margin:10px 0 4px">Benchmark colors</h4>
       <ul>
-        <li><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink);padding:0 6px;border-radius:4px">● green</span> on target,
-          <span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink);padding:0 6px;border-radius:4px">▲ yellow</span> close,
-          <span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink);padding:0 6px;border-radius:4px">▼ red</span> below target.</li>
+        <li><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink)">● green</span> on target,
+          <span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink)">▲ yellow</span> close,
+          <span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink)">▼ red</span> below target.</li>
         <li>A <strong>◎</strong> in a column header means it has a benchmark; hover it to see the cut-offs.
           <span class="help-edit">The <strong>Benchmarks</strong> button shows them all and lets you change them (same for every office).</span></li>
       </ul>
@@ -1005,7 +1232,7 @@ ORDER BY period_thru DESC, office;</textarea>
     </div>
   </div>
   <div class="help-foot">
-    <p class="hint">Open this anytime with the <strong>?</strong> button.</p>
+    <p class="hint">Open this anytime with <strong>Help &amp; guide</strong> in the sidebar.</p>
     <button type="button" class="btn" id="help-prev">Back</button>
     <button type="button" class="btn primary" id="help-next">Next</button>
   </div>
@@ -1016,6 +1243,10 @@ const $ = id => document.getElementById(id);
 const money = n => Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function msg(el, text, ok) { el.textContent = text; el.className = "msg " + (ok ? "ok" : "err"); }
+// Loading and change cues: skeleton rows while data is on its way, a short fade when a table is swapped in place.
+const skelRows = (n, cols, sel = true) => Array.from({length: n}, () => `<tr>${sel ? '<td class="sel-col"></td>' : ""}${Array.from({length: cols}, (_, i) => `<td class="${i ? "num" : ""}"><span class="skel"></span></td>`).join("")}</tr>`).join("");
+const skelTiles = (n, cls) => Array.from({length: n}, () => `<div class="${cls} is-skel"><span class="skel k"></span><span class="skel v"></span><span class="skel s"></span></div>`).join("");
+function swapCue(el) { if (!el) return; el.classList.add("swap"); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("swap"))); }
 
 async function api(path, body, headers = {}) {
   const res = await fetch(path, {method: body === undefined ? "GET" : "POST", body, headers});
@@ -1027,13 +1258,14 @@ async function api(path, body, headers = {}) {
 // Tabs
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button, section").forEach(e => e.classList.remove("active"));
-  b.classList.add("active"); $(b.dataset.tab).classList.add("active");
+  b.classList.add("active"); $(b.dataset.tab).classList.add("active"); window.scrollTo(0, 0); document.querySelector("main").scrollTo(0, 0);
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
   if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); }
   if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
   if (b.dataset.tab === "changes") loadChanges();
-  if (b.dataset.tab === "calls") { loadFunnel(); loadCalls(); }
+  if (b.dataset.tab === "upload") loadInbox();
+  if (b.dataset.tab === "calls") { loadFunnel(); loadCalls(); if ($("pl-card").open) loadPromoLines(); }
 });
 
 // Upload + parse
@@ -1053,6 +1285,7 @@ async function handleFile(file) {
     msg($("parse-msg"), parsed.report_type === "np_analysis"
       ? `${file.name}: New Patient Analysis for ${parsed.offices[0].office} — latest sheet “${parsed.sheet}”, ${parsed.patient_rows} patient rows counted.`
         + (parsed.empty_tabs_skipped?.length ? ` (“${parsed.empty_tabs_skipped.join("”, “")}” has no patients yet, so it was skipped.)` : "")
+      : parsed.empty ? `${file.name}: ${REPORT_NAMES[parsed.report_type]} with no activity in any office (a closed day). Save it so the day counts as closed in the day-by-day history.`
       : `${file.name}: ${REPORT_NAMES[parsed.report_type]}, found ${parsed.offices.length} office(s)`
       + (parsed.grand_total != null ? ` — matches the report's Grand Total of ${money(parsed.grand_total)}.` : ".")
       + (parsed.filter_confirmed === false ? " This file doesn't show which proc codes it was run for — make sure it was ZREFORTH." : ""), true);
@@ -1145,7 +1378,11 @@ function renderReview() {
     <th>Office</th>${shownReviewCols().map(([, label]) => `<th class="num">${label}</th>`).join("")}`;
   $("all").onchange = e => { document.querySelectorAll(".pick").forEach(c => c.checked = e.target.checked); updateTotals(); };
   $("from").value = p.from || ""; $("thru").value = p.thru || "";
-  $("period-hint").textContent = p.from && p.thru
+  const oneDay = !!(p.from && p.thru && p.from === p.thru), dayOk = !["np_analysis", "lender_journal"].includes(parsed.report_type);
+  $("period-kind").value = oneDay && dayOk ? "day" : "month"; $("period-kind").closest("label").hidden = !dayOk;
+  $("period-hint").textContent = oneDay && dayOk
+    ? "One-day report (From = Thru): it goes to the day-by-day history, which the Log shows under Days. The monthly row is not touched."
+    : p.from && p.thru
     ? (parsed.report_type === "np_analysis"
         ? "Thru is the latest date on the sheet. Change it if needed. Saving replaces any earlier numbers for this office and month."
         : "Period read from the report. Saving replaces any earlier report for the same offices and month.")
@@ -1176,10 +1413,11 @@ function updateTotals() {
   const s = selected(), sum = k => s.reduce((a, o) => a + o[k], 0);
   $("review-foot").innerHTML = s.length > 1 ? `<tr><td class="sel-col"></td><td>Total (${s.length} offices)</td>
     ${shownReviewCols().map(([k, , kind]) => `<td class="num">${kind === "money" ? money(sum(k)) : sum(k)}</td>`).join("")}</tr>` : "";
-  $("save").disabled = !s.length;
+  $("save").disabled = !s.length && !parsed.empty;
 }
 // Reports are month-to-date, so From is always the 1st of Thru's month.
-$("thru").onchange = () => { if ($("thru").value) $("from").value = $("thru").value.slice(0, 8) + "01"; };
+const syncFrom = () => { const t = $("thru").value; if (t) $("from").value = $("period-kind").value === "day" ? t : t.slice(0, 8) + "01"; };
+$("thru").onchange = syncFrom; $("period-kind").onchange = syncFrom;
 
 // Saving checks dates and numbers first: a future date is refused, an older date than the log has is skipped,
 // and lower (or same-date changed) numbers are listed for a "Save anyway".
@@ -1219,13 +1457,13 @@ async function saveUpload(confirm = false) {
           {"Content-Type": "application/json"})
       : metrics
       ? await api("/api/save-metrics", JSON.stringify({
-          as_of: thru, period_from: from, source: parsed.source_file, from_report: true, confirm,
+          as_of: thru, period_from: from, source: parsed.source_file, from_report: true, confirm, report_type: parsed.report_type,
           rows: selected().map(o => ({sheet_office: o.office, office: o.office,
                                       values: Object.fromEntries(metrics.map(k => [k, o[k]])),
                                       details: o.details}))}),
           {"Content-Type": "application/json"})
       : await api("/api/save", JSON.stringify({
-          period_from: from, period_thru: thru, source_file: parsed.source_file, offices: selected(), confirm}),
+          period_from: from, period_thru: thru, source_file: parsed.source_file, offices: selected(), confirm, empty: !!parsed.empty}),
           {"Content-Type": "application/json"});
     if (r.needs_review) return showReview($("save-confirm"), r, $("save-msg"), () => saveUpload(true));
     const parts = [];
@@ -1233,7 +1471,9 @@ async function saveUpload(confirm = false) {
     if (r.replaced) parts.push(parsed.report_type === "lender_journal" ? `replaced ${r.replaced} (this month's earlier journal)`
                                                                      : `updated ${r.replaced} (earlier version kept in history)`);
     if (r.unchanged) parts.push(`${r.unchanged} unchanged`);
-    let text = `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
+    if (r.closed) parts.push("recorded as a closed day");
+    let text = r.daily ? `${monthDay(r.day)} (day-by-day history): ${parts.join(", ") || "nothing changed"}.`
+                       : `${from} → ${thru}: ${parts.join(", ") || "nothing changed"}.`;
     if (parsed.report_type === "lender_journal") text += " See the Audit tab for differences from the NP sheets.";
     if (parsed.map_note) text += " " + parsed.map_note;
     if (r.skipped.length) text += ` Skipped ${r.skipped.length} because the log already has a later report for this month: ${r.skipped.join("; ")}. ${LATER_HELP}`;
@@ -1849,6 +2089,11 @@ const sectionOf = Object.fromEntries(SECTIONS.flatMap(sec => sec.keys.map(k => [
 }
 let hiddenSections = new Set();
 try { hiddenSections = new Set(JSON.parse(localStorage.getItem("hiddenSections")) || []); } catch {}
+// Days view state (declared before the first render so colShown can read it).
+let logMode = "month", dayRows = [], dayInfo = null;
+// Numbers that one-day reports give; the Days view shows only these.
+const DAY_KEYS = new Set(["office", "period_thru", "total_collection", "insurance_collection", "new_patients", "total_production",
+  "np_collection", "existing_pt_collection", "ortho_collection", "ortho_referrals", "ortho_rate", "source_file"]);
 const colShown = c => !hiddenCols.has(c.key) && !hiddenSections.has(sectionOf[c.key]?.id);
 
 function renderSectionSwitches() {
@@ -1898,9 +2143,9 @@ function buildLogHead() {
   requestAnimationFrame(() => $("log").style.setProperty("--bands-h", `${$("log-bands").offsetHeight}px`));
   $("log-head").innerHTML = `<th class="sel-col"><input type="checkbox" id="log-all" aria-label="Select all shown"></th>`
     + orderedCols().map(c => {
-      const bench = benchFor(c.key), title = [c.title, bench && benchText(c.key)].filter(Boolean).join(" — ");
+      const bench = benchFor(c.key), title = [c.label.length > 24 ? c.label : "", c.title, bench && benchText(c.key)].filter(Boolean).join(" — ");
       return `<th class="sortable${c.kind === "text" || c.kind === "period" ? "" : " num"}" data-key="${c.key}" data-col="${c.key}"
-        ${title ? `title="${esc(title)}"` : ""}><button type="button">${c.label}${bench ? '<span class="bm-flag" aria-hidden="true">◎</span>' : ""}<span class="arrow" aria-hidden="true"></span></button></th>`;
+        ${title ? `title="${esc(title)}"` : ""}><button type="button"><span class="lbl">${c.label}</span>${bench ? '<span class="bm-flag" aria-hidden="true">◎</span>' : ""}<span class="arrow" aria-hidden="true"></span></button></th>`;
     }).join("");
   document.querySelectorAll("#log th.sortable").forEach(th => th.querySelector("button").onclick = () => {
     const key = th.dataset.key;
@@ -2075,6 +2320,7 @@ function updateSortHeaders() {
 }
 buildLogHead();
 async function loadLog() {
+  if (!logRows.length) { $("log-body").innerHTML = skelRows(8, orderedCols().filter(colShown).length); $("log-count").textContent = "Loading the log…"; }
   try {
     [logRows, benchmarks, checkInfo] = await Promise.all([api("/api/log"), api("/api/benchmarks").catch(() => []),
       api("/api/checks").catch(() => ({ok: []}))]);
@@ -2090,8 +2336,9 @@ function renderLog() {
   const f = $("filter").value.toLowerCase();
   $("clear-filters").hidden = !f;
   renderMonthNav();
-  const rows = logRows.filter(r => (!f || r.office.toLowerCase().includes(f))
-                                && (logMonth === "all" || r.period_from.slice(0, 7) === logMonth))
+  const base = logMode === "days" ? dayRows : logRows;
+  const rows = base.filter(r => (!f || r.office.toLowerCase().includes(f))
+                                && (logMode === "days" || logMonth === "all" || r.period_from.slice(0, 7) === logMonth))
                      .sort(compareRows);
   updateSortHeaders();
   shownRows = rows;
@@ -2102,8 +2349,17 @@ function renderLog() {
   const mmdd = iso => iso.slice(5).replace("-", "/");
   const bodyCell = (r, c) => {
     if (c.key === "office") return `<td data-col="office">${esc(r.office)}</td>`;
-    if (c.kind === "period") return `<td data-col="${c.key}" title="${r.period_from} → ${r.period_thru}">${periodLabel(r)}</td>`;
+    if (c.kind === "period") {
+      const short = logMode === "days" && dayInfo && r.days < dayInfo.days;
+      const closed = logMode === "days" && r.closed && r.closed.length ? ` Closed (no activity): ${r.closed.map(mmdd).join(", ")}.` : "";
+      const title = short ? `${r.days} of ${dayInfo.days} days. Not pulled yet: ${r.missing.map(mmdd).join(", ")}.${closed}` : `${r.period_from} → ${r.period_thru}.${closed}`;
+      const fromDays = logMode !== "days" && r.from_days ? `<span class="asof">from daily reports</span>`
+        : logMode === "days" && r.np_undated && dayInfo && !dayInfo.sheet_ok ? `<span class="asof" title="These New Patient Analysis rows have no date line on the sheet and aren't on an uploaded New Patients List yet, so they can't be placed on a day and are left out of this range. Upload the office's New Patients List to date them.">${r.np_undated} NP sheet row${r.np_undated === 1 ? "" : "s"} undated</span>` : "";
+      return `<td data-col="${c.key}" title="${esc(r.from_days && logMode !== "days" ? `${r.period_from} → ${r.period_thru}, added up from ${r.from_days} one-day reports` : title)}">${periodLabel(r)}${short ? `<span class="asof">${r.days} of ${dayInfo.days} days</span>` : ""}${fromDays}</td>`;
+    }
     if (c.key === "source_file") return `<td data-col="source_file" class="hint src" title="${esc(r.source_file || "")}">${esc(r.source_file || (r.refunds != null ? "pasted sheet" : ""))}</td>`;
+    if (logMode === "days" && dayInfo && !dayInfo.sheet_ok && !DAY_KEYS.has(c.key) && r[c.key] == null)
+      return `<td data-col="${c.key}" class="num"><span class="none" title="Comes once a month (refunds, the New Patient Analysis sheets). Pick a range from a month's 1st through its latest day to see it.">monthly</span></td>`;
     const asOf = c.asOf && r[c.key] != null && r[c.key + "_as_of"] !== r.period_thru
       ? `<span class="asof">as of ${mmdd(r[c.key + "_as_of"])}</span>` : "";
     let tip = "";
@@ -2118,7 +2374,10 @@ function renderLog() {
   };
   $("log-body").innerHTML = rows.map((r, i) => `<tr>
     <td class="sel-col"><input type="checkbox" class="log-pick" value="${i}" aria-label="Select ${esc(r.office)} ${r.period_thru}"></td>
-    ${orderedCols().map(c => bodyCell(r, c)).join("")}</tr>`).join("");
+    ${orderedCols().map(c => bodyCell(r, c)).join("")}</tr>`).join("")
+    || (logMode === "days"
+      ? `<tr><td colspan="${orderedCols().length + 1}"><div class="empty"><b>${dayRows.length ? "No rows match" : dayInfo ? "No one-day reports for these days yet" : "Pick From and To"}</b>${dayRows.length ? "Clear the office search." : dayInfo ? "Upload Executive Summary reports run for a single day (From = Thru), or save them in the inbox folder." : "The Days view adds up one-day reports for any run of days."}</div></td></tr>`
+      : `<tr><td colspan="${orderedCols().length + 1}"><div class="empty"><b>${logRows.length ? "No rows match" : "The log is empty"}</b>${logRows.length ? "Try another month, or clear the office search." : "Upload a report on the Upload tab to start."}</div></td></tr>`);
   const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
   const monthsShown = new Set(rows.map(r => r.period_from.slice(0, 7))).size;
   const footCell = c => {
@@ -2129,6 +2388,14 @@ function renderLog() {
     return `<td data-col="${c.key}" class="num">${fmt(v, c.kind)}</td>`;
   };
   $("log-foot").innerHTML = rows.length ? `<tr><td class="sel-col"></td>${orderedCols().map(footCell).join("")}</tr>` : "";
+  if (logMode === "days") {
+    const short = rows.filter(r => dayInfo && r.days < dayInfo.days);
+    $("log-count").textContent = !dayInfo ? "" : !dayRows.length ? `No one-day reports between ${monthDay(dayInfo.from)} and ${monthDay(dayInfo.to)}.`
+      : `${rows.length} office${rows.length === 1 ? "" : "s"} · ${dayInfo.days} day${dayInfo.days === 1 ? "" : "s"}`
+        + (dayInfo.not_imported?.length ? ` · not pulled yet: ${dayInfo.not_imported.map(d => d.slice(5).replace("-", "/")).join(", ")}` : " · every day pulled")
+        + (short.length ? " (hover a period for details)" : "")
+        + (dayInfo.sheet_ok ? " · refunds and NP sheet columns included" : " · refunds and NP sheet columns show for ranges from a month's 1st through its latest day");
+  } else
   $("log-count").textContent = logRows.length ? `${rows.length} of ${logRows.length} rows` : "The log is empty. Upload a report to start.";
   $("log-all").checked = false;
   document.querySelectorAll(".log-pick").forEach(c => c.onchange = updateDeleteButton);
@@ -2138,9 +2405,91 @@ let shownRows = [];
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 // "Sep 1–20, 2026"
 function periodLabel(r) {
-  const [y, m, d1] = r.period_from.split("-").map(Number), d2 = Number(r.period_thru.slice(8));
-  return `${MON[m - 1]} ${d1}–${d2}, ${y}`;
+  const [y, m, d1] = r.period_from.split("-").map(Number), [y2, m2, d2] = r.period_thru.split("-").map(Number);
+  if (y === y2 && m === m2) return d1 === d2 ? `${MON[m - 1]} ${d1}, ${y}` : `${MON[m - 1]} ${d1}–${d2}, ${y}`;
+  return `${MON[m - 1]} ${d1}${y === y2 ? "" : ", " + y} – ${MON[m2 - 1]} ${d2}, ${y2}`;
 }
+// Days view: any run of days, from the one-day reports added up on the server.
+try { const s = JSON.parse(localStorage.getItem("logDays")) || {}; if (s.from && s.to) { $("d-from").value = s.from; $("d-to").value = s.to; } } catch {}
+// A calendar of the days that exist. mode "data": days with reports are blue and clickable, closed days (no activity)
+// are clickable with an outline, days never pulled are gray, days that haven't happened are off. mode "pull": the
+// days NOT pulled yet are the blue ones (what the robot should fetch); pulled days show green and can be pulled again.
+// Two clicks pick a range (the same day twice picks one day). The chosen days go into two hidden inputs.
+function dayPicker({button, menu, fromInput, toInput, mode, onChange}) {
+  let info = null, view = null, start = null;
+  const two = n => String(n).padStart(2, "0"), md = d => d.slice(5).replace("-", "/");
+  const nice = (d, year) => new Date(d + "T12:00:00").toLocaleDateString(undefined, year ? {month: "short", day: "numeric", year: "numeric"} : {month: "short", day: "numeric"});
+  const label = () => { const f = fromInput.value, t = toInput.value;
+    button.textContent = f && t ? (f === t ? nice(f, true) : `${nice(f)} – ${nice(t, true)}`) : (mode === "pull" ? "Pick days to pull" : "Pick days");
+    button.classList.toggle("unset", !(f && t)); };
+  const close = focus => { menu.hidden = true; button.setAttribute("aria-expanded", "false"); start = null; if (focus) button.focus(); };
+  const render = () => {
+    const days = info.days, today = info.today, f = fromInput.value, t = toInput.value;
+    const months = [...new Set(Object.keys(days).map(d => d.slice(0, 7)))].sort();
+    const minMonth = months[0] || today.slice(0, 7), maxMonth = today.slice(0, 7);
+    if (!view) view = f ? f.slice(0, 7) : (mode === "pull" ? maxMonth : months[months.length - 1] || maxMonth);
+    const [y, m] = view.split("-").map(Number), offset = new Date(y, m - 1, 1).getDay(), count = new Date(y, m, 0).getDate();
+    let html = `<div class="cal-head"><button type="button" data-nav="-1" ${view > minMonth ? "" : "disabled"} aria-label="Previous month"></button><span>${MONTH_NAMES[m - 1]} ${y}</span><button type="button" data-nav="1" ${view < maxMonth ? "" : "disabled"} aria-label="Next month"></button></div>`;
+    html += `<div class="dp-grid">${["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => `<span class="dow">${d}</span>`).join("")}${"<span></span>".repeat(offset)}`;
+    for (let d = 1; d <= count; d++) {
+      const day = `${y}-${two(m)}-${two(d)}`, n = days[day], pulled = n !== undefined, closed = pulled && n === 0, future = day > today;
+      let cls = "dp-day", title = "", on = false;
+      if (future) { cls += " off"; title = "Hasn't happened yet"; }
+      else if (mode === "data") {
+        if (closed) { cls += " closed"; title = "Closed: no activity that day"; on = true; }
+        else if (pulled) { cls += " has"; title = `${n} office${n === 1 ? "" : "s"}`; on = true; }
+        else { cls += " none"; title = "Not pulled yet"; }
+      } else {
+        if (pulled) { cls += " pulled"; title = (closed ? "Pulled: a closed day" : `Pulled (${n} offices)`) + ". Click to pull it again."; on = true; }
+        else { cls += " has"; title = day === today ? "Today (only part of the day so far)" : "Not pulled yet"; on = true; }
+      }
+      if (start ? day === start : (day === f || day === t)) cls += " sel"; else if (!start && f && t && day > f && day < t) cls += " in";
+      if (day === today) cls += " today";
+      html += `<button type="button" class="${cls}" data-day="${day}" ${on ? "" : "disabled"} title="${title}">${d}</button>`;
+    }
+    html += `</div><div class="dp-legend">${mode === "data" ? '<span><i style="background:var(--accent-soft)"></i>has reports</span><span><i style="box-shadow:inset 0 0 0 1px var(--border)"></i>closed</span><span><i style="background:var(--hover)"></i>not pulled</span>'
+      : '<span><i style="background:var(--accent-soft)"></i>not pulled yet</span><span><i style="background:var(--good-soft)"></i>pulled</span>'}</div>`;
+    html += `<div class="cal-foot"><span>${start ? `From ${md(start)}: now click the last day` : f && t ? (f === t ? nice(f, true) : `${md(f)} – ${md(t)}`) : "Click the first day, then the last"}</span><span>${f ? '<button type="button" data-clear>Clear</button>' : ""}</span></div>`;
+    menu.innerHTML = html;
+    menu.querySelectorAll("[data-nav]").forEach(b => b.onclick = () => { const [yy, mm] = view.split("-").map(Number); const nd = new Date(yy, mm - 1 + Number(b.dataset.nav), 1); view = `${nd.getFullYear()}-${two(nd.getMonth() + 1)}`; render(); });
+    menu.querySelectorAll(".dp-day:not(:disabled)").forEach(b => b.onclick = () => {
+      const day = b.dataset.day;
+      if (!start) { start = day; render(); return; }
+      let a = start, z = day; if (z < a) [a, z] = [z, a];
+      fromInput.value = a; toInput.value = z; start = null; label(); close(true); onChange();
+    });
+    menu.querySelector("[data-clear]")?.addEventListener("click", () => { fromInput.value = toInput.value = ""; start = null; label(); render(); onChange(); });
+  };
+  button.onclick = async () => {
+    if (!menu.hidden) return close(false);
+    try { info = await api("/api/days"); } catch (e) { info = {days: {}, today: today()}; }
+    view = null; start = null; menu.hidden = false; button.setAttribute("aria-expanded", "true"); render();
+    (menu.querySelector(".dp-day.sel") || menu.querySelector(".dp-day:not(:disabled)"))?.focus();
+  };
+  document.addEventListener("mousedown", e => { if (!menu.hidden && !e.target.closest(`#${menu.id}, #${button.id}`)) close(false); });
+  menu.onkeydown = e => { if (e.key === "Escape") close(true); };
+  label();
+  return {label};
+}
+const dRange = dayPicker({button: $("d-range"), menu: $("d-menu"), fromInput: $("d-from"), toInput: $("d-to"), mode: "data", onChange: () => loadDays()});
+function setLogMode(mode) {
+  logMode = mode;
+  $("mode-month").setAttribute("aria-pressed", mode === "month"); $("mode-days").setAttribute("aria-pressed", mode === "days");
+  $("month-field").hidden = mode === "days"; $("d-range-f").hidden = mode !== "days";
+  applyHiddenCols(); buildLogHead(); renderSectionSwitches();
+  if (mode === "days") loadDays(); else renderLog();
+}
+$("mode-month").onclick = () => setLogMode("month"); $("mode-days").onclick = () => setLogMode("days");
+async function loadDays() {
+  const f = $("d-from").value, t = $("d-to").value;
+  if (!f || !t) { dayRows = []; dayInfo = null; renderLog(); return; }
+  try { localStorage.setItem("logDays", JSON.stringify({from: f, to: t})); } catch {}
+  swapCue(document.querySelector("#log .log-wrap"));
+  try { dayInfo = await api(`/api/log/days?from=${f}&to=${t}`); dayRows = dayInfo.rows; }
+  catch (e) { dayRows = []; dayInfo = null; renderLog(); $("log-count").textContent = e.message; return; }
+  renderLog();
+}
+dRange.label();
 const pct = v => v == null ? '<span class="none">—</span>' : (v * 100).toFixed(2) + "%";
 
 // Copy a grid of cells so it pastes into Excel / Google Sheets as rows and columns
@@ -2207,7 +2556,7 @@ $("delete-selected").onclick = async () => {
     loadLog();
   } catch (e) { $("log-count").textContent = e.message; }
 };
-$("filter").oninput = renderLog;
+$("filter").oninput = () => { swapCue(document.querySelector("#log .log-wrap")); renderLog(); };
 // Month navigator: the Log shows one month at a time ("YYYY-MM"), or "all".
 let logMonth = null;
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September",
@@ -2215,7 +2564,7 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 const monthName = ym => ym === "all" ? "All months" : `${MONTH_NAMES[Number(ym.slice(5)) - 1]} ${ym.slice(0, 4)}`;
 const dataMonths = () => [...new Set(logRows.map(r => r.period_from.slice(0, 7)))].sort();
 let gridYear = null;
-function setMonth(ym) { logMonth = ym; closeMonthGrid(false); renderLog(); }
+function setMonth(ym) { logMonth = ym; closeMonthGrid(false); swapCue(document.querySelector("#log .log-wrap")); renderLog(); }
 function renderMonthNav() {
   const months = dataMonths(), i = months.indexOf(logMonth);
   $("m-current").textContent = monthName(logMonth || "all");
@@ -2349,6 +2698,40 @@ $("g-sync").onclick = async () => {
   loadGoogle();
 };
 
+// Inbox folder (only on the computer running the app): what was imported from data/inbox lately.
+async function loadInbox() {
+  let d; try { d = await api("/api/inbox"); } catch { $("inbox-card").hidden = true; return; }
+  $("inbox-card").hidden = false; $("inbox-path").textContent = d.folder; loadRobot();
+  $("inbox-state").textContent = d.pending.length ? `${d.pending.length} file(s) waiting` : d.every_seconds >= 60 ? `checked every ${Math.round(d.every_seconds / 60)} minute${d.every_seconds >= 120 ? "s" : ""}` : `checked every ${d.every_seconds} seconds`;
+  const dates = r => r.period_from ? (r.period_from === r.period_thru ? r.period_from : `${r.period_from} → ${r.period_thru}`) : "";
+  $("inbox-rows").innerHTML = d.recent.map(r => `<tr><td>${when(r.seen_at)}</td><td title="${esc(r.file)}">${esc(r.file.length > 48 ? r.file.slice(0, 45) + "…" : r.file)}</td>
+    <td>${esc(REPORT_NAMES[r.report_type] || r.report_type || "")}</td><td>${dates(r)}</td>
+    <td class="${r.status === "failed" ? "err-text" : r.status === "review" ? "" : "ok-text"}" style="white-space:normal;max-width:420px">${esc(r.status)}${r.note ? ": " + esc(r.note) : ""}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="hint">Nothing imported yet.</td></tr>`;
+}
+
+// The Denticon robot: pull a run of days into the inbox; the status line follows the robot while it runs.
+let rbTimer = null;
+const rbRange = dayPicker({button: $("rb-range"), menu: $("rb-menu"), fromInput: $("rb-from"), toInput: $("rb-to"), mode: "pull", onChange: () => {}});
+async function loadRobot() {
+  let st; try { st = await api("/api/robot"); } catch { $("robot-row").hidden = $("rb-help").hidden = true; return; }
+  $("robot-row").hidden = $("rb-help").hidden = !st.available;
+  if (!$("rb-from").value) { $("rb-from").value = $("rb-to").value = clYesterday(); rbRange.label(); }
+  const busy = st.running || st.state === "waiting_login";
+  $("rb-pull").disabled = busy;
+  const whenTxt = st.last_run ? ` (last run ${when(st.last_run)})` : "";
+  $("rb-status").textContent = st.state === "waiting_login" ? "Waiting for you: log into Denticon in the robot window." : (st.message || (st.available ? "Not run yet." : "")) + (busy ? "" : whenTxt);
+  $("rb-status").className = "hint " + (st.state === "error" ? "err-text" : st.state === "done" ? "ok-text" : "");
+  clearTimeout(rbTimer);
+  if (busy) rbTimer = setTimeout(loadRobot, 4000); else if (st.state === "done" && st.days?.length) setTimeout(loadInbox, 20000);   // the inbox imports within a minute
+}
+$("rb-pull").onclick = async () => {
+  if (!$("rb-from").value || !$("rb-to").value) { $("rb-status").textContent = "Pick the days to pull first."; $("rb-status").className = "hint err-text"; return; }
+  try { await api("/api/robot/pull", JSON.stringify({from: $("rb-from").value, to: $("rb-to").value, report: $("rb-report").value}), {"Content-Type": "application/json"}); }
+  catch (e) { $("rb-status").textContent = e.message; $("rb-status").className = "hint err-text"; return; }
+  loadRobot();
+};
+
 // Changes
 let changeRows = [];
 // Data check entries (marked OK, email drafted) and office email changes carry a note instead of numbers.
@@ -2360,6 +2743,7 @@ const checkLabel = k => k.startsWith("check: rate:") ? `Data check: ${labelOf(k.
 const labelOf = k => k.startsWith("check: ") || k === "denticon_lender_payments" ? checkLabel(k) : LOG_COLS.find(c => c.key === k)?.label || k;
 const kindOf = k => LOG_COLS.find(c => c.key === k)?.kind;
 async function loadChanges() {
+  if (!changeRows.length) $("ch-body").innerHTML = skelRows(8, 8, false);
   try { changeRows = await api("/api/changes"); renderChanges(); }
   catch (e) { $("ch-count").textContent = e.message; }
 }
@@ -2372,7 +2756,7 @@ function renderChanges() {
   const val = (v, k) => v == null ? (isNote(k) ? "" : '<span class="none">new</span>')
     : kindOf(k) === "money" || k === "denticon_lender_payments" ? money(v) : Number.isInteger(v) ? v : v;
   $("ch-body").innerHTML = rows.map(c => `<tr>
-    <td>${when(c.changed_at)}</td><td>${esc(c.office)}</td><td>${(c.period_from || "").slice(0, 7)}</td><td>${esc(labelOf(c.metric))}</td>
+    <td>${when(c.changed_at)}</td><td>${esc(c.office)}</td><td>${c.via === "daily report" ? esc(c.period_from) : (c.period_from || "").slice(0, 7)}</td><td>${esc(labelOf(c.metric))}</td>
     <td class="num">${val(c.old_value, c.metric)}</td>
     <td class="num ${c.old_value == null ? "" : c.new_value > c.old_value ? "up" : "down"}">${val(c.new_value, c.metric)}</td>
     <td>${esc(c.via || "")}</td><td class="hint src" title="${esc(c.source || "")}">${esc(c.source || "")}</td></tr>`).join("");
@@ -2456,6 +2840,7 @@ $("sql-csv").onclick = () => {
 // month × office × General/Ortho: patients, paid patients, $ collected). ZIP totals only, nothing per patient.
 let ztData = null;
 async function loadCharts() {
+  if (!ztData) $("rp-tiles").innerHTML = skelTiles(4, "rp-tile");
   try { ztData = await api("/api/maps/trends"); }
   catch (e) { $("rp-lead").textContent = e.message; return; }
   renderReport();
@@ -2604,7 +2989,8 @@ function bindZipLinks() {
 const AU_KINDS = {missing_sheet: "Missing on sheet", missing_denticon: "Not in Denticon", amount: "Amount differs",
                   lender: "Different lender", odd: "Odd value"};
 let audit = null;
-api("/api/audit").then(a => { audit = a; document.querySelector('nav button[data-tab="audit"]').hidden = false; }).catch(() => {});
+// Admin-only tabs: shown only on the computer running the app (the probe is a local-only endpoint).
+api("/api/audit").then(a => { audit = a; document.querySelectorAll('nav button[data-tab="audit"], nav button[data-tab="google"], nav button[data-tab="sql"]').forEach(b => b.hidden = false); }).catch(() => {});
 async function loadAudit() {
   try { [audit, checkInfo] = await Promise.all([api("/api/audit"), api("/api/checks").catch(() => checkInfo)]); }
   catch (e) { return msg($("au-msg"), e.message, false); }
@@ -2674,15 +3060,34 @@ async function loadDenticon() {
           msg($("dx-msg"), "Saved.", true); } catch (e) { msg($("dx-msg"), e.message, false); }
   });
 }
+// Promo lines -> offices: the table at the bottom of the Calls tab, saved row by row as it's edited.
+async function loadPromoLines() {
+  let d; try { d = await api("/api/calls/lines"); } catch (e) { $("pl-sub").textContent = e.message; return; }
+  const bare = l => /^\+?\d{10,}$/.test(l.line);
+  $("pl-sub").textContent = d.lines.length ? `${d.lines.length} promo lines seen in the calls pulled so far · ${d.mapped} mapped to an office · ${d.lines.filter(l => !l.office).reduce((a, l) => a + l.calls, 0).toLocaleString()} calls still on unmapped lines.` : "No calls pulled yet.";
+  const opts = cur => `<option value="">— office —</option>` + d.offices.map(o => `<option value="${esc(o)}"${o === cur ? " selected" : ""}>${esc(d.short[o] || o)}</option>`).join("");
+  $("pl-rows").innerHTML = d.lines.map((l, i) => `<tr class="${l.office ? "" : "unmapped"}"><td>${esc(l.line || "(no promo line)")}${bare(l) ? ' <span class="hint">number only</span>' : ""}</td><td class="num">${l.calls.toLocaleString()}</td><td class="hint">${esc(l.last || "")}</td>
+    <td><select data-pl="${i}" aria-label="Office for this line">${opts(l.office)}</select></td><td><input data-pl-label="${i}" value="${esc(l.label)}" placeholder="${bare(l) ? "e.g. Oxnard website" : ""}" aria-label="Label"></td></tr>`).join("");
+  const save = async i => { const l = d.lines[i], body = {line: l.line, office: document.querySelector(`[data-pl="${i}"]`).value, label: document.querySelector(`[data-pl-label="${i}"]`).value};
+    try { await api("/api/calls/lines", JSON.stringify(body), {"Content-Type": "application/json"}); l.office = body.office; l.label = body.label;
+          document.querySelector(`[data-pl="${i}"]`).closest("tr").classList.toggle("unmapped", !body.office); msg($("pl-msg"), `Saved ${body.label || l.line} → ${body.office ? d.short[body.office] || body.office : "no office"}.`, true);
+          $("pl-sub").textContent = `${d.lines.length} promo lines seen · ${d.lines.filter(x => x.office).length} mapped to an office · ${d.lines.filter(x => !x.office).reduce((a, x) => a + x.calls, 0).toLocaleString()} calls still on unmapped lines.`;
+          if (clData) loadCalls($("cl-date").value); loadFunnel(); }
+    catch (e) { msg($("pl-msg"), e.message, false); } };
+  document.querySelectorAll("[data-pl]").forEach(sel => sel.onchange = () => save(+sel.dataset.pl));
+  document.querySelectorAll("[data-pl-label]").forEach(inp => inp.onchange = () => save(+inp.dataset.plLabel));
+}
+$("pl-card").addEventListener("toggle", () => { if ($("pl-card").open) loadPromoLines(); });
 // Calls tab, the funnel: calls in a month -> callers who became new patients -> started treatment -> $ collected.
 let fnData = null, fnSel = {month: "", office: "", by: "promo_line"};
 try { Object.assign(fnSel, JSON.parse(localStorage.getItem("callFunnelSel")) || {}); } catch {}
 async function loadFunnel() {
+  if (!fnData) $("fn-steps").innerHTML = skelTiles(5, "fn-step");
   try { fnData = await api(`/api/calls/funnel?month=${encodeURIComponent(fnSel.month)}&office=${encodeURIComponent(fnSel.office)}`); }
   catch (e) { $("fn-note").textContent = e.message; return; }
   const d = fnData;
   $("fn-month").innerHTML = d.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No calls pulled yet</option>`;
-  $("fn-office").innerHTML = `<option value="">All offices with a list</option>` + d.offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  $("fn-office").innerHTML = `<option value="">All offices</option>` + d.offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   fnSel.month = d.month || ""; if (!d.offices.includes(fnSel.office)) fnSel.office = "";
   $("fn-month").value = fnSel.month; $("fn-office").value = fnSel.office; $("fn-by").value = fnSel.by;
   try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {}
@@ -2690,20 +3095,56 @@ async function loadFunnel() {
 }
 ["fn-month", "fn-office"].forEach(id => $(id).onchange = () => { fnSel[id.slice(3)] = $(id).value; loadFunnel(); });
 $("fn-by").onchange = () => { fnSel.by = $("fn-by").value; try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {} renderFunnel(); };
+let mkBy = "channel";
+try { mkBy = localStorage.getItem("mkBy") || "channel"; } catch {}
+document.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { mkBy = b.dataset.mk; try { localStorage.setItem("mkBy", mkBy); } catch {} renderMarketing(); });
+function renderMarketing() {
+  const d = fnData;
+  document.querySelectorAll("[data-mk]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mk === mkBy));
+  if (!d || !d.month) { $("mk-rows").innerHTML = `<tr><td colspan="10" class="hint">Pull some days of calls first.</td></tr>`; $("mk-foot").innerHTML = ""; $("mk-sub").textContent = ""; return; }
+  const rows = (d.by[mkBy] || []).slice().sort((a, b) => b.calls - a.calls), t = d.total;
+  const label = {channel: "Marketing channel", medium: "Marketing medium", source: "Marketing source"}[mkBy];
+  $("mk-th").textContent = label;
+  $("mk-title").textContent = `Marketing performance · ${monthName(d.month)}${d.office ? " · " + d.office : ""}`;
+  $("mk-sub").textContent = `Every call that month by Invoca's ${label.toLowerCase()}, followed through to new patients, treatment started and dollars collected (same rules as the funnel above). The best rate in each column is green, among rows with at least 50 calls.`;
+  const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "—", per = (a, b) => b ? "$" + money(a / b) : "—";
+  const big = rows.filter(r => r.calls >= 50);
+  const best = f => big.length ? Math.max(...big.map(f)) : null;
+  const bAns = best(r => r.calls ? r.answered / r.calls : 0), bConv = best(r => r.answered ? r.patients / r.answered : 0), bCall = best(r => r.calls ? r.collected / r.calls : 0), bNp = best(r => r.patients ? r.collected / r.patients : 0);
+  const mark = (v, b, r) => r.calls >= 50 && b !== null && v === b && v > 0 ? " best" : "";
+  const maxCalls = Math.max(1, ...rows.map(r => r.calls));
+  $("mk-rows").innerHTML = rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.calls.toLocaleString()}</td>
+    <td class="share"><i style="width:${Math.max(2, r.calls / maxCalls * 80).toFixed(0)}px"></i><span>${pct(r.calls, t.calls)}</span></td>
+    <td class="num${mark(r.calls ? r.answered / r.calls : 0, bAns, r)}">${pct(r.answered, r.calls)}</td>
+    <td class="num">${r.patients.toLocaleString()}</td><td class="num${mark(r.answered ? r.patients / r.answered : 0, bConv, r)}">${r.answered ? (r.patients / r.answered * 100).toFixed(1) : "—"}</td>
+    <td class="num">${r.started.toLocaleString()}</td><td class="num">${r.collected ? "$" + money(r.collected) : "—"}</td>
+    <td class="num${mark(r.calls ? r.collected / r.calls : 0, bCall, r)}">${r.collected ? per(r.collected, r.calls) : "—"}</td>
+    <td class="num${mark(r.patients ? r.collected / r.patients : 0, bNp, r)}">${r.patients && r.collected ? per(r.collected, r.patients) : "—"}</td></tr>`).join("")
+    || `<tr><td colspan="10" class="hint">No calls that month.</td></tr>`;
+  $("mk-foot").innerHTML = rows.length ? `<tr><td>Total</td><td class="num">${t.calls.toLocaleString()}</td><td></td><td class="num">${pct(t.answered, t.calls)}</td><td class="num">${t.patients.toLocaleString()}</td>
+    <td class="num">${t.answered ? (t.patients / t.answered * 100).toFixed(1) : "—"}</td><td class="num">${t.started.toLocaleString()}</td><td class="num">$${money(t.collected)}</td>
+    <td class="num">${per(t.collected, t.calls)}</td><td class="num">${per(t.collected, t.patients)}</td></tr>` : "";
+  $("mk-note").textContent = "Paid Search and Google PPC are both paid Google traffic, tagged two ways in the ads. New patients only count where a Denticon New Patients List covering their first visit has been uploaded, so the latest month fills in as lists are uploaded.";
+  $("mk-copy").onclick = e => copyGrid([[label, "Calls", "Share of calls", "Answer rate", "New patients", "Per 100 answered", "Started treatment", "$ collected", "$ per call", "$ per new patient"],
+    ...rows.map(r => [r.name, r.calls, pct(r.calls, t.calls), pct(r.answered, r.calls), r.patients, r.answered ? (r.patients / r.answered * 100).toFixed(1) : "", r.started, r.collected.toFixed(2),
+      r.calls ? (r.collected / r.calls).toFixed(2) : "", r.patients ? (r.collected / r.patients).toFixed(2) : ""])], "Marketing", e.currentTarget);
+}
 function renderFunnel() {
   const d = fnData; if (!d) return;
+  renderMarketing();
   if (!d.month) { $("fn-sub").textContent = "Pull some days of calls first."; $("fn-steps").innerHTML = ""; $("fn-rows").innerHTML = ""; $("fn-note").textContent = ""; return; }
   const t = d.total, pct = (a, b) => b ? `${(a / b * 100).toFixed(a / b * 100 < 10 ? 1 : 0)}%` : "—";
-  const who = d.office || (d.offices.length === 1 ? d.offices[0] : d.offices.length ? `${d.offices.length} offices with a list` : "no office list yet");
-  $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}`;
-  $("fn-sub").textContent = `Every call that month, then the callers whose number is on a Denticon new-patient list with a first visit on or after the call (${who}). Started treatment = paid anything in the first-visit month, from the Referral Production Listing.`;
-  const steps = [["Calls", t.calls, `${t.callers.toLocaleString()} different numbers`], ["Answered", t.answered, pct(t.answered, t.calls) + " of calls"],
-    ["Became new patients", t.patients, `${pct(t.patients, t.answered)} of answered` + (t.booked ? ` · +${t.booked} booked, not yet seen` : "")],
-    ["Started treatment", t.started, pct(t.started, t.patients) + " of new patients"], ["$ collected", `$${money(t.collected)}`, t.patients ? `$${money(t.collected / t.patients)} per new patient` : ""]];
-  const max = Math.max(1, t.calls);
-  $("fn-steps").innerHTML = steps.map(([k, v, s_], i) => `<div class="fn-step"><div class="bar" style="width:${i === 4 ? 0 : Math.max(2, (typeof v === "number" ? v : 0) / max * 100).toFixed(1)}%"></div><div class="k">${esc(k)}</div><div class="v">${typeof v === "number" ? v.toLocaleString() : esc(v)}</div><div class="s">${esc(s_)}</div></div>`).join("");
+  $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}${d.office ? " · " + d.office : ""}`;
+  $("fn-sub").textContent = (d.office ? (d.office_calls ? `Calls on ${d.office}'s promo lines, ` : `Every call that month (no promo line is mapped to ${d.office} yet, so calls can't be narrowed), `) : "Every call that month, ")
+    + `then the callers whose number is on a Denticon new-patient list${d.office ? ` for ${d.office}` : ""} with a first visit on or after the call. Started treatment = paid anything in the first-visit month, from the Referral Production Listing.`;
+  // Each tile's bar is the share its caption states (of the step before it), so 63% looks like 63%.
+  const frac = (a, b) => b ? a / b : 0;
+  const steps = [["Calls", t.calls, `${t.callers.toLocaleString()} different numbers`, 1], ["Answered", t.answered, pct(t.answered, t.calls) + " of calls", frac(t.answered, t.calls)],
+    ["Became new patients", t.patients, `${pct(t.patients, t.answered)} of answered` + (t.booked ? ` · +${t.booked} booked, not yet seen` : ""), frac(t.patients, t.answered)],
+    ["Started treatment", t.started, pct(t.started, t.patients) + " of new patients", frac(t.started, t.patients)], ["$ collected", `$${money(t.collected)}`, t.patients ? `$${money(t.collected / t.patients)} per new patient` : "", 0]];
+  $("fn-steps").innerHTML = steps.map(([k, v, s_, f]) => `<div class="fn-step"><div class="bar" style="width:${f ? Math.max(1.5, f * 100).toFixed(1) : 0}%"></div><div class="k">${esc(k)}</div><div class="v">${typeof v === "number" ? v.toLocaleString() : esc(v)}</div><div class="s">${esc(s_)}</div></div>`).join("");
   const all = d.by[fnSel.by] || [];
-  $("fn-th").textContent = fnSel.by === "campaign" ? "Campaign" : "Promo line";
+  $("fn-th").textContent = {campaign: "Campaign", office: "Office (from the promo lines)", channel: "Marketing channel", medium: "Marketing medium", source: "Marketing source", location: "Location (Invoca)"}[fnSel.by] || "Promo line";
   // Lines that are just a phone number (no description in Invoca) fold into one row; click it to see them.
   const bare = g => /^\+?\d{10,}$/.test(g.name), named = all.filter(g => !bare(g)), unnamed = all.filter(bare);
   const sum = unnamed.reduce((a, g) => { Object.keys(a).forEach(k => a[k] += g[k] || 0); return a; }, {calls: 0, answered: 0, patients: 0, started: 0, collected: 0, booked: 0});
@@ -2717,7 +3158,8 @@ function renderFunnel() {
   if (fold) fold.onclick = () => { const open = fold.classList.toggle("open"); $("fn-rows").querySelectorAll("tr.fn-sub").forEach(tr => tr.hidden = !open); };
   const lists = d.lists.map(l => `${l.office} (${l.patients} patients, first visits ${l.lo ? l.lo.slice(5).replace("-", "/") : "?"}–${l.hi ? l.hi.slice(5).replace("-", "/") : "?"})`).join("; ");
   $("fn-note").textContent = (d.lists.length ? `Patient lists loaded: ${lists}. Conversions can only be seen for those offices and first-visit months; upload each office's New Patients List for the months after these calls to complete the picture. ` : "No New Patients List uploaded yet, so no conversions can be seen. ")
-    + "Invoca reports every call under the group, so calls and answered are for all offices; each patient counts once, credited to their first call's promo line and campaign.";
+    + (d.mapped_lines ? `${d.mapped_lines} promo lines are mapped to offices; calls on unmapped lines show as "(not mapped)". ` : "No promo line is mapped to an office yet (see Promo lines → offices at the bottom), so calls can't be split by office. ")
+    + `Calls are counted once even when Invoca records several legs; answered ${d.answered_rule === "signal" ? "is Invoca's Answered by Agent signal, as on its dashboard" : "means any connected time"}. Each patient counts once, credited to their first call's promo line and campaign.`;
 }
 // Calls tab: one day's calls from Invoca, kept once pulled; a flat sheet with sort, filter, search and Copy.
 let clData = null, clSort = {key: "start_utc", dir: 1};
@@ -2729,7 +3171,7 @@ async function loadCalls(day) {
   day = day || dt.value;
   try { clData = await api(`/api/calls?date=${day}`); } catch (e) { $("cl-note").textContent = e.message; return; }
   const cur = $("cl-office").value;
-  const offices = [...new Set(clData.rows.map(r => r.advertiser || ""))].filter(Boolean).sort();
+  const offices = [...new Set(clData.rows.map(r => r.office || (clData.mapped_lines ? "(not mapped)" : r.advertiser || "")))].filter(Boolean).sort();
   $("cl-office").innerHTML = `<option value="">All offices</option>` + offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   if (offices.includes(cur)) $("cl-office").value = cur;
   renderCalls();
@@ -2754,7 +3196,14 @@ $("cl-pull").onclick = async () => {
   const day = $("cl-date").value || clYesterday();
   msg($("cl-msg"), `Pulling ${day}'s calls from Invoca…`, true);
   try { const r = await api("/api/calls/pull", JSON.stringify({date: day}), {"Content-Type": "application/json"});
-        msg($("cl-msg"), `${r.calls.toLocaleString()} calls pulled for ${monthDay(day)}.`, true); clData = r; renderCalls(); loadCalls(day); loadFunnel(); }
+        msg($("cl-msg"), `${r.calls.toLocaleString()} calls pulled for ${monthDay(day)}.`, true); clData = r; renderCalls(); loadCalls(day); loadFunnel(); if ($("pl-card").open) loadPromoLines(); }
+  catch (e) { msg($("cl-msg"), e.message, false); }
+};
+$("cl-pull-month").onclick = async () => {
+  const day = $("cl-date").value || clYesterday(), month = day.slice(0, 7);
+  msg($("cl-msg"), `Pulling every day of ${monthName(month)} from Invoca… this takes a minute or two.`, true);
+  try { const r = await api("/api/calls/pull-month", JSON.stringify({month}), {"Content-Type": "application/json"});
+        msg($("cl-msg"), `${r.calls.toLocaleString()} calls pulled for ${monthName(month)} (${r.day_count} days).`, true); loadCalls(day); loadFunnel(); if ($("pl-card").open) loadPromoLines(); }
   catch (e) { msg($("cl-msg"), e.message, false); }
 };
 const monthDay = d => new Date(d + "T12:00:00").toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric", year: "numeric"});
@@ -2771,11 +3220,13 @@ function renderCalls() {
   const day = clData.date, office = $("cl-office").value, q = $("cl-search").value.trim().toLowerCase();
   const pulled = clData.days.find(d => d.day === day);
   $("cl-title").textContent = `Calls · ${monthDay(day)}`;
-  let rows = clData.rows.filter(r => (!office || r.advertiser === office)
-    && (!q || `${r.advertiser} ${r.campaign} ${r.promo_line} ${r.city} ${r.region} ${r.result} ${r.signals.join(" ")} ${Object.values(r.custom).join(" ")}`.toLowerCase().includes(q)));
+  const officeOf = r => r.office || (clData.mapped_lines ? "(not mapped)" : r.advertiser || "");
+  clData.rows.forEach(r => { r.channel = (r.custom && r.custom.marketing_channel) || ""; r.medium = (r.custom && r.custom.utm_medium) || ""; });
+  let rows = clData.rows.filter(r => (!office || officeOf(r) === office)
+    && (!q || `${officeOf(r)} ${r.campaign} ${r.promo_line} ${r.promo_label} ${r.city} ${r.region} ${r.result} ${r.signals.join(" ")} ${Object.values(r.custom).join(" ")}`.toLowerCase().includes(q)));
   const k = clSort.key, val = r => k === "signals" ? r.signals.join(",") : k === "match" ? (r.match ? (r.match.status === "converted" ? "2" : "1") + (r.match.appt_date || "") : "0") : (r[k] ?? (typeof r[k] === "number" ? -Infinity : ""));
   rows.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * clSort.dir);
-  const answered = rows.filter(r => (r.connect_duration || 0) > 0).length, talk = rows.reduce((a, r) => a + (r.connect_duration || 0), 0);
+  const answered = rows.filter(r => r.answered).length, talk = rows.reduce((a, r) => a + (r.answered ? (r.connect_duration || 0) : 0), 0);
   const visited = rows.filter(r => r.match && r.match.status === "visited"), booked = rows.filter(r => r.match && r.match.status === "converted").length;
   const converted = visited.length + booked, visitedAmt = visited.reduce((a, r) => a + (r.match.collected || 0), 0);
   const sigCounts = {}; rows.forEach(r => r.signals.forEach(sg => sigCounts[sg] = (sigCounts[sg] || 0) + 1));
@@ -2799,16 +3250,16 @@ function renderCalls() {
       <text x="${C}" y="${C + 5}" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text)">${totalN}</text></svg>
     <ul>${slices.map(([name, n], i) => `<li><i style="background:${OFFICE_COLORS[i % OFFICE_COLORS.length]}"></i>${esc(name)} <span>${n} · ${Math.round(n / totalN * 100)}%</span></li>`).join("")}</ul>` : "";
   drawCallsMap(rows);
-  $("cl-rows").innerHTML = rows.map(r => `<tr><td>${esc((r.start_local || "").replace(/^\d{4}-\d{2}-\d{2}[T ]?/, "").replace(/[-+]\d{2}:?\d{2}$|Z$/, "").slice(0, 8))}</td><td>${esc(r.advertiser || "")}</td><td>${esc(r.campaign || "")}</td><td>${esc(r.promo_line || "")}</td>
+  $("cl-rows").innerHTML = rows.map(r => `<tr><td title="${r.legs > 1 ? `${r.legs} legs (overflow or transfer), counted once` : ""}">${esc((r.start_local || "").replace(/^\d{4}-\d{2}-\d{2}[T ]?/, "").replace(/[-+]\d{2}:?\d{2}$|Z$/, "").slice(0, 8))}</td><td>${esc(officeOf(r))}</td><td>${esc(r.campaign || "")}</td><td title="${esc(r.promo_line || "")}">${esc(r.promo_label || r.promo_line || "")}</td><td title="${esc(r.medium)}">${esc(r.channel)}</td>
     <td>${esc(r.city || "")}</td><td>${esc(r.region || "")}</td><td>${esc(r.mobile || "")}</td><td>${r.repeat_caller ? "yes" : ""}</td><td class="num">${clMMSS(r.duration)}</td>
-    <td class="num${(r.connect_duration || 0) > 0 ? "" : " miss"}">${(r.connect_duration || 0) > 0 ? clMMSS(r.connect_duration) : "not answered"}</td><td>${esc(r.result || "")}</td>
+    <td class="num${r.answered ? "" : " miss"}">${r.answered ? clMMSS(r.connect_duration) : "not answered"}</td><td>${esc(r.result || "")}</td>
     <td>${clMatchCell(r.match)}</td>
     <td>${r.signals.map(sg => `<span class="sig">${esc(sg)}</span>`).join("")}${Object.entries(r.custom).map(([n, v]) => `<span class="sig" title="${esc(n)}">${esc(n)}: ${esc(v)}</span>`).join("")}</td></tr>`).join("")
-    || `<tr><td colspan="13" class="hint">${clData.rows.length ? "No calls match." : pulled ? "No calls that day." : ""}</td></tr>`;
+    || `<tr><td colspan="14" class="hint">${clData.rows.length ? "No calls match." : pulled ? "No calls that day." : ""}</td></tr>`;
   $("cl-table").querySelectorAll("th[data-sort]").forEach(th => th.setAttribute("aria-sort", th.dataset.sort === k ? (clSort.dir === 1 ? "ascending" : "descending") : "none"));
-  $("cl-note").textContent = rows.length ? `Rang + talked is the whole call; Talked is the time connected to the office. Signals are Invoca's call outcomes. "New patient?" matches the caller's number against the Denticon patient lists uploaded (${(clData.appts_known || 0).toLocaleString()} numbers known): "came in" = a first visit on or after the call, with that month's $ collected; "booked" = a first appointment on or after the call; "existing patient" = seen before the call. Numbers are kept only as fingerprints, never as digits.` : "";
-  $("cl-copy").onclick = e => copyGrid([["Time", "Office", "Campaign", "Promo line", "City", "State", "Phone", "Repeat caller", "Rang + talked (s)", "Talked (s)", "Outcome", "New patient?", "Signals", "Marketing data"],
-    ...rows.map(r => [r.start_local || "", r.advertiser || "", r.campaign || "", r.promo_line || "", r.city || "", r.region || "", r.mobile || "", r.repeat_caller ? "yes" : "", r.duration ?? "", r.connect_duration ?? "", r.result || "",
+  $("cl-note").textContent = rows.length ? `Each call is counted once even when Invoca records several legs (an overflow or transfer)${clData.legs > clData.rows.length ? `: ${clData.legs - clData.rows.length} extra legs merged today` : ""}. "Answered" ${clData.answered_rule === "signal" ? "is Invoca's own Answered by Agent signal, the same count as its dashboard" : "means any time connected to the office"}. Rang + talked is the whole call; Talked is the time connected to the office. Signals are Invoca's call outcomes. "New patient?" matches the caller's number against the Denticon patient lists uploaded (${(clData.appts_known || 0).toLocaleString()} numbers known): "came in" = a first visit on or after the call, with that month's $ collected; "booked" = a first appointment on or after the call; "existing patient" = seen before the call. Numbers are kept only as fingerprints, never as digits.` : "";
+  $("cl-copy").onclick = e => copyGrid([["Time", "Office", "Campaign", "Promo line", "Marketing channel", "City", "State", "Phone", "Repeat caller", "Rang + talked (s)", "Talked (s)", "Outcome", "New patient?", "Signals", "Marketing data"],
+    ...rows.map(r => [r.start_local || "", officeOf(r), r.campaign || "", r.promo_label || r.promo_line || "", r.channel || "", r.city || "", r.region || "", r.mobile || "", r.repeat_caller ? "yes" : "", r.duration ?? "", r.connect_duration ?? "", r.result || "",
       r.match ? ({visited: `came in ${r.match.first_visit} ${r.match.office}${r.match.collected != null ? " $" + r.match.collected.toFixed(2) : ""}`, converted: `booked ${r.match.appt_date} ${r.match.office}`, existing: `existing patient ${r.match.first_visit || ""}`, before: `booked earlier ${r.match.appt_date || ""}`})[r.match.status] : "", r.signals.join("; "), Object.entries(r.custom).map(([n, v]) => `${n}: ${v}`).join("; ")])], "Calls", e.currentTarget);
 }
 // The callers' map: one circle per city (sized and shaded by calls) on the ZIP-outline background; cities the

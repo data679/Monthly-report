@@ -64,6 +64,7 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
 | `static/index.html` | Whole UI (vanilla JS/CSS, light+dark) |
 | `run.sh` | Auto-restart loop |
 | `data/reports.db` | SQLite log (git-ignored). Backups: `data/reports.backup-*.db` |
+| `data/inbox/` | Drop folder: report files saved here are imported within a minute (see §9b) |
 | `data/office_summary.csv` | CSV mirror of the `monthly_log` view, rewritten on every change |
 | `data/google/service_account.json` | Google service-account key (chmod 600, git-ignored) |
 
@@ -191,6 +192,20 @@ data show "—" (and copy blank).
 
 ## 9. UI (static/index.html)
 
+**UI rebuilt 2026-10-15 (approved and swapped in).** The page has a navy sidebar (groups Work / Reports / Admin;
+a top bar with a scrolling tab row under 900 px), a page header per tab with its actions, one control/table/tile
+vocabulary, drawn SVG icons (inline and as `--i-*` mask-image tokens), skeleton rows while loading, an empty state, and a
+180-ms fade when the month or office filter changes. On desktop `main` is the scroll container and the Log's table box
+fills the window. The script is the old one plus `skelRows`/`skelTiles`/`swapCue` helpers, an empty-state row in
+`renderLog`, and scroll-to-top on tab change; every element id was kept, so the server and `VIEWER_HTML` are unchanged.
+The previous page is at `data/backups/index-before-rebuild-2026-10-15.html` (git-ignored) and in git history.
+**Preview rule (the user's standing preference):** future UI reworks go to `static/preview.html` served at `/preview`
+(add the path to `do_GET` and `VIEWER_PATHS`) and are copied over index.html only when the user approves.
+Design records: `PRODUCT.md` (product truth, from the user's answers), `DESIGN.md` + `.impeccable/design.json`
+(the visual system: tokens, components, do's and don'ts), `.impeccable/surfaces/static-index-html.md` (the direction
+contract). The design skill lives in `.agents/skills/impeccable` (symlinked from `.claude/skills/impeccable`);
+`sh .claude/skills/impeccable/scripts/impeccable detect --json static/index.html` runs its checks.
+
 Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
 - **Upload**: drop a file → review table (numbers with hover lists) → Period (From = 1st, Thru editable) → Save to log.
   Paste box for the refunds sheet with office matching dropdowns (remembered as aliases).
@@ -227,6 +242,105 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   `VIEWER_PASSWORD` on port 8766 (Log + Changes only, every change refused, no sync, no emails/sheet links) and a
   Cloudflare quick tunnel (`~/.local/bin/cloudflared`); stops after 60 min by default or Ctrl+C.
 
+## 9b. Day-by-day history, the inbox folder and the report robot (2026-10-15)
+
+- **Why:** Denticon reports are month-to-date, so the Log can't answer "the 7th to the 14th". The user chose to run
+  the reports **one day at a time** (From = Thru = that day) and keep a day-by-day history; any range is the sum of its
+  days. The monthly rows and uploads are unchanged.
+- **Tables:** `office_daily` (office, day, the six Executive Summary numbers; UNIQUE(office, day)) and
+  `daily_metrics` (office, day, metric, value; for np_collection, ortho_collection, ortho_referrals from one-day
+  Referral Production Listing / ortho Daily Journal / Treatment Plan Status). A re-upload of the same day replaces
+  it; every changed number goes to `change_log` with `via = 'daily report'` and `period_from = as_of = the day`
+  (the Changes tab shows the day for those rows). ZIP rows and patient details are not kept per day.
+- **Save paths:** `/api/save` and `/api/save-metrics` (`from_report` + `report_type`) route a payload with
+  From = Thru to `save_daily` / `save_daily_metrics` (`is_day_report`, only for `DAY_REPORT_TYPES`); the NP
+  Analysis and the lender journal stay monthly. The Upload review has a "Report covers" select (month-to-date /
+  one day) that sets From; a PDF with From = Thru selects "one day" by itself. A report that is neither (e.g. the
+  7th to the 14th) is still refused.
+- **Log › Days:** a Month / Days switch in the Log toolbar; Days takes From and To (remembered in this browser) and
+  calls `GET /api/log/days?from&to` (`log_days`: sums per office over `office_daily` + `daily_metrics`, with
+  `days` present, `missing` days and `metric_days`; `existing_pt_collection` and `ortho_rate` recomputed). Only
+  the columns daily reports give are shown (`DAY_KEYS` in index.html); the period cell says "n of N days" and
+  lists the missing days on hover. Viewers can use it (`/api/log/days` is in `VIEWER_PATHS`; the gate now strips the
+  query string before matching).
+- **Day pickers (2026-10-16):** `GET /api/days` (in `VIEWER_PATHS`) returns `{day: offices}` from `daily_imports`
+  plus today. `dayPicker()` in index.html draws a month calendar in a `.cal.dp` popover: Log › Days uses mode "data"
+  (days with reports blue and clickable, closed days outlined, never-pulled days gray and off, future days off; two
+  clicks pick a range, the same day twice picks one day; hidden inputs `#d-from`/`#d-to` feed `loadDays`), the
+  Upload tab's robot row uses mode "pull" (days not pulled yet are the blue ones, pulled days green and re-pullable;
+  hidden `#rb-from`/`#rb-to`).
+- **Month view from days (2026-10-19):** `month_rows_from_days` (applied in `/api/log`): a month whose one-day ES
+  reports run unbroken from the 1st (`daily_imports`) gets its ES columns from `office_daily` sums through the last
+  pulled day, and NP collection / ortho collection / ortho referrals from `daily_metrics` when that report's own days
+  (`daily_report_imports`, backfilled from `inbox_log`) reach the same day; refunds and NP-sheet columns stay as
+  uploaded; dependent rates recomputed; `from_days` → "from daily reports" under the Period. Months not pulled by day
+  are untouched.
+- **Days view, all columns (2026-10-19):** `add_month_columns` fills refunds + NP-sheet columns + all `CALCULATED`
+  rates (`_calculated` evaluates the view's own SQL expressions) when the range covers each month it touches from
+  the 1st through that month's latest data; otherwise `add_np_days` sums `np_daily` (NP Analysis counts by day) for
+  the range and refunds show "monthly". `np_daily` comes from `np_analysis.parse_month`'s `details["_by_row"]` (each
+  sheet row's contribution to every count, plus the date line above it); rows without a date line are dated from
+  `patient_phones.first_visit` (the uploaded New Patients Lists) by Pat ID or key, else stored with day '' and
+  reported as `np_undated` ("N NP sheet rows undated" under the Period). Filled by every Google sync / upload; rebuilt
+  for Jul–Oct 2026 on 2026-10-19. Known gaps: Care Dental Center and Gardena Dental Care have no New Patients List
+  uploaded and no date lines; Dentist Of Gardena's October tab has no Insurance Type column so it isn't read.
+- **Inbox folder:** `data/inbox/` (git-ignored). `inbox_loop` (thread, every `INBOX_SECONDS`, default 60) imports any
+  .pdf/.xlsx/.xlsm/.doc/.docx older than 15 s with `import_report_file` (same parsing and save paths as the Upload
+  tab; dates from the PDF, else from the file name: `2026-10-14`, `10-14-2026` or `20261014`), then moves it to
+  `done/`, `review/` (lower numbers than the Log: upload by hand to confirm) or `failed/` with a `.txt` note, and
+  logs it in `inbox_log`. `GET /api/inbox` (local-only) feeds the "Inbox folder" card on the Upload tab.
+- **Report robot (option 2, chosen over the Denticon API key for now). Working since 2026-10-16.**
+  `tools/denticon_robot.js` (launcher, commands, status) + `tools/denticon_pull.js` (the pull steps, reloaded per
+  command so fixes need no browser restart). Node with the playwright-core shipped in `@playwright/cli` and the
+  installed Google Chrome; its own profile in `data/denticon-browser/` (git-ignored). Flow per day:
+  `a1.denticon.com/ASPX/Reports/GroupRptsDlyRpts.aspx` → `#rbExecSumm` → offices ALL → `#txtStartDt`/`#txtEndDt`
+  (MM/DD/YYYY, same day) → `#btnPrint` opens a popup on `r2.denticon.com/ReportViewer/ReportFrame?...` that never
+  draws in this browser, so the robot takes that address, closes the popup and opens it in a plain tab; the report is
+  drawn **as a PDF in Chrome's PDF viewer** (a `chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai` frame; about
+  10 s), then the robot clicks the header's `#ExcelIconImg` ("Export to Excel") and saves the download as
+  `data/inbox/Denticon_GrpExecSumm2 YYYY-MM-DD.xlsx` (~52 KB; a 4.6 KB file means it exported before the draw).
+  The inbox importer reads the day from the file name. Status in `data/denticon-robot.json`, log in
+  `data/denticon-robot.log`, screenshots `data/denticon-robot-*.png` on failure.
+  **Logins:** Denticon ends every login after at most 120 minutes and the session does not survive closing the
+  browser, so the robot runs as a **standing window** (`node tools/denticon_robot.js serve`, user service
+  `denticon-robot.service`, enabled, `tools/denticon-robot.service` is a copy): it stays open, touches Denticon
+  every 15 minutes, and runs commands written to `data/denticon-robot.cmd` (`pull 2026-10-01 2026-10-02`, `quit`).
+  When Denticon wants a login the status is `waiting_login` and the user logs in in that window (never Claude).
+  The Upload tab's **Pull from Denticon** (`POST /api/robot/pull`, local-only) writes the command file when the
+  standing window is running (`_robot_serving()` looks for the process), else starts a one-off `pull --headed`.
+  `GET /api/robot` is polled by the card. Reports mapped: the **Executive Summary** (above) and the **Referral Production Listing** (2026-10-16): Reports ›
+  Referral Reports (`NewReports.aspx?RptName=Referral Reports`, an Angular app in `MVCReportsIFrame` on
+  `c1.denticon.com/Reports/Report/ReferralReports`): `#rbReferralProductionList`, output `#rbPrintFormatPDF` (the
+  "Excel" choice there is a plain patient list the parser can't read), office `#rbOffice` → second `button.office-btns`
+  → dialog `#chkAllOfc` + `#btnRight` + apply → `#txtselOffices` = ALL, dates `#dtProcedureStartDate/EndDate`,
+  `#dtFirstVisitStartDate/EndDate` = **the whole month** for a one-day report (a range report: the range itself),
+  because NP collection means collections from patients whose first visit falls in the window, as the manual monthly
+  report is run (its footer prints First Visit From/Thru = From/Thru); without it the listing counts every patient and
+  the days add up to the total collection instead. With the 1st..day window the days came out below a 1st–15th report
+  (deposits paid before the first visit); with the whole month the days add up to the month's final figure; `#cbGrpByZip`, "Print / Preview" → popup on `r2.denticon.com/ReportViewer/ReportFrame?rptPath=/PoWReportsPrm/ReferralRefProdList`
+  → same viewer flow as the ES (plain tab, wait for the PDF, `#ExcelIconImg`) → `data/inbox/Denticon_ReferralRefProdList
+  YYYY-MM-DD.xlsx` (~180 KB, formatted with "Total for Office" lines and ZIP groups; a one-day file feeds
+  `daily_metrics.np_collection`, a month-to-date one the monthly Log + map). Clicks inside that frame use a script
+  click fallback because the frame scrolls in a small box (`clickIn`). `data/denticon-robot.report` (exec | referral |
+  both) chooses the report for the next command; the Upload tab's Pull row has the same choice. Mapping aid:
+  `data/denticon-robot.explore` (JSON {url, clicks}) makes the next command dump a page's controls to the log.
+  **Ortho Daily Journal** (ortho collection, 2026-10-16): Daily Reports (`NewReports.aspx?RptName=Daily Reports`,
+  frame `c1.denticon.com/Reports/Report/DailyReports`): `#rbDlyJournal`, `#test5` Detail, `#rptPrntPdf`, `#test2` Office →
+  visible `button.office-btns` → `#chkAllOfc`/`#btnRight`/apply, `#test3` transaction date, `#dtStartDate/#dtEndDate`,
+  `#orthoPatientType`, `#check1` Services off, `#check2` Payments + `#check3` Adjustments on, "Print / Preview" → viewer
+  (`/PoWReportsPrm/NewDlyJournalDByTransPortrait`) → `#WordIconImg` → `data/inbox/Denticon_OrthoDailyJournal
+  YYYY-MM-DD.doc` (~600 KB; the Word parser reads it; a one-day file feeds `daily_metrics.ortho_collection`). Shared
+  helper `exportFromPopup`. Report choices: exec | referral | ortho | both (exec+referral) | all.
+  **Treatment Plan Status** (# of ortho referrals, 2026-10-16): Treatment Plan Reports (`NewReports.aspx?RptName=Treatment
+  Plan Reports`, frame `c1.denticon.com/Reports/Report/TreatmentPlanReports`): `#rbTreatPlanSts`, `#rbReportFormat1` Detail,
+  `#rbPrintFormatPDF`, `#rbOffice` → `pickAllOffices` (the Select after `#txtselOffices`), `#dtStartDate/#dtEndDate`,
+  `#rbAll` (every status), the Select after `#txtselCode` → code dialog: `#chkAllCodes` off, `#cat-other`, pick the
+  option containing ZREFORTH in `#availabelist:visible`, `#btnRight:visible`, apply → `#txtselCode` = ZREFORTH
+  (the office and code dialogs share list ids, hence `:visible`), "Print / Preview" → viewer
+  (`/PoWReportsPrm/TreatPlanStatusD`) → `#ExcelIconImg` → `data/inbox/Denticon_TreatPlanStatus YYYY-MM-DD.xlsx`
+  (~27 KB; offices with no referral that day have no "Total for office" line and simply get no row). Report choices:
+  exec | referral | ortho | txplan | both (exec+referral) | all (four). All four Denticon reports are now mapped.
+
 ## 10. Google Sheets sync
 
 - User created a Google Cloud project + service account + JSON key and added the key in the app (stored in
@@ -255,7 +369,8 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   A full load from Jan 2026 takes ~3–6 minutes. Tabs for months that haven't started are skipped.
 - Tab names: `APR'26` style years are read; a tab with **no year** ("October 🎃", "Feburary 💟") is taken as the
   latest such month up to today unless a tab with a year already covers it (Cerritos' old 2023 "SEPTEMBER" etc.).
-- Tab order in the UI: Log (opens first), Charts (report + map), Calls, Changes, Upload, Google Sheets, SQL, Audit (local only).
+- Tab order in the UI: Log (opens first), Charts (report + map), Calls, Changes, Upload, Google Sheets (local only), SQL (local only), Audit (local only).
+  The Google Sheets, SQL and Audit tab buttons start hidden and are shown when the local-only `/api/audit` probe succeeds.
   There is no Maps tab any more: the map is a card inside the Charts report (`#mp-section`), with the Map setup card
   (`#mp-admin`, local only) at the bottom of the Charts tab.
 - **Charts tab** = the **collections report** (index.html `loadCharts` → `renderReport`/`renderReportTable`/
@@ -338,7 +453,22 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   treatment (collected > 0 that first-visit month), $ collected, booked-not-yet-seen (np_appts); breakdown by
   promo line or campaign. The office filter applies from the patient step (calls are group-level in Invoca).
   `pull_invoca_range(frm, to)` backfills a date range in one paged fetch (Aug 1–Sep 30 2026 were backfilled).
-  Next: a nightly pull and calls per office per month next to new patients.
+- **Promo lines → offices** (table `promo_lines(line PK, office, label)`, `GET/POST /api/calls/lines`, `#pl-card` = a
+  collapsed `<details>` at the bottom of the Calls tab (the user doesn't know the line→office mapping yet); the table
+  loads only when opened, saved per row on change): the only way to put an office on a call, since Invoca
+  reports the group. `calls_info` adds `office` (mapped, else "") and `promo_label` to each row; the sheet shows the
+  mapped office (or "(not mapped)" once any line is mapped) and the label with the raw line in the hover. The funnel
+  applies its Office filter to calls when at least one line maps to that office (`office_calls`), otherwise to the
+  patient side only (and says so); "by office" breakdown. `pull_invoca_month(month)` / `POST /api/calls/pull-month`
+  = "Pull whole month" (the selected day's month, up to today).
+- **Legs vs calls**: Invoca sends one "Call" transaction per leg (an overflow/transfer re-reports the call under the
+  same `complete_call_id`), and its dashboard counts the call once. `merge_call_legs` (used by `calls_info` and
+  `calls_funnel`) merges legs: first leg's time/promo line/campaign, longest durations, signals combined; `legs`
+  per call. "Answered" = Invoca's `Answered by Agent` signal when the account has it (`answered_flag`, rule
+  "signal"), else any connected time. Verified against Invoca's dashboard: Sep 2026 = 8,512 calls / 6,260
+  answered; Sep 1 = 352 / 281, New Patient 46, Existing Patient 96. Indexes: invoca_calls(caller_fp),
+  patient_phones(fp), np_appts(fp), map_patients(pat_id, office, period_from).
+  Next: a nightly pull and calls per office per month next to new patients on the Log.
 - **Denticon API** (denticon_api.py, Audit tab, local-only): base `https://api.planetdds.com/denticon`, header
   `PDDS-Subscription-Key` (key in `data/denticon_api.json`, 0600, entered by the user in the app). Step 1 built:
   save key, Test connection (Practices `/practices/v0/offices`), match Denticon offices to log offices

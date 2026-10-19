@@ -8,3 +8,7 @@ data/
 
 __pycache__/
 *.pyc
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+.impeccable/review/
+.impeccable/mocks/

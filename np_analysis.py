@@ -334,7 +334,20 @@ def parse_month(wb, chosen, default_office=None):
     # Every new patient's collected amounts per lender, to check against Denticon's Daily Journal. The Pat ID is
     # only here so the app can replace it with a keyed hash (app.scrub_patients) before saving or sending it.
     details["_patients"] = []
+    # Each row's contribution to every count, under the day the row is listed below (the sheet groups patients
+    # under date lines), so any run of days can be added up. Counts only: no names or IDs.
+    contrib, cur_day, prev, row_day = {}, None, None, {}
+    def _settle(row_no, snap, day):
+        row_day[row_no] = day
+        for k, v in counts.items():
+            dv = v - snap[k]
+            if dv:
+                slot = contrib.setdefault(row_no, {"day": day.isoformat() if day else "", "m": {}})["m"]
+                slot[k] = slot.get(k, 0) + dv
     for r in sorted(rows):
+        if prev is not None:
+            _settle(*prev)
+        prev = (r, dict(counts), cur_day)
         cells = rows[r]
         header = _header_map(cells)
         if header:
@@ -357,6 +370,7 @@ def parse_month(wb, chosen, default_office=None):
             office = clean_office(m.group(1))
         if NUMBER_RE.match(a) and 40000 < float(a) < 60000:   # a date marker (Excel date number)
             dates.append(_excel_date(a))
+            cur_day = _excel_date(a); prev = (r, prev[1], cur_day)
         if cols and NUMBER_RE.match(cells.get(cols["pat_id"], "")):
             patient_rows += 1
             # The Insurance Type dropdown allows several choices ("Cash, Medi-Cal"); count the
@@ -515,6 +529,8 @@ def parse_month(wb, chosen, default_office=None):
                 counts["existing_finance_patients"] += 1
                 details["existing_finance_patients"].append({"row": r, "lender": lender_named(hit["text"]), **hit})
 
+    if prev is not None:
+        _settle(*prev)
     # Combined prime + subprime patient counts, from the per-patient lists above.
     by_row = lambda key: {d["row"]: d for d in details[key]}
     p_appr, s_appr = by_row("prime_approved"), by_row("subprime_approved")
@@ -527,6 +543,12 @@ def parse_month(wb, chosen, default_office=None):
     details["fin_funded"] = [{"row": r, "source": source(r, p_fund, s_fund)} for r in funded_rows]
     both = [r for r in approved_rows if r in funded_rows]
     counts["fin_approved_funded"] = len(both)
+    for key, rows_ in (("fin_approved", approved_rows), ("fin_funded", funded_rows), ("fin_approved_funded", both)):
+        for r_ in rows_:
+            d_ = row_day.get(r_)
+            slot = contrib.setdefault(r_, {"day": d_.isoformat() if d_ else "", "m": {}})["m"]
+            slot[key] = slot.get(key, 0) + 1
+    details["_by_row"] = {str(r_): {"day": v["day"], "m": {k: round(x, 2) for k, x in v["m"].items()}} for r_, v in contrib.items()}
     details["fin_approved_funded"] = [{"row": r, "source": source(r, p_fund, s_fund)} for r in both]
 
     if cols is not None and patient_rows == 0:

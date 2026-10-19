@@ -589,11 +589,23 @@ def parse_report(path, filename=None):
 
     heading = [label for label, _ in rows[:20]]
     if "Referral Production Listing" in heading:
-        result = parse_referral(rows)
+        try:
+            result = parse_referral(rows)
+        except ParseError as e:
+            if "Total for Office" not in str(e):
+                raise
+            # No office totals at all: a day with no activity (a Sunday). The day still counts, as empty.
+            result = {"report_type": "referral", "offices": [], "skipped": [], "grand_total": None, "empty": True}
         result["period"] = period
         return result
     if any(h.startswith("Treatment Plan Status") for h in heading):
-        result = parse_tx_plan_status(rows)
+        try:
+            result = parse_tx_plan_status(rows)
+        except ParseError as e:
+            if "Total for office" not in str(e) and "No office" not in str(e):
+                raise
+            # No office totals at all: a day with no ortho referrals (a Sunday). The day still counts, as empty.
+            result = {"report_type": "ortho_referrals", "offices": [], "skipped": [], "grand_total": None, "empty": True}
         result["period"] = period
         return result
     if any(h.startswith("Daily Journal") for h in heading):
@@ -613,7 +625,13 @@ def parse_report(path, filename=None):
                 raise ParseError(f"{e}. (For ortho collection, run it with Patient Type = Ortho.)")
             result["period"] = period
             return result
-        result = parse_ortho_journal(rows)
+        try:
+            result = parse_ortho_journal(rows)
+        except ParseError as e:
+            if "No 'Summary for" not in str(e):   # only a journal with no office sections at all is an empty day
+                raise
+            # A journal with no ortho payments at all (a Sunday): a day with no activity. The day still counts, as empty.
+            result = {"report_type": "ortho_journal", "offices": [], "skipped": [], "grand_total": None, "empty": True}
         result["period"] = period
         return result
 
@@ -635,6 +653,9 @@ def parse_report(path, filename=None):
         })
 
     if not offices:
+        if skipped and any("Executive Summary" in h for h in heading):
+            # Every office block is blank: a day with no activity (offices closed). The day still counts.
+            return {"report_type": "executive_summary", "period": period, "offices": [], "skipped": skipped, "empty": True}
         raise ParseError("This doesn't look like an Executive Summary or Referral Production Listing")
     return {"report_type": "executive_summary", "period": period, "offices": offices, "skipped": skipped}
 
