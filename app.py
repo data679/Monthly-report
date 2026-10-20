@@ -34,6 +34,7 @@ from datetime import date, timedelta
 
 import denticon_api
 import invoca_api
+import assistant
 import google_sheets
 import np_analysis
 from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, rows_to_text, title_case
@@ -47,7 +48,7 @@ CSV_PATH = DATA_DIR / "office_summary.csv"
 HOST, PORT = os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", 8765))
 PASSWORD_FILE = DATA_DIR / "app_password.json"   # salted PBKDF2 hash, never the password itself
 # Only from the computer running the app: SQL, the Google key, and the Denticon audit (admin view).
-LOCAL_ONLY_PATHS = {"/api/sql", "/api/inbox", "/api/robot", "/api/robot/pull", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
+LOCAL_ONLY_PATHS = {"/api/sql", "/api/assistant/status", "/api/assistant/key", "/api/assistant/key/delete", "/api/assistant/test", "/api/assistant/cache/clear", "/api/inbox", "/api/robot", "/api/robot/pull", "/api/google/key", "/api/audit", "/api/save-lender-journal", "/api/denticon/status",
                     "/api/denticon/key", "/api/denticon/key/delete", "/api/denticon/test", "/api/denticon/offices",
                     "/api/invoca/status", "/api/invoca/save", "/api/invoca/delete", "/api/invoca/test",
                     "/api/google/notes-sheet", "/api/google/notes-sheet/delete", "/api/google/notes-sheet/write",
@@ -142,6 +143,30 @@ CREATE TABLE IF NOT EXISTS np_daily (
     value        REAL NOT NULL,
     as_of        TEXT NOT NULL,
     PRIMARY KEY (office, period_from, day, metric)
+);
+
+-- The assistant's questions and answers (no patient data: its tools only return totals), for review.
+CREATE TABLE IF NOT EXISTS assistant_log (
+    id           INTEGER PRIMARY KEY,
+    asked_at     TEXT NOT NULL,
+    who          TEXT NOT NULL,                  -- this computer | viewer link | other computer
+    question     TEXT NOT NULL,
+    answer       TEXT,
+    tools        TEXT,
+    input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+    error        TEXT,
+    route        TEXT                            -- how it was answered: cache | rules | haiku | main (see ai_chat)
+);
+
+-- The assistant's saved verdicts and answers, so a repeated question costs nothing. An answer is reused only while the
+-- data (and the date) are unchanged; an off-topic verdict is reused for good. Cleared from the Audit card.
+CREATE TABLE IF NOT EXISTS assistant_cache (
+    qkey      TEXT PRIMARY KEY,                  -- the question, lower-cased with punctuation and extra spaces removed
+    verdict   TEXT NOT NULL,                     -- on | off
+    answer    TEXT,
+    data_fp   TEXT,
+    saved_at  TEXT NOT NULL,
+    hits      INTEGER NOT NULL DEFAULT 0
 );
 
 -- Every day each other one-day report was imported for (an empty day too), so a month's coverage can be checked per report.
@@ -649,6 +674,8 @@ def _setup(conn):
         conn.execute("ALTER TABLE np_patients ADD COLUMN other REAL NOT NULL DEFAULT 0")
     if "replaced_by" not in {r["name"] for r in conn.execute("PRAGMA table_info(metric_history)")}:
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
+    if "route" not in {r["name"] for r in conn.execute("PRAGMA table_info(assistant_log)")}:
+        conn.execute("ALTER TABLE assistant_log ADD COLUMN route TEXT")
     if "caller_fp" not in {r["name"] for r in conn.execute("PRAGMA table_info(invoca_calls)")}:
         conn.execute("ALTER TABLE invoca_calls ADD COLUMN caller_fp TEXT")
     if not conn.execute("SELECT 1 FROM daily_report_imports LIMIT 1").fetchone():
@@ -662,15 +689,19 @@ def _setup(conn):
     conn.executescript(log_view_sql())
 
 
+def log_rows(conn, extra=()):
+    """The Log as the app shows it: the monthly_log view, with months pulled day by day filled from the days."""
+    rows = [dict(r) for r in conn.execute(f"SELECT {', '.join(LOG_COLUMNS + list(extra))} FROM monthly_log")]
+    return month_rows_from_days(rows)
+
+
 def write_csv(conn):
-    rows = conn.execute(
-        f"SELECT {', '.join(LOG_COLUMNS)} FROM monthly_log ORDER BY period_from, office"
-    ).fetchall()
+    rows = sorted(log_rows(conn), key=lambda r: (r["period_from"], r["office"]))
     tmp = CSV_PATH.with_suffix(".csv.tmp")
     with open(tmp, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(LOG_COLUMNS)
-        w.writerows([tuple(r) for r in rows])
+        w.writerows([[r.get(c) for c in LOG_COLUMNS] for r in rows])
     tmp.replace(CSV_PATH)
 
 
@@ -1230,6 +1261,7 @@ def add_np_days(rows, frm, to):
             for m in METRIC_NAMES:
                 if m not in DAY_FILLED and m != "refunds" and row.get(m) is None:
                     row[m] = 0
+                    row[m + "_as_of"] = to
     for row in rows.values():
         row.update(_calculated(row))
 
@@ -1398,6 +1430,339 @@ def inbox_loop():
         except Exception as e:   # never stop the app over the inbox
             print(f"{datetime.now():%H:%M} Inbox check failed: {e}")
         time.sleep(INBOX_EVERY)
+
+
+# ------------------------------------------------------------------ the assistant (read-only questions about the app's numbers)
+
+claude_cfg = assistant.Config(DATA_DIR)
+AI_HIDE = ("_detail", "source_file", "logged_at", "from_days")
+
+
+def _ai_glossary():
+    """Each Log column's name and meaning, read from the page's own column list (so it never drifts)."""
+    page = (ROOT / "static" / "index.html").read_text()
+    out = []
+    for m in re.finditer(r'\{key: "([a-z_]+)", label: "([^"]+)", kind: "([a-z]+)"(?:[^}]*?title:\s*"([^"]*)")?', page):
+        key, label, kind, title = m.groups()
+        out.append(f"- {key}: {label} ({kind}){' - ' + title if title else ''}")
+    return "\n".join(out)
+
+
+def _ai_help():
+    page = (ROOT / "static" / "index.html").read_text()
+    body = page.split('<div class="help-body">', 1)[-1].split("</dialog>", 1)[0]
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", body, flags=re.S)
+    text = re.sub(r"</(p|li|h3|h4|div)>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ")
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
+def ai_system():
+    return f"""You are the assistant inside the Executive Summary Logger, Care Dentistry Group's finance app for its 15 dental offices.
+You answer questions about the app's numbers and how to use the app. You are read-only: you can look numbers up with your tools, but
+you cannot change, upload, delete, pull or sync anything. If someone asks for a change, tell them where in the app to do it.
+
+How to answer:
+- Look the numbers up with the tools; never guess a figure. Say which period (month, or exact days) and which offices a number covers.
+- Keep answers short and plain. Use a small table for comparisons. Money as $1,234.56; rates as percentages.
+- The tools only return totals per office, ZIP code or marketing channel. Never ask for, guess or reveal patient names, patient IDs or phone numbers.
+- Data notes: a month can be "from daily reports" (added up from one-day Denticon reports, through the last day pulled) or an uploaded
+  month-to-date report. The current month is partial. In a part-month range, refunds (and net collections / refund %) are monthly only.
+  New Patient Analysis numbers come from each office's Google Sheet. Calls only count as new patients where a Denticon New Patients List
+  covering their first visit has been uploaded. Paid Search and Google PPC are both paid Google traffic.
+- If the data isn't there (a month not loaded, an office missing), say so and suggest what to upload or pull.
+
+Log columns (key: label (kind) - meaning):
+{_ai_glossary()}
+
+The app's help guide:
+{_ai_help()}"""
+
+
+AI_TOOLS = [
+    {"name": "overview", "description": "What data the app has: today's date, offices, months in the Log, which days were pulled one day at a time, "
+     "months with ZIP data and months with calls. Call this first when you need to know what periods exist.",
+     "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "get_log", "description": "Log numbers per office for one month (month = YYYY-MM) or for any run of days (from_date and to_date, YYYY-MM-DD), "
+     "with a Total row. Optional: offices (names or parts of names) and columns (Log column keys; default: the main ones).",
+     "input_schema": {"type": "object", "properties": {
+         "month": {"type": "string"}, "from_date": {"type": "string"}, "to_date": {"type": "string"},
+         "offices": {"type": "array", "items": {"type": "string"}}, "columns": {"type": "array", "items": {"type": "string"}}},
+         "additionalProperties": False}},
+    {"name": "get_log_trend", "description": "One or more Log columns month by month (from_month..to_month, YYYY-MM) for each office and the group total.",
+     "input_schema": {"type": "object", "properties": {
+         "columns": {"type": "array", "items": {"type": "string"}}, "from_month": {"type": "string"}, "to_month": {"type": "string"},
+         "offices": {"type": "array", "items": {"type": "string"}}}, "required": ["columns"], "additionalProperties": False}},
+    {"name": "get_zip_collections", "description": "New-patient collections by home ZIP code (from the Referral Production Listing) for a month range: "
+     "the top ZIPs with patients, dollars and city, plus totals. Optional office filter.",
+     "input_schema": {"type": "object", "properties": {"from_month": {"type": "string"}, "to_month": {"type": "string"},
+                                                       "office": {"type": "string"}, "top": {"type": "integer"}}, "additionalProperties": False}},
+    {"name": "get_calls", "description": "The Invoca calls funnel for a call month (YYYY-MM): calls, answered, callers who became new patients, started "
+     "treatment and $ collected, in total and grouped by channel, medium, source, location, promo_line, campaign or office.",
+     "input_schema": {"type": "object", "properties": {"month": {"type": "string"}, "group_by": {"type": "string",
+                      "enum": ["channel", "medium", "source", "location", "promo_line", "campaign", "office"]}, "office": {"type": "string"}},
+                      "additionalProperties": False}},
+    {"name": "get_benchmarks", "description": "The benchmark cut-offs (green / yellow) set for Log columns.",
+     "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
+]
+AI_DEFAULT_COLS = ["total_collection", "insurance_collection", "new_patients", "total_production", "refunds", "net_collections",
+                   "np_collection", "ortho_collection", "ortho_referrals", "ortho_rate", "financing_applicants", "financing_rate", "started_tx"]
+
+
+def _ai_offices(conn):
+    return sorted({r[0] for r in conn.execute("SELECT office FROM office_summary UNION SELECT office FROM office_metrics")})
+
+
+def _ai_pick(rows, offices, columns):
+    cols = [c for c in (columns or AI_DEFAULT_COLS) if c in LOG_COLUMNS and not c.endswith(AI_HIDE)] or AI_DEFAULT_COLS
+    if offices:
+        want = [o.lower() for o in offices]
+        rows = [r for r in rows if any(w in r["office"].lower() for w in want)]
+    out = [{"office": r["office"], "period": f"{r['period_from']} to {r['period_thru']}", **{c: r.get(c) for c in cols}} for r in rows]
+    total = {"office": "TOTAL"}
+    for c in cols:
+        vals = [r.get(c) for r in rows if isinstance(r.get(c), (int, float))]
+        if vals and c not in CALCULATED and not c.endswith("_rate"):
+            total[c] = round(sum(vals), 2)
+    return {"rows": out, "total": total, "note": "Rates are per office; the total row only adds counts and dollars."}
+
+
+def ai_overview():
+    conn = db()
+    months = sorted({r[0][:7] for r in conn.execute("SELECT period_from FROM office_summary UNION SELECT period_from FROM office_metrics")})
+    days = [r[0] for r in conn.execute("SELECT day FROM daily_imports ORDER BY day")]
+    calls = [r[0] for r in conn.execute("SELECT DISTINCT substr(call_date, 1, 7) FROM invoca_calls ORDER BY 1")]
+    zips = [r[0] for r in conn.execute("SELECT DISTINCT substr(period_from, 1, 7) FROM map_patients ORDER BY 1")]
+    offices = _ai_offices(conn)
+    conn.close()
+    by_month = {}
+    for d in days:
+        by_month.setdefault(d[:7], []).append(d)
+    return {"today": date.today().isoformat(), "offices": offices, "log_months": months,
+            "days_pulled": {m: f"{ds[0]} to {ds[-1]} ({len(ds)} days)" for m, ds in by_month.items()},
+            "zip_months": zips, "call_months": calls}
+
+
+def ai_get_log(month=None, from_date=None, to_date=None, offices=None, columns=None):
+    if from_date and to_date:
+        d = log_days(from_date, to_date)
+        res = _ai_pick(d["rows"], offices, columns)
+        res["range_note"] = ("whole months to date: every column filled" if d["sheet_ok"]
+                             else "part of a month: refunds / net collections / refund % are monthly only (shown empty)")
+        if d.get("not_imported"):
+            res["days_not_pulled"] = d["not_imported"]
+        return res
+    conn = db()
+    rows = log_rows(conn)
+    conn.close()
+    month = month or max(r["period_from"][:7] for r in rows)
+    return _ai_pick([r for r in rows if r["period_from"].startswith(month)], offices, columns)
+
+
+def ai_get_log_trend(columns, from_month=None, to_month=None, offices=None):
+    conn = db()
+    rows = log_rows(conn)
+    conn.close()
+    cols = [c for c in columns if c in LOG_COLUMNS and not c.endswith(AI_HIDE)][:6]
+    if not cols:
+        raise ValueError("unknown columns; use Log column keys such as total_collection")
+    if from_month:
+        rows = [r for r in rows if r["period_from"][:7] >= from_month]
+    if to_month:
+        rows = [r for r in rows if r["period_from"][:7] <= to_month]
+    if offices:
+        want = [o.lower() for o in offices]
+        rows = [r for r in rows if any(w in r["office"].lower() for w in want)]
+    out = {}
+    for r in rows:
+        m = r["period_from"][:7]
+        e = out.setdefault(m, {"period_thru": r["period_thru"], "offices": {}, "total": {}})
+        e["offices"][r["office"]] = {c: r.get(c) for c in cols}
+        for c in cols:
+            if isinstance(r.get(c), (int, float)) and c not in CALCULATED and not c.endswith("_rate"):
+                e["total"][c] = round(e["total"].get(c, 0) + r[c], 2)
+    return {"months": dict(sorted(out.items()))}
+
+
+def ai_get_zip_collections(from_month=None, to_month=None, office=None, top=25):
+    t = maps_trends()
+    months = [m for m in t["months"] if (not from_month or m >= from_month) and (not to_month or m <= to_month)]
+    zips, total_n, total_d = {}, 0, 0.0
+    for r in t["rows"]:
+        if r["month"] not in months or (office and office.lower() not in r["office"].lower()):
+            continue
+        z = zips.setdefault(r["zip"], {"zip": r["zip"], "city": t["where"].get(r["zip"], ""), "new_patients": 0, "collected": 0.0})
+        z["new_patients"] += r["n"]; z["collected"] += r["total"]; total_n += r["n"]; total_d += r["total"]
+    ranked = sorted(zips.values(), key=lambda z: -z["collected"])
+    for z in ranked:
+        z["collected"] = round(z["collected"], 2)
+    return {"months": months, "partial_months": {m: t["thru"][m] for m in months if t["thru"].get(m, "")[-2:] < "28"},
+            "total_new_patients": total_n, "total_collected": round(total_d, 2), "zip_count": len(ranked),
+            "top": ranked[:max(1, min(int(top or 25), 100))]}
+
+
+def ai_get_calls(month=None, group_by="channel", office=""):
+    d = calls_funnel(month, office or "")
+    if not d.get("month"):
+        return {"note": "No calls pulled yet."}
+    rows = sorted(d["by"].get(group_by or "channel", []), key=lambda r: -r["calls"])
+    return {"month": d["month"], "office": d.get("office") or "all", "total": d["total"], "group_by": group_by, "rows": rows[:40],
+            "patient_lists": [{"office": l["office"], "first_visits": f"{l['lo']} to {l['hi']}"} for l in d["lists"]]}
+
+
+def ai_get_benchmarks():
+    conn = db()
+    rows = [dict(r) for r in conn.execute("SELECT metric, direction, green, yellow FROM benchmarks ORDER BY metric")]
+    conn.close()
+    return {"benchmarks": rows, "note": "Rates are fractions (0.25 = 25%)."}
+
+
+AI_HANDLERS = {"overview": ai_overview, "get_log": ai_get_log, "get_log_trend": ai_get_log_trend,
+               "get_zip_collections": ai_get_zip_collections, "get_calls": ai_get_calls, "get_benchmarks": ai_get_benchmarks}
+
+
+# Before Sonnet answers, each question goes through cheaper steps:
+#   1. exact-match cache: asked before (first question of a chat)? reuse the verdict, or the answer if the data hasn't changed (0 tokens)
+#   2. keyword rules: clearly off-topic -> block; clearly on-topic (or a follow-up in a chat) -> step 4; greetings get a canned reply (0 tokens)
+#   3. Haiku gatekeeper: only the unclear ones -> yes/no, verdict saved
+#   4. Sonnet: the real answer, saved for step 1
+AI_ON_TOPIC = re.compile(r"\b(collect\w*|production|produc\w*|patients?|np|nps|new pts?|offices?|clinics?|locations?|zips?|zip ?codes?|calls?|callers?|"
+    r"invoca|channels?|medium|sources?|campaigns?|marketing|ppc|seo|organic|paid|google|referr\w*|ortho\w*|financ\w*|lenders?|refunds?|"
+    r"revenue|insurance|treatment|tx|started|benchmarks?|goals?|log|charts?|reports?|denticon|exec\w* summary|sheets?|upload\w*|robot|"
+    r"pull\w*|months?|monthly|weeks?|days?|daily|yesterday|today|ytd|mtd|quarter|q[1-4]|totals?|average|avg|compare\w*|trend\w*|"
+    r"rate|percent\w*|dollars?|best|worst|top|highest|lowest|jan\w*|feb\w*|mar|march|apr\w*|may|june?|july?|aug\w*|sep\w*|oct\w*|"
+    r"nov\w*|dec\w*|20\d\d|dental|dentist\w*|hygien\w*|adjustments?|payments?|irrelevant|column|mean|meaning|"
+    r"what can you|can you help|help me|how (do|can|should) (i|we)|how to|where (do|can) (i|we)|app|this page|tab)\b|[$%]")
+AI_OFF_TOPIC = re.compile(r"\b(poem|poetry|song|lyrics|joke|riddle|story|recipe|cook\w*|weather|movie|tv show|sports?|nba|nfl|stocks?|"
+    r"bitcoin|crypto|horoscope|translate|homework|essay|python|javascript|html|css|code|coding|program\w*|politic\w*|election|president|"
+    r"religio\w*|dating|girlfriend|boyfriend|ignore (all|any|the|your|previous)|system prompt|jailbreak|pretend|role ?play)\b")
+AI_GREETING = re.compile(r"^(hi|hello|hey|hiya|yo|good (morning|afternoon|evening)|thanks?|thank you|thx|ty|ok|okay|cool|great)( there| so much| claude)?[ !.]*$")
+AI_GREETING_REPLY = "Hi! Ask me about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days."
+AI_BLOCKED_REPLY = ("I can only help with questions about Care Dentistry Group's numbers in this app (collections, new patients, production, "
+                    "ZIP codes, calls and marketing) and how to use the app. Try something like \"Which office collected the most last month?\"")
+AI_OFFICE_WORDS = {"care", "dental", "dentistry", "center", "centre", "group", "family", "smile", "smiles", "the", "and", "of", "dentist", "office"}
+
+
+def _ai_qkey(question):
+    return " ".join(re.sub(r"[^a-z0-9$%./-]+", " ", question.lower()).split()).strip(" .")
+
+
+def _ai_data_fp(conn):
+    """Changes when anything the assistant could look up changes, or the day changes ("last month", "this week")."""
+    q = lambda sql: conn.execute(sql).fetchone()[0]
+    return "|".join((date.today().isoformat(), notes_fingerprint(conn), str(q("SELECT COUNT(*) FROM invoca_calls")),
+                     str(q("SELECT COUNT(*) FROM map_patients")), str(q("SELECT MAX(as_of) FROM map_patients")),
+                     str(q("SELECT COUNT(*) FROM benchmarks")), str(q("SELECT MAX(id) FROM change_log"))))
+
+
+def _ai_rules(conn, qkey, follow_up):
+    """Step 2: 'greet', 'off', 'on' or None (unclear)."""
+    if AI_GREETING.match(qkey):
+        return "greet"
+    office_words = {w for o in _ai_offices(conn) for w in re.findall(r"[a-z]+", o.lower()) if len(w) > 3 and w not in AI_OFFICE_WORDS}
+    on = bool(AI_ON_TOPIC.search(qkey)) or bool(office_words & set(qkey.split()))
+    off = bool(AI_OFF_TOPIC.search(qkey))
+    if off and not on:
+        return "off"
+    if on and not off:
+        return "on"
+    if follow_up and not off:   # "and Downey?", "why?": the chat already has a topic
+        return "on"
+    return None
+
+
+def ai_chat(question, history, who, use_cache=True):
+    question = (question or "").strip()[:2000]
+    if not question:
+        raise ValueError("Type a question first.")
+    now = datetime.now().isoformat(timespec="seconds")
+    history = [h for h in (history or []) if h.get("text")]
+    qkey, follow_up = _ai_qkey(question), bool(history)
+    usage, tools, answer, err, route = {"input": 0, "output": 0, "cache_read": 0}, [], None, None, None
+    conn = db()
+    fp = _ai_data_fp(conn)
+    cached = conn.execute("SELECT * FROM assistant_cache WHERE qkey = ?", (qkey,)).fetchone() if use_cache else None
+    verdict = None
+    # 1. exact-match cache (a follow-up depends on the chat before it, so only its off-topic verdict is reused)
+    if cached and cached["verdict"] == "off":
+        answer, route = AI_BLOCKED_REPLY, "cache: blocked"
+    elif cached and not follow_up and cached["answer"] and cached["data_fp"] == fp:
+        answer, route = cached["answer"], "cache: answer"
+    elif cached:
+        verdict = "on"   # known on-topic; the data changed (or it's a follow-up), so answer again
+    if answer:
+        with conn:
+            conn.execute("UPDATE assistant_cache SET hits = hits + 1 WHERE qkey = ?", (qkey,))
+    if not answer and not verdict:
+        # 2. keyword rules
+        rule = _ai_rules(conn, qkey, follow_up)
+        if rule == "greet":
+            answer, route = AI_GREETING_REPLY, "rules: greeting"
+        elif rule == "off":
+            answer, route, verdict = AI_BLOCKED_REPLY, "rules: blocked", "off"
+        elif rule == "on":
+            verdict, route = "on", "rules: on-topic"
+        else:
+            # 3. Haiku gatekeeper
+            try:
+                ok, u = assistant.gate(claude_cfg.key(), question)
+                usage = {k: usage[k] + u[k] for k in usage}
+                verdict, route = ("on", "haiku: on-topic") if ok else ("off", "haiku: blocked")
+                if not ok:
+                    answer = AI_BLOCKED_REPLY
+            except assistant.AssistantError as e:
+                if not claude_cfg.exists():
+                    err = str(e)
+                verdict, route = "on", "haiku failed: on-topic"   # let the main model decide
+        if verdict == "off" and use_cache:
+            with conn:
+                conn.execute("INSERT OR REPLACE INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'off', ?)", (qkey, now))
+    # 4. the main model
+    if not answer and not err:
+        route = (route + " → " if route else "cache: on-topic → ") + "sonnet"
+        try:
+            answer, tools, u = assistant.run(claude_cfg.key(), ai_system(), AI_TOOLS, AI_HANDLERS, history, question)
+            usage = {k: usage[k] + u.get(k, 0) for k in usage}
+            complete = not answer.endswith("ask a narrower question.)") and "too many lookups" not in answer and tools
+            if use_cache and not follow_up and complete:   # only answers backed by a lookup are reused
+                with conn:
+                    conn.execute("INSERT OR REPLACE INTO assistant_cache (qkey, verdict, answer, data_fp, saved_at) VALUES (?, 'on', ?, ?, ?)",
+                                 (qkey, answer, fp, now))
+            elif use_cache:
+                with conn:
+                    conn.execute("INSERT INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'on', ?) ON CONFLICT(qkey) DO NOTHING", (qkey, now))
+        except assistant.AssistantError as e:
+            err = str(e)
+    with conn:
+        conn.execute("INSERT INTO assistant_log (asked_at, who, question, answer, tools, input_tokens, output_tokens, cache_read_tokens, error, route) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (now, who, question, answer, ",".join(tools), usage["input"],
+                                                                usage["output"], usage["cache_read"], err, route))
+    conn.close()
+    if err:
+        raise ValueError(err)
+    return {"answer": answer, "tools": tools, "route": route}
+
+
+def assistant_cache_clear():
+    conn = db()
+    with conn:
+        n = conn.execute("DELETE FROM assistant_cache").rowcount
+    conn.close()
+    return {"cleared": n}
+
+
+def assistant_status():
+    conn = db()
+    n = conn.execute("SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens) FROM assistant_log WHERE asked_at >= date('now', '-30 days')").fetchone()
+    recent = [dict(r) for r in conn.execute("SELECT asked_at, who, question, route, substr(COALESCE(answer, error), 1, 160) AS answer FROM assistant_log ORDER BY id DESC LIMIT 15")]
+    free = conn.execute("SELECT COUNT(*) FROM assistant_log WHERE asked_at >= date('now', '-30 days') AND (route LIKE 'cache: answer%' "
+                        "OR route LIKE 'cache: blocked%' OR route LIKE 'rules: greeting%' OR route LIKE 'rules: blocked%')").fetchone()[0]
+    saved = conn.execute("SELECT COUNT(*), SUM(verdict = 'off') FROM assistant_cache").fetchone()
+    conn.close()
+    return {"connected": claude_cfg.exists(), "model": assistant.MODEL, "gate_model": assistant.GATE_MODEL, "questions_30d": n[0],
+            "free_30d": free, "input_tokens_30d": n[1] or 0, "output_tokens_30d": n[2] or 0, "cached": saved[0], "cached_off": saved[1] or 0,
+            "recent": recent}
 
 
 # ------------------------------------------------------------------ the Denticon report robot (tools/denticon_robot.js)
@@ -1857,7 +2222,9 @@ def notes_fingerprint(conn):
     q = lambda sql: conn.execute(sql).fetchone()[0]
     return "|".join(str(v) for v in (q("SELECT MAX(id) FROM change_log"), q("SELECT COUNT(*) FROM monthly_log"),
                                      q("SELECT MAX(logged_at) FROM office_metrics"), q("SELECT MAX(logged_at) FROM office_summary"),
-                                     q("SELECT COUNT(*) FROM office_metrics"), q("SELECT COUNT(*) FROM office_summary")))
+                                     q("SELECT COUNT(*) FROM office_metrics"), q("SELECT COUNT(*) FROM office_summary"),
+                                     q("SELECT MAX(logged_at) FROM office_daily"), q("SELECT MAX(logged_at) FROM daily_metrics"),
+                                     q("SELECT COUNT(*) FROM daily_imports")))
 
 
 def notes_sheet_info():
@@ -1908,7 +2275,8 @@ def write_notes_sheet(force=False):
             conn.close()
             return None
         cols = log_sheet_columns()
-        log = conn.execute("SELECT * FROM monthly_log ORDER BY period_from DESC, office").fetchall()
+        log = sorted(log_rows(conn, [m + "_detail" for m in DETAIL_METRICS]), key=lambda r: (r["period_from"], r["office"]))
+        log.sort(key=lambda r: r["period_from"], reverse=True)   # newest month first, offices A-Z inside
         conn.close()
         tab_of = lambda pf: datetime.strptime(pf[:7], "%Y-%m").strftime("%B %Y")
         months = list(dict.fromkeys(tab_of(r["period_from"]) for r in log))           # newest first
@@ -3196,7 +3564,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(401, {"error": "Password required"},
                            extra={"WWW-Authenticate": 'Basic realm="Monthly report (view only)", charset="UTF-8"'})
                 return True
-            if self.command != "GET" or self.path.split("?", 1)[0] not in VIEWER_PATHS:
+            if (self.command != "GET" or self.path.split("?", 1)[0] not in VIEWER_PATHS) and not (self.command == "POST" and self.path == "/api/chat"):
                 self._send(403, {"error": "This is a view-only link."})
                 return True
         elif APP_PASSWORD and not app_password_ok(auth, given):
@@ -3241,6 +3609,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {"error": str(e)})
         elif self.path == "/api/inbox":
             self._send(200, inbox_info())
+        elif self.path == "/api/assistant/status":
+            self._send(200, assistant_status())
         elif self.path == "/api/days":
             self._send(200, days_info())
         elif self.path == "/api/robot":
@@ -3377,6 +3747,23 @@ class Handler(BaseHTTPRequestHandler):
                     os.unlink(tmp.name)
             elif self.path == "/api/denticon/offices":
                 self._send(200, set_denticon_office(json.loads(self._body())))
+            elif self.path == "/api/chat":
+                b = json.loads(self._body())
+                who = "viewer link" if VIEWER_PASSWORD else ("this computer" if self._on_this_computer() else "other computer")
+                self._send(200, ai_chat(b.get("question"), b.get("history"), who))
+            elif self.path == "/api/assistant/key":
+                try:
+                    claude_cfg.save(json.loads(self._body()).get("key"))
+                except assistant.AssistantError as e:
+                    raise ValueError(str(e))
+                self._send(200, assistant_status())
+            elif self.path == "/api/assistant/key/delete":
+                claude_cfg.remove()
+                self._send(200, assistant_status())
+            elif self.path == "/api/assistant/test":
+                self._send(200, ai_chat("In one sentence: what is the latest month in the Log, and its total collection?", [], "this computer (test)", use_cache=False))
+            elif self.path == "/api/assistant/cache/clear":
+                self._send(200, assistant_cache_clear())
             elif self.path == "/api/robot/pull":
                 b = json.loads(self._body())
                 self._send(200, robot_pull(b.get("from"), b.get("to"), b.get("report") or "exec"))

@@ -465,6 +465,34 @@
   .cl-sheet td.miss { color: var(--bad); } .cl-sheet .ok { color: var(--good); font-weight: 600; white-space: nowrap; } .cl-sheet .booked { color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
   .cl-sheet .sig { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); margin-right: 3px; color: var(--muted); }
 
+  /* The assistant: a button and a panel docked bottom-right. */
+  .ask-btn { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
+             border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
+  .ask-btn svg { width: 16px; height: 16px; } .ask-btn:hover { background: var(--accent-hover); }
+  .ask-panel { position: fixed; right: 20px; bottom: 72px; z-index: 41; width: min(420px, calc(100vw - 24px)); height: min(620px, calc(100vh - 100px));
+               display: flex; flex-direction: column; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .ask-panel[hidden] { display: none !important; }
+  .ask-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .ask-head h2 { flex: 1; font-size: 16px; }
+  .ask-x { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+  .ask-x:hover { background: var(--hover); color: var(--text); } #ask-close { font-size: 20px; line-height: 1; }
+  .ask-log { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+  .ask-msg { max-width: 92%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .ask-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); white-space: pre-wrap; }
+  .ask-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
+  .ask-msg.bot.err { color: var(--bad); }
+  .ask-msg.bot p { margin: 0 0 6px; } .ask-msg.bot p:last-child { margin-bottom: 0; }
+  .ask-msg.bot ul { margin: 4px 0 6px; padding-left: 18px; }
+  .ask-msg.bot table { font-size: 12px; margin: 6px 0; } .ask-msg.bot th, .ask-msg.bot td { padding: 3px 6px; white-space: nowrap; }
+  .ask-msg.bot .tw { overflow-x: auto; }
+  .ask-msg.thinking { color: var(--muted); font-style: italic; }
+  .ask-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 8px; }
+  .ask-chips button { font: inherit; font-size: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 4px 10px; cursor: pointer; text-align: left; }
+  .ask-chips button:hover { background: var(--accent-soft); }
+  .ask-form { display: flex; gap: 8px; align-items: flex-end; padding: 8px 16px; border-top: 1px solid var(--border); }
+  .ask-form textarea { flex: 1; min-height: 40px; max-height: 120px; height: auto; resize: none; font: inherit; font-size: 13px; background: var(--surface); padding: 8px 10px; }
+  .ask-foot { margin: 0; padding: 0 16px 10px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 900px) { .ask-btn { right: 12px; bottom: 12px; } .ask-panel { right: 12px; bottom: 60px; } }
   /* Help: a guided dialog. */
   #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
   #help[open] { display: flex; flex-direction: column; }
@@ -961,6 +989,26 @@
       <p class="msg" id="iv-msg"></p>
       <div id="iv-result"></div>
     </div>
+    <div class="card">
+      <h2 class="card-title" style="margin-top:0">Assistant (Claude API)</h2>
+      <p class="hint" style="margin-top:0">The <strong>Ask</strong> button (bottom right, for everyone including the view-only link) answers questions about the Log,
+        Charts and Calls. It can only look numbers up, never change anything, and its lookups return totals only (no patient names, IDs or phone numbers).
+        Paste your Claude API key from <strong>console.anthropic.com</strong> below; it's stored only on this computer (in data/, readable only by your
+        user) and never shown again. Every question is logged below for review.</p>
+      <p class="hint">To keep costs down, each question goes through cheaper steps first: a question asked before reuses its saved answer
+        (until the data changes) at no cost; greetings and clearly off-topic questions are handled by keyword rules at no cost; unclear ones
+        get a quick yes/no check from Claude Haiku (a fraction of a cent); only real questions reach Claude Sonnet.</p>
+      <p id="ai-status"></p>
+      <div class="row">
+        <label>Claude API key <input type="password" id="ai-key" autocomplete="off" spellcheck="false" style="width:min(360px,70vw)"></label>
+        <button class="btn primary" id="ai-save">Save key</button>
+        <button class="btn" id="ai-test">Test</button>
+        <button class="btn" id="ai-clear">Clear saved answers</button>
+        <button class="btn danger" id="ai-remove">Remove key</button>
+      </div>
+      <p class="msg" id="ai-msg"></p>
+      <div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Question</th><th>How</th><th>Answer</th></tr></thead><tbody id="ai-recent"></tbody></table></div>
+    </div>
   </section>
 
   <!-- Calls: the funnel, then one day's phone calls from Invoca laid out like a sheet -->
@@ -1098,6 +1146,19 @@ ORDER BY period_thru DESC, office;</textarea>
   </section>
 </main>
 
+<button type="button" class="ask-btn" id="ask-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="ask-panel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>Ask</button>
+<section class="ask-panel" id="ask-panel" role="dialog" aria-labelledby="ask-title" hidden>
+  <div class="ask-head"><h2 id="ask-title">Ask about the numbers</h2><button type="button" class="ask-x" id="ask-new" title="Start a new conversation">New</button><button type="button" class="ask-x" id="ask-close" aria-label="Close">×</button></div>
+  <div class="ask-log" id="ask-log" aria-live="polite"></div>
+  <div class="ask-chips" id="ask-chips">
+    <button type="button">Which office collected the most last month?</button>
+    <button type="button">How did October 1–15 compare with September 1–15?</button>
+    <button type="button">Which marketing channel brought the most new patients in September?</button>
+    <button type="button">What does % irrelevant patients mean?</button>
+  </div>
+  <form class="ask-form" id="ask-form"><textarea id="ask-input" rows="2" placeholder="Ask a question about collections, new patients, calls, ZIP codes…" aria-label="Your question"></textarea><button class="btn primary" id="ask-send">Send</button></form>
+  <p class="ask-foot">Read-only: it looks numbers up, it can't change anything. Answers can be wrong; check important figures in the Log.</p>
+</section>
 <dialog id="help" aria-labelledby="help-title">
   <div class="help-head">
     <h2 id="help-title">How to use the Executive Summary Logger</h2>
@@ -1261,7 +1322,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   b.classList.add("active"); $(b.dataset.tab).classList.add("active"); window.scrollTo(0, 0); document.querySelector("main").scrollTo(0, 0);
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
-  if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); }
+  if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); loadAssistant(); }
   if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
   if (b.dataset.tab === "changes") loadChanges();
   if (b.dataset.tab === "upload") loadInbox();
@@ -2360,7 +2421,7 @@ function renderLog() {
     if (c.key === "source_file") return `<td data-col="source_file" class="hint src" title="${esc(r.source_file || "")}">${esc(r.source_file || (r.refunds != null ? "pasted sheet" : ""))}</td>`;
     if (logMode === "days" && dayInfo && !dayInfo.sheet_ok && !DAY_KEYS.has(c.key) && r[c.key] == null)
       return `<td data-col="${c.key}" class="num"><span class="none" title="Comes once a month (refunds, the New Patient Analysis sheets). Pick a range from a month's 1st through its latest day to see it.">monthly</span></td>`;
-    const asOf = c.asOf && r[c.key] != null && r[c.key + "_as_of"] !== r.period_thru
+    const asOf = c.asOf && r[c.key] != null && r[c.key + "_as_of"] && r[c.key + "_as_of"] !== r.period_thru
       ? `<span class="asof">as of ${mmdd(r[c.key + "_as_of"])}</span>` : "";
     let tip = "";
     try { tip = r[c.key + "_detail"] ? detailText(c.key, JSON.parse(r[c.key + "_detail"])) : ""; } catch {}
@@ -2730,6 +2791,90 @@ $("rb-pull").onclick = async () => {
   try { await api("/api/robot/pull", JSON.stringify({from: $("rb-from").value, to: $("rb-to").value, report: $("rb-report").value}), {"Content-Type": "application/json"}); }
   catch (e) { $("rb-status").textContent = e.message; $("rb-status").className = "hint err-text"; return; }
   loadRobot();
+};
+
+// The assistant: questions go to /api/chat (read-only lookups on the server); the conversation lives in this tab.
+{
+  const panel = $("ask-panel"), logEl = $("ask-log"), input = $("ask-input");
+  let history = [];
+  try { history = JSON.parse(sessionStorage.getItem("askHistory")) || []; } catch {}
+  const md = text => {   // a small, safe Markdown subset: paragraphs, **bold**, lists, pipe tables
+    const lines = esc(text).split("\n"), out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+        const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+        const head = cells(l); i += 2; const body = [];
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) body.push(cells(lines[i++]));
+        i--;
+        const num = c => /^[-$\d.,%()]+$/.test(c) ? ' class="num"' : "";
+        out.push(`<div class="tw"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body.map(r => `<tr>${r.map(c => `<td${num(c)}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      } else if (/^\s*[-*] /.test(l)) {
+        const items = [];
+        while (i < lines.length && /^\s*[-*] /.test(lines[i])) items.push(lines[i++].replace(/^\s*[-*] /, ""));
+        i--; out.push(`<ul>${items.map(t => `<li>${t}</li>`).join("")}</ul>`);
+      } else if (l.trim()) out.push(`<p>${l.replace(/^#+\s*/, "")}</p>`);
+    }
+    return out.join("").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  };
+  const add = (role, text, cls = "") => {
+    const d = document.createElement("div"); d.className = `ask-msg ${role} ${cls}`.trim();
+    if (role === "bot" && !cls) d.innerHTML = md(text); else d.textContent = text;
+    logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; return d;
+  };
+  const redraw = () => { logEl.innerHTML = ""; history.forEach(h => add(h.role === "user" ? "user" : "bot", h.text));
+    if (!history.length) add("bot", "Hi! Ask me about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days.");
+    $("ask-chips").hidden = history.length > 0; };
+  const save = () => { try { sessionStorage.setItem("askHistory", JSON.stringify(history.slice(-20))); } catch {} };
+  const open = show => { panel.hidden = !show; $("ask-btn").setAttribute("aria-expanded", show); if (show) { redraw(); input.focus(); } };
+  $("ask-btn").onclick = () => open(panel.hidden);
+  $("ask-close").onclick = () => open(false);
+  $("ask-new").onclick = () => { history = []; save(); redraw(); input.focus(); };
+  panel.addEventListener("keydown", e => { if (e.key === "Escape") open(false); });
+  let busy = false;
+  const ask = async q => {
+    q = q.trim(); if (!q || busy) return;
+    busy = true; $("ask-send").disabled = true; $("ask-chips").hidden = true;
+    add("user", q); input.value = "";
+    const wait = add("bot", "Looking that up…", "thinking");
+    try {
+      const r = await api("/api/chat", JSON.stringify({question: q, history}), {"Content-Type": "application/json"});
+      wait.remove(); add("bot", r.answer);
+      history.push({role: "user", text: q}, {role: "assistant", text: r.answer}); save();
+    } catch (e) { wait.remove(); add("bot", e.message, "err"); }
+    busy = false; $("ask-send").disabled = false; input.focus();
+  };
+  $("ask-form").onsubmit = e => { e.preventDefault(); ask(input.value); };
+  input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } };
+  $("ask-chips").onclick = e => { const b = e.target.closest("button"); if (b) ask(b.textContent); };
+}
+// Assistant setup (Audit tab, this computer only).
+async function loadAssistant() {
+  let st; try { st = await api("/api/assistant/status"); } catch { return; }
+  $("ai-status").innerHTML = st.connected ? `Connected (model ${esc(st.model)}). Last 30 days: ${st.questions_30d} question${st.questions_30d === 1 ? "" : "s"} (${st.free_30d} answered at no cost), ${st.input_tokens_30d.toLocaleString()} input and ${st.output_tokens_30d.toLocaleString()} output tokens. ${st.cached} saved question${st.cached === 1 ? "" : "s"} (${st.cached_off} off-topic).`
+    : "No key yet. Paste it below and click Save key.";
+  $("ai-remove").hidden = $("ai-test").hidden = !st.connected;
+  $("ai-clear").hidden = !st.cached;
+  $("ai-recent").innerHTML = st.recent.map(r => `<tr><td>${when(r.asked_at)}</td><td>${esc(r.who)}</td><td style="white-space:normal;max-width:320px">${esc(r.question)}</td><td class="hint">${esc(r.route || "")}</td><td class="hint" style="white-space:normal;max-width:420px">${esc(r.answer || "")}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="hint">No questions yet.</td></tr>`;
+}
+$("ai-save").onclick = async () => {
+  try { await api("/api/assistant/key", JSON.stringify({key: $("ai-key").value}), {"Content-Type": "application/json"}); $("ai-key").value = ""; msg($("ai-msg"), "Saved. Click Test.", true); loadAssistant(); }
+  catch (e) { msg($("ai-msg"), e.message, false); }
+};
+$("ai-test").onclick = async () => {
+  msg($("ai-msg"), "Asking Claude a test question…", true);
+  try { const r = await api("/api/assistant/test", "{}", {"Content-Type": "application/json"}); msg($("ai-msg"), "Works: " + r.answer, true); }
+  catch (e) { msg($("ai-msg"), e.message, false); }
+  loadAssistant();
+};
+$("ai-clear").onclick = async () => {
+  if (!confirm("Forget every saved answer and off-topic verdict? Questions will be checked and answered fresh.")) return;
+  const r = await api("/api/assistant/cache/clear", "{}", {"Content-Type": "application/json"}); msg($("ai-msg"), `Cleared ${r.cleared} saved question${r.cleared === 1 ? "" : "s"}.`, true); loadAssistant();
+};
+$("ai-remove").onclick = async () => {
+  if (!confirm("Remove the Claude API key from this computer? The Ask button will stop answering.")) return;
+  await api("/api/assistant/key/delete", "{}", {"Content-Type": "application/json"}); msg($("ai-msg"), "Key removed.", true); loadAssistant();
 };
 
 // Changes

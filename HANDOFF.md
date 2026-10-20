@@ -341,6 +341,15 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   (~27 KB; offices with no referral that day have no "Total for office" line and simply get no row). Report choices:
   exec | referral | ortho | txplan | both (exec+referral) | all (four). All four Denticon reports are now mapped.
 
+## 9c. The Ask assistant (2026-10-20)
+
+- **What:** an "Ask" button (bottom right, every page, including the view-only link) opens a chat panel. Questions go to `POST /api/chat` `{question, history:[{role, text}]}` → `{answer, tools}`. The conversation lives in the browser tab (sessionStorage, last 20 turns); the server keeps the last 12 text turns.
+- **Code:** `assistant.py` (raw HTTPS to the Claude Messages API, tool loop, max 8 tool rounds, model `claude-sonnet-5`, effort medium, cached system prompt) and the "assistant" section of `app.py` (`ai_system`, `AI_TOOLS`, `ai_*` handlers, `ai_chat`, `assistant_status`).
+- **Read-only by design:** the only tools are lookups: `overview`, `get_log` (month or day range, offices, columns), `get_log_trend`, `get_zip_collections`, `get_calls` (Invoca funnel grouped by channel/medium/source/location/promo line/campaign/office), `get_benchmarks`. They return totals only, never patient names, IDs or phone numbers. Viewers may POST only `/api/chat`.
+- **Key:** stored in `data/claude_api.json` (0600), entered on the Audit tab card "Assistant (Claude API)" (Save / Test / Remove). Admin endpoints are local-only: `GET /api/assistant/status`, `POST /api/assistant/key`, `/api/assistant/key/delete`, `/api/assistant/test`. The key is never sent to the browser.
+- **Cost steps before Sonnet** (`ai_chat`): 1. exact-match cache (`assistant_cache`, question lower-cased without punctuation; an answer is reused only for the first question of a chat, only if it used a lookup, and only while `_ai_data_fp` (date + data counts) is unchanged; an off-topic verdict is reused for good), 2. keyword rules (`AI_GREETING` canned reply, `AI_OFF_TOPIC` without `AI_ON_TOPIC` → blocked, on-topic or office name or a follow-up → Sonnet), 3. Haiku gatekeeper (`assistant.gate`, `claude-haiku-4-5-20251001`, yes/no, verdict saved; if Haiku fails, Sonnet decides), 4. Sonnet. Each log row's `route` records the path. "Clear saved answers" on the Audit card empties the cache; Test bypasses it.
+- **Log:** every question goes to the `assistant_log` table (asked_at, who, question, answer, tools, tokens, error); the Audit card shows the last 15 and 30-day token totals. No usage limits for now (user's choice).
+
 ## 10. Google Sheets sync
 
 - User created a Google Cloud project + service account + JSON key and added the key in the app (stored in

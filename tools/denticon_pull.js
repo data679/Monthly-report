@@ -401,6 +401,7 @@ async function pullDays(context, page, days, headed) {
       const error = e.message.split("\n")[0] + where;
       failed.push({ day, error }); log("failed", day, error);
       if (/not logged in/.test(error)) break;
+      if (/has been closed/.test(error)) { failed.push({ day: "stopped", error: "the robot window was closed; pull again to continue" }); break; }   // no point trying the rest
     }
   }
   const needsLoginNow = failed.some(f => /not logged in/.test(f.error));
