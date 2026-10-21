@@ -469,29 +469,59 @@
   .ask-btn { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px;
              border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
   .ask-btn svg { width: 16px; height: 16px; } .ask-btn:hover { background: var(--accent-hover); }
-  .ask-panel { position: fixed; right: 20px; bottom: 72px; z-index: 41; width: min(420px, calc(100vw - 24px)); height: min(620px, calc(100vh - 100px));
-               display: flex; flex-direction: column; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .ask-panel { position: fixed; right: 20px; bottom: 72px; z-index: 41; width: min(420px, calc(100vw - 24px)); height: min(640px, calc(100vh - 100px));
+               display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
   .ask-panel[hidden] { display: none !important; }
-  .ask-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-  .ask-head h2 { flex: 1; font-size: 16px; }
-  .ask-x { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
-  .ask-x:hover { background: var(--hover); color: var(--text); } #ask-close { font-size: 20px; line-height: 1; }
-  .ask-log { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
-  .ask-msg { max-width: 92%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-  .ask-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); white-space: pre-wrap; }
-  .ask-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
-  .ask-msg.bot.err { color: var(--bad); }
+  .ask-head { display: flex; align-items: center; gap: 4px; padding: 12px 8px 12px 16px; border-bottom: 1px solid var(--border); }
+  .ask-head > div { flex: 1; min-width: 0; }
+  .ask-head h2 { font-size: 15px; line-height: 1.3; }
+  .ask-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .ask-x { display: inline-flex; align-items: center; gap: 4px; height: 28px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 0 8px; border-radius: 6px; }
+  .ask-x:hover { background: var(--hover); color: var(--text); } .ask-x svg { width: 14px; height: 14px; }
+  #ask-close { width: 28px; padding: 0; justify-content: center; }
+  .ask-log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
+  .ask-msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .ask-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); white-space: pre-wrap; border-bottom-right-radius: 4px; }
+  .ask-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .ask-msg.bot.err { color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); }
   .ask-msg.bot p { margin: 0 0 6px; } .ask-msg.bot p:last-child { margin-bottom: 0; }
   .ask-msg.bot ul { margin: 4px 0 6px; padding-left: 18px; }
   .ask-msg.bot table { font-size: 12px; margin: 6px 0; } .ask-msg.bot th, .ask-msg.bot td { padding: 3px 6px; white-space: nowrap; }
   .ask-msg.bot .tw { overflow-x: auto; }
-  .ask-msg.thinking { color: var(--muted); font-style: italic; }
-  .ask-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 8px; }
-  .ask-chips button { font: inherit; font-size: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 4px 10px; cursor: pointer; text-align: left; }
-  .ask-chips button:hover { background: var(--accent-soft); }
-  .ask-form { display: flex; gap: 8px; align-items: flex-end; padding: 8px 16px; border-top: 1px solid var(--border); }
-  .ask-form textarea { flex: 1; min-height: 40px; max-height: 120px; height: auto; resize: none; font: inherit; font-size: 13px; background: var(--surface); padding: 8px 10px; }
-  .ask-foot { margin: 0; padding: 0 16px 10px; font-size: 12px; color: var(--muted); }
+  .ask-msg.thinking { color: var(--muted); }
+  .ask-msg.thinking::after { content: ""; display: inline-block; width: 1.2em; text-align: left; animation: ask-dots 1.2s steps(4) infinite; }
+  @keyframes ask-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  @media (prefers-reduced-motion: reduce) { .ask-msg.thinking::after { animation: none; content: "…"; } }
+  .ask-intro { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
+  .ask-intro + .ask-label { margin-top: 4px; }
+  .ask-label { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 -4px; }
+  .ask-suggest { display: flex; flex-direction: column; gap: 6px; }
+  .ask-suggest button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 8px 12px; font: inherit; font-size: 13px; line-height: 1.4;
+                        text-align: left; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+  .ask-suggest button::after { content: "→"; color: var(--faint); flex: none; }
+  .ask-suggest button:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); color: var(--accent-ink); }
+  .ask-suggest button:hover::after { color: var(--accent-ink); }
+  .ask-compose { margin: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: border-color .15s, box-shadow .15s; }
+  .ask-compose:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
+  .ask-compose textarea, .ask-compose textarea:focus-visible { display: block; width: 100%; min-height: 0; max-height: 140px; height: auto; resize: none; border: 0; box-shadow: none; outline: none;
+                        background: transparent; font: inherit; font-size: 13px; line-height: 1.5; padding: 10px 12px 4px; }
+  .ask-bar { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px; }
+  .ask-hint { flex: 1; font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ask-clip { flex: none; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+  .ask-clip:hover { color: var(--text); background: var(--hover); } .ask-clip svg { width: 16px; height: 16px; }
+  #ask-send { height: 28px; padding: 0 10px; gap: 4px; } #ask-send svg { width: 14px; height: 14px; }
+  .ask-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 8px 0; }
+  .ask-files[hidden] { display: none; }
+  .ask-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; padding: 3px 4px 3px 8px; border-radius: 6px;
+              background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+  .ask-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ask-chip small { color: var(--muted); white-space: nowrap; }
+  .ask-chip.busy small { font-style: italic; } .ask-chip.bad { border-color: var(--bad); color: var(--bad); }
+  .ask-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+  .ask-chip button:hover { background: var(--hover); color: var(--text); }
+  .ask-msg.user .ask-chip { background: color-mix(in srgb, var(--accent-text) 18%, transparent); border-color: transparent; color: var(--accent-text); padding-right: 8px; margin-bottom: 4px; }
+  .ask-msg.user .ask-chip small { color: inherit; opacity: .8; }
+  .ask-panel.drop .ask-compose { border-style: dashed; border-color: var(--accent); background: var(--accent-soft); }
+  .ask-foot { margin: 0; padding: 6px 16px 10px; font-size: 11px; color: var(--faint); text-align: center; }
   @media (max-width: 900px) { .ask-btn { right: 12px; bottom: 12px; } .ask-panel { right: 12px; bottom: 60px; } }
   /* Help: a guided dialog. */
   #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -1148,16 +1178,23 @@ ORDER BY period_thru DESC, office;</textarea>
 
 <button type="button" class="ask-btn" id="ask-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="ask-panel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>Ask</button>
 <section class="ask-panel" id="ask-panel" role="dialog" aria-labelledby="ask-title" hidden>
-  <div class="ask-head"><h2 id="ask-title">Ask about the numbers</h2><button type="button" class="ask-x" id="ask-new" title="Start a new conversation">New</button><button type="button" class="ask-x" id="ask-close" aria-label="Close">×</button></div>
-  <div class="ask-log" id="ask-log" aria-live="polite"></div>
-  <div class="ask-chips" id="ask-chips">
-    <button type="button">Which office collected the most last month?</button>
-    <button type="button">How did October 1–15 compare with September 1–15?</button>
-    <button type="button">Which marketing channel brought the most new patients in September?</button>
-    <button type="button">What does % irrelevant patients mean?</button>
+  <div class="ask-head">
+    <div><h2 id="ask-title">Ask about the numbers</h2><p class="ask-sub">Read-only. Looks numbers up in this app.</p></div>
+    <button type="button" class="ask-x" id="ask-new" title="Start a new conversation"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>New</button>
+    <button type="button" class="ask-x" id="ask-close" aria-label="Close"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
-  <form class="ask-form" id="ask-form"><textarea id="ask-input" rows="2" placeholder="Ask a question about collections, new patients, calls, ZIP codes…" aria-label="Your question"></textarea><button class="btn primary" id="ask-send">Send</button></form>
-  <p class="ask-foot">Read-only: it looks numbers up, it can't change anything. Answers can be wrong; check important figures in the Log.</p>
+  <div class="ask-log" id="ask-log" aria-live="polite"></div>
+  <form class="ask-compose" id="ask-form">
+    <div class="ask-files" id="ask-files" hidden></div>
+    <textarea id="ask-input" rows="1" placeholder="Ask a question…" aria-label="Your question"></textarea>
+    <div class="ask-bar">
+      <input type="file" id="ask-file" accept=".pdf,.xlsx,.xlsm,.doc,.docx,.csv,.txt" multiple hidden>
+      <button type="button" class="ask-clip" id="ask-clip" title="Attach a PDF, Excel or Word file (sent to Claude, forgotten after 4 hours)" aria-label="Attach a file"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 7.5 8.2 12.8a3.2 3.2 0 0 1-4.5-4.5l5.6-5.6a2.1 2.1 0 0 1 3 3L6.7 11.3a1.1 1.1 0 0 1-1.5-1.5l5-5"/></svg></button>
+      <span class="ask-hint">Enter to send, Shift+Enter for a new line</span>
+      <button class="btn primary" id="ask-send">Send<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>
+    </div>
+  </form>
+  <p class="ask-foot">Answers can be wrong. Check key figures in the Log.</p>
 </section>
 <dialog id="help" aria-labelledby="help-title">
   <div class="help-head">
@@ -2817,36 +2854,74 @@ $("rb-pull").onclick = async () => {
     }
     return out.join("").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   };
-  const add = (role, text, cls = "") => {
+  const chip = f => `<span class="ask-chip"><span>${esc(f.name)}</span>${f.what ? `<small>${esc(f.what)}</small>` : ""}</span>`;
+  const add = (role, text, cls = "", files = []) => {
     const d = document.createElement("div"); d.className = `ask-msg ${role} ${cls}`.trim();
     if (role === "bot" && !cls) d.innerHTML = md(text); else d.textContent = text;
+    if (files.length) d.insertAdjacentHTML("afterbegin", `<div>${files.map(chip).join(" ")}</div>`);
     logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; return d;
   };
-  const redraw = () => { logEl.innerHTML = ""; history.forEach(h => add(h.role === "user" ? "user" : "bot", h.text));
-    if (!history.length) add("bot", "Hi! Ask me about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days.");
-    $("ask-chips").hidden = history.length > 0; };
+  const SUGGEST = ["Which office collected the most last month?", "How did October 1–15 compare with September 1–15?",
+                   "Which marketing channel brought the most new patients in September?", "What does % irrelevant patients mean?"];
+  const redraw = () => {
+    logEl.innerHTML = "";
+    history.forEach(h => add(h.role === "user" ? "user" : "bot", h.text, "", h.fileInfo || []));
+    if (!history.length) logEl.innerHTML = `<p class="ask-intro">Ask about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days. You can also attach a PDF, Excel or Word file and ask about it.</p>
+      <p class="ask-label">Try asking</p><div class="ask-suggest">${SUGGEST.map(q => `<button type="button">${esc(q)}</button>`).join("")}</div>`;
+  };
+  const grow = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; };
+  input.addEventListener("input", grow);
   const save = () => { try { sessionStorage.setItem("askHistory", JSON.stringify(history.slice(-20))); } catch {} };
   const open = show => { panel.hidden = !show; $("ask-btn").setAttribute("aria-expanded", show); if (show) { redraw(); input.focus(); } };
   $("ask-btn").onclick = () => open(panel.hidden);
   $("ask-close").onclick = () => open(false);
-  $("ask-new").onclick = () => { history = []; save(); redraw(); input.focus(); };
+  $("ask-new").onclick = () => { history = []; pending = []; drawPending(); save(); redraw(); input.focus(); };
   panel.addEventListener("keydown", e => { if (e.key === "Escape") open(false); });
+  // Attached files: read on the server as soon as they're picked; sent with the next question and kept for the rest of the chat.
+  let pending = [];   // [{key, name, what, id?, error?}]
+  const drawPending = () => {
+    $("ask-files").hidden = !pending.length;
+    $("ask-files").innerHTML = pending.map(f => `<span class="ask-chip ${f.error ? "bad" : f.id ? "" : "busy"}" title="${esc(f.error || f.name)}"><span>${esc(f.name)}</span><small>${esc(f.error ? "couldn't read" : f.id ? f.what : "reading…")}</small><button type="button" data-key="${f.key}" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("");
+  };
+  const attach = list => {
+    for (const file of list) {
+      const f = {key: Math.random().toString(36).slice(2), name: file.name};
+      pending.push(f); drawPending();
+      api("/api/chat/file", file, {"X-Filename": encodeURIComponent(file.name)})
+        .then(r => Object.assign(f, {id: r.id, what: r.what}))
+        .catch(e => { f.error = e.message; add("bot", `${file.name}: ${e.message}`, "err"); })
+        .finally(drawPending);
+    }
+  };
+  $("ask-clip").onclick = () => $("ask-file").click();
+  $("ask-file").onchange = e => { attach([...e.target.files]); e.target.value = ""; input.focus(); };
+  $("ask-files").onclick = e => { const b = e.target.closest("button[data-key]"); if (b) { pending = pending.filter(f => f.key !== b.dataset.key); drawPending(); } };
+  panel.addEventListener("dragover", e => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); panel.classList.add("drop"); } });
+  panel.addEventListener("dragleave", e => { if (!panel.contains(e.relatedTarget)) panel.classList.remove("drop"); });
+  panel.addEventListener("drop", e => { e.preventDefault(); panel.classList.remove("drop"); attach([...e.dataTransfer.files]); });
+  input.addEventListener("paste", e => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); attach(fs); } });
   let busy = false;
   const ask = async q => {
-    q = q.trim(); if (!q || busy) return;
-    busy = true; $("ask-send").disabled = true; $("ask-chips").hidden = true;
-    add("user", q); input.value = "";
-    const wait = add("bot", "Looking that up…", "thinking");
+    q = q.trim();
+    if (pending.some(f => !f.id && !f.error)) { add("bot", "Still reading the attached file; send again in a moment.", "err"); return; }
+    const files = pending.filter(f => f.id).map(({id, name, what}) => ({id, name, what}));
+    if ((!q && !files.length) || busy) return;
+    q = q || "Summarize this file.";
+    busy = true; $("ask-send").disabled = true;
+    if (!history.length) logEl.innerHTML = "";
+    add("user", q, "", files); input.value = ""; grow(); pending = []; drawPending();
+    const wait = add("bot", files.length ? "Reading the file" : "Looking that up", "thinking");
     try {
-      const r = await api("/api/chat", JSON.stringify({question: q, history}), {"Content-Type": "application/json"});
+      const sent = history.map(h => ({role: h.role, text: h.text, files: (h.fileInfo || []).map(f => f.id)}));
+      const r = await api("/api/chat", JSON.stringify({question: q, history: sent, files: files.map(f => f.id)}), {"Content-Type": "application/json"});
       wait.remove(); add("bot", r.answer);
-      history.push({role: "user", text: q}, {role: "assistant", text: r.answer}); save();
+      history.push({role: "user", text: q, fileInfo: files}, {role: "assistant", text: r.answer}); save();
     } catch (e) { wait.remove(); add("bot", e.message, "err"); }
     busy = false; $("ask-send").disabled = false; input.focus();
   };
   $("ask-form").onsubmit = e => { e.preventDefault(); ask(input.value); };
   input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } };
-  $("ask-chips").onclick = e => { const b = e.target.closest("button"); if (b) ask(b.textContent); };
+  logEl.addEventListener("click", e => { const b = e.target.closest(".ask-suggest button"); if (b) ask(b.textContent); });
 }
 // Assistant setup (Audit tab, this computer only).
 async function loadAssistant() {

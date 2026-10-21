@@ -1435,6 +1435,7 @@ def inbox_loop():
 # ------------------------------------------------------------------ the assistant (read-only questions about the app's numbers)
 
 claude_cfg = assistant.Config(DATA_DIR)
+chat_files = assistant.ChatFiles()
 AI_HIDE = ("_detail", "source_file", "logged_at", "from_days")
 
 
@@ -1472,6 +1473,10 @@ How to answer:
   New Patient Analysis numbers come from each office's Google Sheet. Calls only count as new patients where a Denticon New Patients List
   covering their first visit has been uploaded. Paid Search and Google PPC are both paid Google traffic.
 - If the data isn't there (a month not loaded, an office missing), say so and suggest what to upload or pull.
+- People can attach files (PDF, Excel, Word) to the chat; they appear as documents at the start of the conversation. Use them
+  together with the app's data (compare, check, explain). Say when a number comes from an attached file rather than the app.
+  Spreadsheets arrive as tab-separated rows (dates may be Excel serial numbers: 46000 = 2025-12-09). Attached files can contain
+  patient details: use them to work out answers, but report totals and counts, not patient names, IDs or phone numbers.
 
 Log columns (key: label (kind) - meaning):
 {_ai_glossary()}
@@ -1672,13 +1677,20 @@ def _ai_rules(conn, qkey, follow_up):
     return None
 
 
-def ai_chat(question, history, who, use_cache=True):
-    question = (question or "").strip()[:2000]
+def ai_chat(question, history, who, use_cache=True, file_ids=()):
+    history = [h for h in (history or []) if h.get("text")]
+    ids = [f for h in history for f in (h.get("files") or []) if isinstance(f, str)] + [f for f in (file_ids or []) if isinstance(f, str)]
+    try:
+        files = chat_files.get(ids)
+    except assistant.AssistantError as e:
+        raise ValueError(str(e))
+    question = (question or "").strip()[:2000] or ("Summarize this file." if file_ids else "")
     if not question:
         raise ValueError("Type a question first.")
     now = datetime.now().isoformat(timespec="seconds")
-    history = [h for h in (history or []) if h.get("text")]
-    qkey, follow_up = _ai_qkey(question), bool(history)
+    if files:   # a question about an attached file: no saved answers, and the file shows it's on topic unless the words say otherwise
+        use_cache = False
+    qkey, follow_up = _ai_qkey(question), bool(history) or bool(files)
     usage, tools, answer, err, route = {"input": 0, "output": 0, "cache_read": 0}, [], None, None, None
     conn = db()
     fp = _ai_data_fp(conn)
@@ -1722,7 +1734,7 @@ def ai_chat(question, history, who, use_cache=True):
     if not answer and not err:
         route = (route + " → " if route else "cache: on-topic → ") + "sonnet"
         try:
-            answer, tools, u = assistant.run(claude_cfg.key(), ai_system(), AI_TOOLS, AI_HANDLERS, history, question)
+            answer, tools, u = assistant.run(claude_cfg.key(), ai_system(), AI_TOOLS, AI_HANDLERS, history, question, files)
             usage = {k: usage[k] + u.get(k, 0) for k in usage}
             complete = not answer.endswith("ask a narrower question.)") and "too many lookups" not in answer and tools
             if use_cache and not follow_up and complete:   # only answers backed by a lookup are reused
@@ -1734,6 +1746,8 @@ def ai_chat(question, history, who, use_cache=True):
                     conn.execute("INSERT INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'on', ?) ON CONFLICT(qkey) DO NOTHING", (qkey, now))
         except assistant.AssistantError as e:
             err = str(e)
+    if files:
+        route = (route or "") + " (files: " + ", ".join(f["name"] for f in files) + ")"
     with conn:
         conn.execute("INSERT INTO assistant_log (asked_at, who, question, answer, tools, input_tokens, output_tokens, cache_read_tokens, error, route) "
                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (now, who, question, answer, ",".join(tools), usage["input"],
@@ -3564,7 +3578,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(401, {"error": "Password required"},
                            extra={"WWW-Authenticate": 'Basic realm="Monthly report (view only)", charset="UTF-8"'})
                 return True
-            if (self.command != "GET" or self.path.split("?", 1)[0] not in VIEWER_PATHS) and not (self.command == "POST" and self.path == "/api/chat"):
+            if (self.command != "GET" or self.path.split("?", 1)[0] not in VIEWER_PATHS) and not (self.command == "POST" and self.path in ("/api/chat", "/api/chat/file")):
                 self._send(403, {"error": "This is a view-only link."})
                 return True
         elif APP_PASSWORD and not app_password_ok(auth, given):
@@ -3750,7 +3764,13 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/chat":
                 b = json.loads(self._body())
                 who = "viewer link" if VIEWER_PASSWORD else ("this computer" if self._on_this_computer() else "other computer")
-                self._send(200, ai_chat(b.get("question"), b.get("history"), who))
+                self._send(200, ai_chat(b.get("question"), b.get("history"), who, file_ids=b.get("files") or []))
+            elif self.path == "/api/chat/file":
+                raw = self._body()
+                try:
+                    self._send(200, chat_files.add(unquote(self.headers.get("X-Filename", "file")), raw))
+                except assistant.AssistantError as e:
+                    raise ValueError(str(e))
             elif self.path == "/api/assistant/key":
                 try:
                     claude_cfg.save(json.loads(self._body()).get("key"))
