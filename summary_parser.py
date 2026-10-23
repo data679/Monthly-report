@@ -332,17 +332,22 @@ def parse_patient_types(path):
     keys = sorted(rows)
     if not any("patient list" in v.lower() for r in keys[:6] for v in rows[r].values()):
         raise ParseError("This doesn't look like Denticon's Patient List - Address report")
-    office = next((v.strip() for r in keys[:4] for v in rows[r].values()
-                   if v.strip() and "patient list" not in v.lower()), None)
-    head_r = next((r for r in keys[:20] if any(v.strip().lower() == "pat id" for v in rows[r].values())), None)
+    # The office: an "Office : Dentist Of X" line if there is one (newer layout), else the first title line that isn't the report name.
+    office = next((m.group(1).strip() for r in keys[:12] for v in rows[r].values()
+                   for m in [re.match(r"\s*office\s*:\s*(.+)", v, re.I)] if m), None) \
+        or next((v.strip() for r in keys[:4] for v in rows[r].values()
+                 if v.strip() and "patient list" not in v.lower() and "dentistry group" not in v.lower()), None)
+    is_pid = lambda v: re.sub(r"\s+", " ", v).strip().lower().startswith("pat id")   # "Pat ID" or "Pat ID / Chart#"
+    head_r = next((r for r in keys[:20] if any(is_pid(v) for v in rows[r].values())), None)
     if not office or head_r is None:
         raise ParseError("Couldn't find the office name or the header row (Pat ID) in this patient list")
     head = {re.sub(r"\s+", " ", v).strip().lower(): c for c, v in rows[head_r].items()}
-    pid_c = head.get("pat id")
+    pid_c = next(c for h, c in head.items() if h.startswith("pat id"))
     type_c = next((c for h, c in head.items() if "general" in h or "ortho" in h), None)
     if not type_c:
         raise ParseError("This patient list has no 'General / Ortho' column")
-    types = {}
+    addr_cols = _address_columns(head)
+    types, addresses = {}, {}
     for r in keys:
         if r <= head_r:
             continue
@@ -350,9 +355,45 @@ def parse_patient_types(path):
         t = rows[r].get(type_c, "").strip().lower()
         if pid.isdigit():
             types[pid] = "Ortho" if t.startswith("ortho") else "General" if t.startswith("gen") else ""
+            a = _address_of(rows[r], addr_cols)
+            if a:
+                addresses[pid] = a
     if not types:
         raise ParseError("No patients found in this patient list")
-    return {"office": office, "types": types}
+    # addresses: only handed to the neighborhood lookup (app.geocode_patients), which keeps the Census block group, not the address
+    return {"office": office, "types": types, "addresses": addresses}
+
+
+def _address_columns(head):
+    """Which columns hold the street, city, state and ZIP (header text -> column), however the report names them."""
+    find = lambda *names: next((c for h, c in head.items() if h in names), None)
+    street = find("address", "address 1", "address1", "address line 1", "street", "street address", "addr1", "addr 1")
+    if street is None:
+        street = next((c for h, c in head.items() if h.startswith("address") and "2" not in h and "email" not in h), None)
+    return {"street": street, "city": find("city"), "state": find("state", "st"),
+            "zip": find("zip", "zip code", "zipcode", "postal code", "zip/postal code"),
+            "csz": next((c for h, c in head.items() if "city" in h and ("zip" in h or "state" in h) and h != "city"), None)}
+
+
+CSZ_RE = re.compile(r"^(.*?)[,\s]+([A-Z]{2})[\s,]+(\d{5})(?:-\d{4})?$")
+
+
+def _address_of(row, cols):
+    """(street, city, state, zip) for one patient, or None. Copes with one-cell addresses ("123 Main St, Torrance, CA 90503")."""
+    get = lambda k: " ".join(str(row.get(cols[k], "")).split()) if cols.get(k) is not None else ""
+    street, city, state, zipc = get("street"), get("city"), get("state"), get("zip").split(".")[0].split("-")[0]
+    if cols.get("csz") is not None and not (city and zipc):
+        m = CSZ_RE.match(get("csz"))
+        if m:
+            city, state, zipc = m.group(1).strip(" ,"), m.group(2), m.group(3)
+    if street and not (city or zipc):   # everything in the street cell
+        raw = re.split(r"\s*[\n,]\s*", str(row.get(cols["street"], "")).strip(), maxsplit=1)
+        m = CSZ_RE.match(raw[1].strip()) if len(raw) == 2 else None
+        if m:
+            street, city, state, zipc = raw[0].strip(), m.group(1).strip(" ,"), m.group(2), m.group(3)
+    if not street or not (zipc or city) or re.match(r"^(p\.?\s*o\.?\s*box|n/?a|none|unknown)\b", street, re.I):
+        return None
+    return street, city, state or "CA", zipc.zfill(5) if zipc.isdigit() else zipc
 
 
 def parse_new_patient_appts(path):

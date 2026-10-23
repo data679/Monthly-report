@@ -107,10 +107,20 @@ function pullModule() {
           await pullModule().pullDays(context, page, daysBetween(a, b || a), true);
           page = context.pages()[0] || await context.newPage();
           writeStatus({ serving: true });
+          login = await pullModule().needsLogin(page).catch(() => false);
         }
         lastTouch = Date.now();
       }
-      if (Date.now() - lastTouch > 15 * 60 * 1000) {
+      if (login && Date.now() - lastTouch > 10 * 1000) {
+        // Waiting for a login: look at the open tabs every 10 s (without moving them), so the status flips as soon as someone logs in.
+        lastTouch = Date.now();
+        const p = context.pages().find(x => /a1\.denticon\.com/i.test(x.url())) || page;
+        const title = await p.title().catch(() => "");
+        if (/a1\.denticon\.com/i.test(p.url()) && /Welcome,\s*\S/.test(title) && !(await pullModule().needsLogin(p))) {
+          login = false; page = p;
+          writeStatus({ serving: true, state: "idle", needs_login: false, logged_in_at: new Date().toISOString(), message: "Robot window open, logged in. Waiting for a pull." });
+        }
+      } else if (Date.now() - lastTouch > 15 * 60 * 1000) {
         lastTouch = Date.now();
         await page.goto(REPORT_PAGE, { waitUntil: "domcontentloaded" }).catch(() => {});
         login = await pullModule().needsLogin(page);

@@ -349,6 +349,7 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
 - **Key:** stored in `data/claude_api.json` (0600), entered on the Audit tab card "Assistant (Claude API)" (Save / Test / Remove). Admin endpoints are local-only: `GET /api/assistant/status`, `POST /api/assistant/key`, `/api/assistant/key/delete`, `/api/assistant/test`. The key is never sent to the browser.
 - **Cost steps before Sonnet** (`ai_chat`): 1. exact-match cache (`assistant_cache`, question lower-cased without punctuation; an answer is reused only for the first question of a chat, only if it used a lookup, and only while `_ai_data_fp` (date + data counts) is unchanged; an off-topic verdict is reused for good), 2. keyword rules (`AI_GREETING` canned reply, `AI_OFF_TOPIC` without `AI_ON_TOPIC` → blocked, on-topic or office name or a follow-up → Sonnet), 3. Haiku gatekeeper (`assistant.gate`, `claude-haiku-4-5-20251001`, yes/no, verdict saved; if Haiku fails, Sonnet decides), 4. Sonnet. Each log row's `route` records the path. "Clear saved answers" on the Audit card empties the cache; Test bypasses it.
 - **Attached files** (paperclip, drag-and-drop or paste in the chat): `POST /api/chat/file` (raw body, `X-Filename`; viewers allowed) reads the file at once into a document block held **in memory only** by `assistant.ChatFiles` (random id, forgotten 4 h after last use or on restart; 25 MB max). PDF: `pdftotext -layout` text, or sent as pages when it has no text (scanned, ≤100 pages); .xlsx/.xlsm: tab-separated rows per sheet; .doc/.docx: text (Word tables come one cell per line); .csv/.txt as is; text cut at 300k characters. The browser keeps `{id, name}` per turn and resends the ids; `assistant.run` puts every file of the chat before the first kept message with a cache breakpoint, so follow-ups reuse it cheaply. Questions with files skip saved answers and Haiku (off-topic words still block); the log's route lists the file names, never their contents. The system prompt says to report totals from files, not patient names/IDs/phones.
+- **Google Drive** (`google_drive.py`): tools `drive_search` (name/full-text search, folder contents, or most recent) and `drive_read` (Google Docs/Slides exported as text, Sheets exported as .xlsx and turned into tab-separated text per tab; 40k-character parts with `offset`; exports cached in memory until the file's modifiedTime changes). Signs in with the existing Sheets service account using scope `drive.readonly`, so it sees only what is shared with that email (Viewer); other file types are listed but not opened. Needs the Google Drive API enabled in the service account's Cloud project. Available to every chat user including the view-only link (user's choice). Answers that used Drive are never saved in `assistant_cache`. Audit card: "Check Drive" (`POST /api/assistant/drive`, local-only) lists the latest 20 shared items.
 - **Log:** every question goes to the `assistant_log` table (asked_at, who, question, answer, tools, tokens, error); the Audit card shows the last 15 and 30-day token totals. No usage limits for now (user's choice).
 
 ## 10. Google Sheets sync
@@ -517,8 +518,7 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     labels-only Esri overlay (`Reference/World_Boundaries_and_Places`, pane "labels" z450) for city names, inverted
     in dark mode; ZIP numbers as permanent tooltips at zoom ≥ 11 (busiest 150 in view). Numbered office pins
     (short names from office_alias via `office_short_names`; offices < 0.7 mi apart share a "5·13" pin), legend,
-    optional 3/5/8-mile rings (straight-line; nearest/outside measured against the same offices the rings are drawn
-    for; "not nearest" flag when a ZIP's patients mostly visit a farther office), inset mini-map (light-gray base
+    (rings removed 2026-10-23; "not nearest" flag when a ZIP's patients mostly visit a farther office), inset mini-map (light-gray base
     tiles, bottom right) with the main view's box, auto-fit to the ZIPs holding 80% of patients within 35 miles of
     the patient-weighted median (nearby pins within 1.1× that reach). ZIPs with patients but no boundary (outside the
     downloaded region) show as dots and are listed in the note. The map is limited to the **map area**
@@ -531,6 +531,30 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     collapsible, folded by default on phones) lists each class's real range. Office colors (`assignOfficeColors`)
     are stable per office and chosen so offices within 10 miles get the most different hues; mixed ZIPs get a dark
     dashed outline. The numbered office key sits under the map (`#mp-key`). The map canvas stays light in dark mode.
+    **Getting around** (2026-10-23): office rings removed (the select and the ring drawing/notes); zoom 8–16 in half
+    steps; from zoom 12 a softened Esri World Street Map under the data (overlay pane fades to 0.65 / 0.45 at 12 / 13+ so
+    streets and names show through); Ctrl/⌘ + scroll zooms (plain scroll scrolls the page and flashes a hint; in full
+    screen plain scroll zooms); buttons under the zoom: whole area (`mapHome`, the auto-fit box) and full screen (browser
+    Fullscreen API, falling back to a fixed overlay; Esc leaves); "Find" box (datalist of ZIPs with patients and the
+    area's cities) jumps to a ZIP and opens its neighborhoods, or centers a city. Map height min(78vh, 760px).
+    **Speed** (2026-10-23): the map uses Leaflet's canvas renderer (`preferCanvas`), and ZIP numbers and city names are
+    plain divs written in one innerHTML per redraw (`labelBox`/`placeLabel`, panes "labels"), not permanent tooltips
+    (those forced a page re-measure per label: ~2 s per pan/zoom). Server: `maps_info`/`maps_trends` are memoised per
+    (name, month) by `_map_fingerprint` (map_patients count/max rowid/as_of, patient_types max rowid, office pins,
+    aliases, data-file mtimes); `types_loaded_offices` caches the 262k-row DISTINCT; indexes on map_patients
+    (period_from) and (zip); `_send` gzips text answers over 16 KB; `/api/maps/shapes` has an ETag (file mtime) so the
+    browser revalidates instead of re-downloading 1.3 MB; `warm_neighborhoods` (a minute after start) caches every patient
+    ZIP's block groups and their counties' incomes so clicks open at once.
+    **Neighborhoods inside a ZIP** (click a ZIP area): its Census block groups (TIGERweb ACS2023 layer 10, the ones whose
+    middle falls inside the ZIP, cached per ZIP in `data/block_groups/`), shaded by median household income (ACS 5-year
+    B19013, fixed bands under $50k … $200k+, cached per county in `data/acs_income/`; needs a free Census API key, Map setup
+    step 4, `data/census_api.json`), with a numbered dot per block group holding the month's filtered new patients. Patients
+    are placed from the Patient List – Address upload (both layouts: "Pat ID" or "Pat ID / Chart#", office from an "Office : X" line, address in one cell "street\\nCity, ST ZIP" or split columns; many files at once): `parse_patient_types` now also reads addresses (in memory only),
+    `geocode_patients` sends new/changed ones **of new patients on the map only** (pat_ids in `map_patients`; the list holds every patient) to the Census batch geocoder in a background thread and keeps only
+    `patient_blocks` (office, pat_id → 12-digit block group GEOID, '' = unmatched, plus a short address hash to skip
+    unchanged addresses). Endpoints: `GET /api/maps/blocks?zip=&month=`, `GET /api/maps/neighborhoods` (local-only
+    status/progress), `POST /api/maps/census-key` (local-only). The ZIP legend and inset hide while the box is open;
+    max zoom goes to 15 while open, back to 13 on Close.
     City names: Step 1 also downloads the area's cities (Census 2020 incorporated places + CDPs, layers 25/26 of
     TIGERweb Places, with population) and works out which city each ZIP center and office pin falls in (point in
     polygon, done once; outlines not kept) → `data/city_names.json` {"cities": {name: {c, pop, cdp}}, "where":

@@ -386,13 +386,25 @@
   .rp-foot { margin-top: 4px; }
 
   /* Maps (the ZIP-area map and the callers' map). The canvas stays light in dark mode: the colour ramp needs it. */
-  .mp-map { height: min(70vh, 640px); border-radius: 8px; border: 1px solid var(--border); background: #dfe3e8; }
+  .mp-map { position: relative; }
+  .mp-map.mp-full { position: fixed !important; inset: 0; z-index: 1500; height: 100vh !important; border-radius: 0; border: 0; }
+  body.mp-full-open .ask-btn { display: none; }
+  .mp-navbar a { display: grid !important; place-items: center; color: #374151; }
+  .mp-navbar a svg { width: 15px; height: 15px; }
+  .mp-scrollhint { position: absolute; inset: 0; z-index: 1000; display: grid; place-items: center; pointer-events: none; background: rgba(17, 24, 39, .45);
+                   color: #fff; font: 600 15px/1.3 system-ui, sans-serif; opacity: 0; transition: opacity .2s; }
+  .mp-scrollhint.on { opacity: 1; }
+  .mp-map { height: min(78vh, 760px); border-radius: 8px; border: 1px solid var(--border); background: #dfe3e8; }
   .mp-map.mp-zoomed-out .mp-pin { width: 16px !important; height: 16px !important; font: 700 9px/13px system-ui, sans-serif; margin-left: -8px !important; margin-top: -8px !important; }
   .mp-map.mp-zoomed-out .mp-pin.mp-pin-2 { width: 26px !important; margin-left: -13px !important; }
   .mp-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; font-size: 12px; }
   .mp-key span { white-space: nowrap; }
   .mp-key em, .mp-legend .key em { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #111827; color: #fff; font: 700 10px/14px system-ui, sans-serif;
                                     border: 1px solid #fff; box-sizing: border-box; text-align: center; font-style: normal; margin-right: 4px; vertical-align: -3px; }
+  /* Keep the map's own layers (z-index up to 1000) inside the map, so the chat panel and pop-ups stay on top of it. */
+  .leaflet-container { isolation: isolate; z-index: 0; }
+  .mp-labelbox { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .mp-labelbox .leaflet-tooltip { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; opacity: 1; }
   .leaflet-tooltip.mp-zipno { background: none; border: 0; box-shadow: none; padding: 0; font: 600 10px/1 system-ui, sans-serif; color: #374151; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; pointer-events: none; }
   .leaflet-tooltip.mp-zipno::before { display: none; }
   .leaflet-tooltip.mp-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 12px/1.1 system-ui, sans-serif; color: #1f2937; letter-spacing: .01em;
@@ -407,6 +419,13 @@
   .mp-pop .num { text-align: right; }
   .mp-pin { background: #111827; color: #fff; border: 2px solid #fff; border-radius: 50%; width: 22px; height: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.5); font: 700 11px/18px system-ui, sans-serif; text-align: center; }
   .leaflet-tooltip.mp-label { font-size: 12px; padding: 2px 6px; }
+  .mp-nb { background: var(--surface); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.4; width: 270px; max-height: calc(100% - 120px); overflow: auto; max-width: calc(100vw - 80px); box-shadow: var(--shadow); }
+  .mp-map.nb-open .mp-legend, .mp-map.nb-open .mp-inset { display: none; }   /* room for the neighborhoods */
+  .mp-nb h3 { font-size: 13px; margin: 0 0 2px; } .mp-nb p { margin: 4px 0; } .mp-nb .hint { font-size: 11px; }
+  .mp-nb-key { display: grid; grid-template-columns: 14px 1fr 14px 1fr; gap: 2px 6px; align-items: center; margin: 6px 0; }
+  .mp-nb-key i { width: 14px; height: 10px; border-radius: 2px; border: 1px solid #0001; }
+  .mp-nb-row { display: flex; gap: 6px; margin-top: 6px; } .mp-nb-row .btn { height: 26px; padding: 0 8px; font-size: 12px; }
+  .mp-nb-count { display: grid; place-items: center; border-radius: 50%; background: #111827; color: #fff; font: 700 11px/1 system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 3px #0005; }
   .mp-legend { background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.4; max-width: 230px; overflow: auto; box-shadow: var(--shadow); }
   .mp-legend summary { display: list-item; cursor: pointer; font-weight: 600; margin: 0; color: var(--text); }
   .mp-legend details[open] summary { margin-bottom: 4px; }
@@ -918,8 +937,8 @@
             <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
           <label>Color by <select id="mp-metric"><option value="count">new patients</option><option value="collection">$ collected</option>
             <option value="per10k">new patients per 10k residents</option><option value="office">office they visit</option></select></label>
-          <label>Office rings <select id="mp-ring"><option value="0">none</option><option value="3">3 miles</option><option value="5" selected>5 miles</option>
-            <option value="8">8 miles</option></select></label>
+          <label>Find <input type="search" id="mp-find" list="mp-find-list" placeholder="ZIP or city" autocomplete="off" style="width:150px"></label>
+          <datalist id="mp-find-list"></datalist>
           <label class="tr-check"><input type="checkbox" id="mp-paid"> Hide $0 patients</label>
         </div>
         <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
@@ -954,9 +973,17 @@
       <p class="mp-step"><strong>Step 2.</strong> Type each office's address below and click <strong>Save</strong>.</p>
       <div class="table-wrap"><table><thead><tr><th>Office</th><th>Address</th><th>Latitude</th><th>Longitude</th><th></th></tr></thead>
         <tbody id="mp-offices"></tbody></table></div>
-      <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter, upload each office's Denticon
-        <strong>Patient List – Address</strong>: <label class="btn btn-file">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" hidden></label>
+      <p class="mp-step"><strong>Step 3 (optional).</strong> For the General / Ortho filter and the neighborhoods inside each ZIP, upload every
+        office's Denticon <strong>Patient List – Address</strong> (pick all the files at once): <label class="btn btn-file">Upload…<input type="file" id="mp-typefile" accept=".xlsx,.xlsm" multiple hidden></label>
         <span class="hint" id="mp-types"></span></p>
+      <p class="hint" style="margin:-4px 0 8px">Only new patients on the map are placed: each one's address is sent once to the US Census
+        address lookup to find their Census block group (a few city blocks); only that block group is kept, never the address. Upload the
+        lists again after new months come in to place those months' new patients.</p>
+      <p class="hint" id="mp-nbstate" style="margin:-4px 0 8px"></p>
+      <p class="mp-step"><strong>Step 4 (optional).</strong> To shade neighborhoods by household income, get a free key at
+        <a href="https://api.census.gov/data/key_signup.html" target="_blank" rel="noopener">api.census.gov/data/key_signup.html</a>
+        (it arrives by email; click the link in it), then paste it: <input type="password" id="mp-censuskey" autocomplete="off" style="width:min(300px,60vw)">
+        <button class="btn" id="mp-censussave">Save</button> <span class="hint" id="mp-censusstate"></span></p>
       <p class="mp-step"><strong>Then:</strong> on the <strong>Upload</strong> tab, upload the month's <strong>Referral Production Listing</strong>
         (Excel, grouped by Zip Code). The map fills in by itself.</p>
       <p class="msg" id="mp-msg"></p>
@@ -1037,6 +1064,15 @@
         <button class="btn danger" id="ai-remove">Remove key</button>
       </div>
       <p class="msg" id="ai-msg"></p>
+      <h3 class="card-title" style="font-size:14px;margin:16px 0 4px">Google Drive</h3>
+      <p class="hint" style="margin-top:0">The assistant can search and read Google Docs, Sheets and Slides that are shared with the app's Google account
+        (the same one the office sheets use). It sees only what you share. To add a folder or file: in Google Drive, click Share, add
+        <strong id="ai-drive-email">the app's Google account</strong> <button type="button" class="btn quiet" id="ai-drive-copy" style="height:24px;padding:0 6px">Copy</button>
+        as <strong>Viewer</strong>, and untick "Notify people". Anyone using the chat (including the view-only link) can ask about what's shared.</p>
+      <div class="row"><button class="btn" id="ai-drive-check">Check Drive</button></div>
+      <p class="msg" id="ai-drive-msg"></p>
+      <div class="table-wrap" id="ai-drive-wrap" hidden><table><thead><tr><th>Shared with the app (latest 20)</th><th>Type</th><th>Changed</th></tr></thead><tbody id="ai-drive-files"></tbody></table></div>
+      <h3 class="card-title" style="font-size:14px;margin:16px 0 4px">Recent questions</h3>
       <div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Question</th><th>How</th><th>Answer</th></tr></thead><tbody id="ai-recent"></tbody></table></div>
     </div>
   </section>
@@ -1179,7 +1215,7 @@ ORDER BY period_thru DESC, office;</textarea>
 <button type="button" class="ask-btn" id="ask-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="ask-panel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>Ask</button>
 <section class="ask-panel" id="ask-panel" role="dialog" aria-labelledby="ask-title" hidden>
   <div class="ask-head">
-    <div><h2 id="ask-title">Ask about the numbers</h2><p class="ask-sub">Read-only. Looks numbers up in this app.</p></div>
+    <div><h2 id="ask-title">Ask about the numbers</h2><p class="ask-sub">Read-only. Uses this app's numbers and shared Google Drive files.</p></div>
     <button type="button" class="ask-x" id="ask-new" title="Start a new conversation"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>New</button>
     <button type="button" class="ask-x" id="ask-close" aria-label="Close"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
@@ -2866,7 +2902,7 @@ $("rb-pull").onclick = async () => {
   const redraw = () => {
     logEl.innerHTML = "";
     history.forEach(h => add(h.role === "user" ? "user" : "bot", h.text, "", h.fileInfo || []));
-    if (!history.length) logEl.innerHTML = `<p class="ask-intro">Ask about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days. You can also attach a PDF, Excel or Word file and ask about it.</p>
+    if (!history.length) logEl.innerHTML = `<p class="ask-intro">Ask about collections, new patients, production, financing, ZIP codes or calls, for any office, month or range of days. It can also look things up in the Google Drive files shared with the app, and you can attach a PDF, Excel or Word file to ask about it.</p>
       <p class="ask-label">Try asking</p><div class="ask-suggest">${SUGGEST.map(q => `<button type="button">${esc(q)}</button>`).join("")}</div>`;
   };
   const grow = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; };
@@ -2929,6 +2965,7 @@ async function loadAssistant() {
   $("ai-status").innerHTML = st.connected ? `Connected (model ${esc(st.model)}). Last 30 days: ${st.questions_30d} question${st.questions_30d === 1 ? "" : "s"} (${st.free_30d} answered at no cost), ${st.input_tokens_30d.toLocaleString()} input and ${st.output_tokens_30d.toLocaleString()} output tokens. ${st.cached} saved question${st.cached === 1 ? "" : "s"} (${st.cached_off} off-topic).`
     : "No key yet. Paste it below and click Save key.";
   $("ai-remove").hidden = $("ai-test").hidden = !st.connected;
+  if (st.drive_email) $("ai-drive-email").textContent = st.drive_email;
   $("ai-clear").hidden = !st.cached;
   $("ai-recent").innerHTML = st.recent.map(r => `<tr><td>${when(r.asked_at)}</td><td>${esc(r.who)}</td><td style="white-space:normal;max-width:320px">${esc(r.question)}</td><td class="hint">${esc(r.route || "")}</td><td class="hint" style="white-space:normal;max-width:420px">${esc(r.answer || "")}</td></tr>`).join("")
     || `<tr><td colspan="5" class="hint">No questions yet.</td></tr>`;
@@ -2943,6 +2980,18 @@ $("ai-test").onclick = async () => {
   catch (e) { msg($("ai-msg"), e.message, false); }
   loadAssistant();
 };
+$("ai-drive-check").onclick = async () => {
+  msg($("ai-drive-msg"), "Checking Google Drive…", true);
+  try {
+    const r = await api("/api/assistant/drive", "{}", {"Content-Type": "application/json"});
+    if (r.email) $("ai-drive-email").textContent = r.email;
+    if (!r.ok) { msg($("ai-drive-msg"), r.error, false); $("ai-drive-wrap").hidden = true; return; }
+    msg($("ai-drive-msg"), r.files.length ? `Connected. The assistant can see ${r.files.length === 20 ? "at least 20" : r.files.length} shared item${r.files.length === 1 ? "" : "s"}.` : "Connected, but nothing is shared with the app yet.", true);
+    $("ai-drive-files").innerHTML = r.files.map(f => `<tr><td>${f.link ? `<a href="${esc(f.link)}" target="_blank" rel="noopener">${esc(f.name)}</a>` : esc(f.name)}</td><td>${esc(f.type)}${f.readable || f.type === "folder" ? "" : ' <span class="hint">(not read)</span>'}</td><td>${esc(f.modified)}</td></tr>`).join("");
+    $("ai-drive-wrap").hidden = !r.files.length;
+  } catch (e) { msg($("ai-drive-msg"), e.message, false); }
+};
+$("ai-drive-copy").onclick = () => { navigator.clipboard?.writeText($("ai-drive-email").textContent); msg($("ai-drive-msg"), "Copied the app's Google account email.", true); };
 $("ai-clear").onclick = async () => {
   if (!confirm("Forget every saved answer and off-topic verdict? Questions will be checked and answered fresh.")) return;
   const r = await api("/api/assistant/cache/clear", "{}", {"Content-Type": "application/json"}); msg($("ai-msg"), `Cleared ${r.cleared} saved question${r.cleared === 1 ? "" : "s"}.`, true); loadAssistant();
@@ -3607,8 +3656,8 @@ $("ns-disconnect").onclick = async () => {
 // Zip Code). ZIP boundaries come from the US Census; each area is filled by the chosen measure. No street tiles:
 // a plain background with city names on top. Numbered office pins with a key, optional distance rings, an inset
 // for offices outside the main view. Leaflet loads only when the tab is opened.
-let mapData = null, mapShapes = null, mapRegion = null, mapView = null, mapCityTiles = null, mapCityLabels = [], mapFocusZip = null, mapLayers = [], mapLegend = null, mapInset = null, mapInsetRect = null,
-    mapNotes = [], mapShown = [], mapMonthShown, mapZipLabels = [];   // mapMonthShown starts undefined: the first load always fits
+let mapData = null, mapShapes = null, mapRegion = null, mapView = null, mapCityTiles = null, mapFocusZip = null, mapLayers = [], mapLegend = null, mapInset = null, mapInsetRect = null,
+    mapNotes = [], mapShown = [], mapMonthShown;   // mapMonthShown starts undefined: the first load always fits
 const RAMP = ["#fed976", "#feb24c", "#fd8d3c", "#f03b20", "#bd0026"];   // light -> dark, one hue family; the lightest is a clear yellow
 const NO_PATIENTS = "#f3f4f6", NO_FIGURE = "#9ca3af";   // ZIP with no new patients this month; ZIP with no population figure
 const OFFICE_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#dc2626", "#0891b2",
@@ -3667,6 +3716,76 @@ const miles = (a, b) => {   // distance between two [lat, lon] points
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLon / 2) ** 2;
   return 3958.8 * 2 * Math.asin(Math.sqrt(h));
 };
+// Getting around the map: zoom to street level with a softened street map (with street names) from zoom 12, a full-screen
+// button, a "whole area" button, a ZIP/city finder, and Ctrl+scroll to zoom (plain scrolling keeps scrolling the
+// page; in full screen plain scrolling zooms).
+let mapHome = null, mapStreets = null;
+function setupMapNavigation() {
+  const el = mapView.getContainer();
+  mapStreets = esriTiles("World_Street_Map", {minZoom: 12, maxZoom: 16, opacity: 0.55}).addTo(mapView);   // softened, so the data stays in front
+  const fade = () => { const z = mapView.getZoom(); mapView.getPane("overlayPane").style.opacity = z >= 13 ? 0.45 : z >= 12 ? 0.65 : 1; };   // let the streets show through
+  mapView.on("zoomend", fade); fade();
+  // Ctrl/⌘ + scroll zooms; plain scroll shows a hint once in a while (full screen: plain scroll zooms).
+  const hint = L.DomUtil.create("div", "mp-scrollhint", el); hint.textContent = /Mac/.test(navigator.platform) ? "Hold ⌘ and scroll to zoom the map" : "Hold Ctrl and scroll to zoom the map";
+  let hintT = null;
+  el.addEventListener("wheel", e => {
+    if (el.classList.contains("mp-full") || e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const z = mapView.getZoom() + (e.deltaY < 0 ? 0.5 : -0.5);
+      mapView.setZoomAround(mapView.mouseEventToContainerPoint(e), Math.max(mapView.getMinZoom(), Math.min(mapView.getMaxZoom(), z)));
+    } else { hint.classList.add("on"); clearTimeout(hintT); hintT = setTimeout(() => hint.classList.remove("on"), 1200); }
+  }, {passive: false});
+  // Buttons under the zoom controls: whole area, full screen.
+  const bar = L.control({position: "topleft"});
+  bar.onAdd = () => {
+    const d = L.DomUtil.create("div", "leaflet-bar mp-navbar");
+    d.innerHTML = `<a href="#" role="button" data-nav="home" title="Show the whole area" aria-label="Show the whole area"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5"/></svg></a>
+      <a href="#" role="button" data-nav="full" title="Full screen (Esc to leave)" aria-label="Full screen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg></a>`;
+    L.DomEvent.disableClickPropagation(d);
+    d.querySelector('[data-nav="home"]').onclick = e => { e.preventDefault(); goMapHome(); };
+    d.querySelector('[data-nav="full"]').onclick = e => { e.preventDefault(); toggleMapFull(); };
+    return d;
+  };
+  bar.addTo(mapView);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && el.classList.contains("mp-full") && !document.fullscreenElement) toggleMapFull(false); });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && el.classList.contains("mp-full")) toggleMapFull(false, true); });
+}
+function goMapHome() {
+  if (nbZip) closeNeighborhoods();
+  if (mapHome) mapView.fitBounds(mapHome, {padding: [30, 30], maxZoom: 11}); else if (mapRegion) mapView.fitBounds(mapRegion);
+}
+function toggleMapFull(on, fromBrowser) {
+  const el = mapView.getContainer(), full = on ?? !el.classList.contains("mp-full");
+  const center = mapView.getCenter(), zoom = mapView.getZoom();
+  // The browser's own full screen where it's allowed (fills the whole screen); otherwise the map covers the window.
+  if (!fromBrowser) {
+    if (full && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (!full && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  el.classList.toggle("mp-full", full); document.body.classList.toggle("mp-full-open", full);
+  el.querySelector('[data-nav="full"]').title = full ? "Leave full screen (Esc)" : "Full screen (Esc to leave)";
+  setTimeout(() => { mapView.invalidateSize(); mapInset?.invalidateSize(); mapView.setView(center, zoom, {animate: false}); }, 60);
+}
+function fillMapFinder() {
+  const zips = (mapData?.zips || []).map(z => z.zip), cities = Object.keys(mapData?.cities || {}).filter(c => mapData.cities[c].c);
+  $("mp-find-list").innerHTML = [...zips.map(z => `<option value="${z}">${esc(mapData.where?.[z] || "")}</option>`), ...cities.sort().map(c => `<option value="${esc(c)}"></option>`)].join("");
+}
+$("mp-find").addEventListener("change", () => {
+  const q = $("mp-find").value.trim(); if (!q || !mapView) return;
+  const zip = q.match(/^\d{5}$/) ? q : null;
+  if (zip) {
+    const shape = mapShapes?.features.find(f => f.properties.zip === zip), z = mapData.zips.find(x => x.zip === zip);
+    if (!shape && !z) { $("mp-note").textContent = `ZIP ${zip} isn't on the map.`; return; }
+    if (shape) mapView.fitBounds(L.geoJSON(shape).getBounds(), {maxZoom: 14, padding: [30, 30]}); else mapView.setView([z.lat, z.lon], 13);
+    openNeighborhoods(zip);
+  } else {
+    const name = Object.keys(mapData.cities || {}).find(c => c.toLowerCase() === q.toLowerCase());
+    if (!name) { $("mp-note").textContent = `Couldn't find "${q}" on the map. Try a ZIP code.`; return; }
+    if (nbZip) closeNeighborhoods();
+    mapView.setView(mapData.cities[name].c, 12.5);
+  }
+  $("mp-find").blur();
+});
 async function loadMaps(month) {
   try {
     await loadLeaflet();
@@ -3689,7 +3808,8 @@ async function loadMaps(month) {
   if (!mapView) {
     // Zoom runs from "the whole office area fits" (set below, once the area is known) to neighborhood level; panning
     // can't leave the area, so there's never a screen of empty gray.
-    mapView = L.map("mp-map", {scrollWheelZoom: true, maxZoom: 13, maxBoundsViscosity: 1.0}).setView([34.0, -118.2], 9);
+    mapView = L.map("mp-map", {preferCanvas: true, scrollWheelZoom: false, maxZoom: 16, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, maxBoundsViscosity: 1.0}).setView([34.0, -118.2], 9);
+    setupMapNavigation();
     mapView.attributionControl.setPrefix("");
     mapView.createPane("labels").style.zIndex = 450;   // city names: above the ZIP areas, below the pins
     mapLegend = L.control({position: "topright"});   // the zoom buttons are top-left, the inset bottom-right
@@ -3720,14 +3840,15 @@ async function loadMaps(month) {
   const monthChanged = mapData.month !== mapMonthShown;
   mapMonthShown = mapData.month;
   renderMap(monthChanged);
+  fillMapFinder();
   if (mapFocusZip) {   // sent here from the Charts tab: zoom to that ZIP
     const z = mapData.zips.find(x => x.zip === mapFocusZip); mapFocusZip = null;
     if (z && !(mapRegion && !mapRegion.contains([z.lat, z.lon]))) mapView.setView([z.lat, z.lon], 12);
   }
   loadMapAdmin();
 }
-["mp-type", "mp-metric", "mp-ring", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(false));
-$("mp-month").onchange = () => loadMaps($("mp-month").value);
+["mp-type", "mp-metric", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(false));
+$("mp-month").onchange = () => { const z = nbZip; closeNeighborhoods(); loadMaps($("mp-month").value).then(() => { if (z) setTimeout(() => openNeighborhoods(z), 400); }); };   // after the map's own fit
 function mapZips() {   // the ZIPs after the filters, each with its matching patients and its measures
   const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked;   // office: the report's filter
   const pins = mapData.pins.filter(p => !office || p.office === office);   // the same offices the rings are drawn for
@@ -3769,10 +3890,82 @@ function zipList(z, limit) {   // the hover / click content, built as DOM text (
   if (z.ps.length > limit) { const more = document.createElement("div"); more.className = "hint"; more.textContent = `+ ${z.ps.length - limit} more: click for all`; box.append(more); }
   return box;
 }
+// Neighborhoods inside a ZIP: click a ZIP area to see its Census block groups (a few city blocks each), shaded by
+// median household income, with how many of the month's new patients (after the filters) live in each.
+const INCOME_BANDS = [[50000, "#eff3ff", "under $50k"], [75000, "#c6dbef", "$50k–75k"], [100000, "#9ecae1", "$75k–100k"],
+                      [150000, "#6baed6", "$100k–150k"], [200000, "#3182bd", "$150k–200k"], [Infinity, "#08519c", "$200k or more"]];
+const incomeColor = v => v == null ? "#e5e7eb" : INCOME_BANDS.find(b => v < b[0])[1];
+let nbZip = null, nbData = null, nbLayers = [], nbBox = null;
+async function openNeighborhoods(zip) {
+  nbZip = zip; nbData = null; drawNeighborhoods();
+  try { nbData = await api(`/api/maps/blocks?zip=${zip}&month=${$("mp-month").value || ""}`); }
+  catch (e) { nbData = {error: e.message}; }
+  if (nbZip === zip) drawNeighborhoods(true);
+}
+function closeNeighborhoods() {
+  nbZip = nbData = null; nbLayers.forEach(l => l.remove()); nbLayers = [];
+  if (nbBox) { nbBox.remove(); nbBox = null; }
+  $("mp-map").classList.remove("nb-open");
+}
+function drawNeighborhoods(fit) {
+  nbLayers.forEach(l => l.remove()); nbLayers = [];
+  if (!nbZip || !mapView) return;
+  if (!nbBox) {
+    nbBox = L.control({position: "bottomleft"});
+    nbBox.onAdd = () => { const d = L.DomUtil.create("div", "mp-nb"); L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d); return d; };
+    nbBox.addTo(mapView);
+  }
+  $("mp-map").classList.add("nb-open");
+  const box = nbBox.getContainer(), z = mapZips().find(x => x.zip === nbZip);
+  const city = mapData.where?.[nbZip] || "";
+  const head = `<h3>Neighborhoods in ZIP ${esc(nbZip)}${city ? ` · ${esc(city)}` : ""}</h3>`;
+  const buttons = `<div class="mp-nb-row">${z ? '<button class="btn" data-nb="list">Patient list</button>' : ""}<button class="btn" data-nb="close">Close</button></div>`;
+  const wire = () => box.querySelectorAll("[data-nb]").forEach(b => b.onclick = () => {
+    if (b.dataset.nb === "close") return closeNeighborhoods();
+    const zz = mapZips().find(x => x.zip === nbZip); if (zz) L.popup({maxWidth: 360}).setLatLng([zz.lat, zz.lon]).setContent(zipList(zz, 500)).openOn(mapView);
+  });
+  if (!nbData) { box.innerHTML = head + `<p class="hint">Loading the neighborhoods from the US Census…</p>` + buttons; wire(); return; }
+  if (nbData.error) { box.innerHTML = head + `<p class="msg err">${esc(nbData.error)}</p>` + buttons; wire(); return; }
+  // Count the filtered patients per block group.
+  const per = {};
+  let placed = 0;
+  (z ? z.ps : []).forEach(p => {
+    const g = nbData.patients[`${p.office}|${p.pat_id}`]; if (!g) return;
+    placed++; (per[g] = per[g] || {n: 0, total: 0}); per[g].n++; per[g].total += p.collection;
+  });
+  const n = z ? z.ps.length : 0;
+  const layer = L.geoJSON({type: "FeatureCollection", features: nbData.features}, {
+    style: f => ({color: "#1f2937", weight: 0.8, fillColor: incomeColor(f.properties.income), fillOpacity: 0.8}),
+    onEachFeature: (f, l) => {
+      const inc = f.properties.income, c = per[f.properties.geoid];
+      l.bindTooltip(`<b>${inc != null ? "Median household income $" + inc.toLocaleString() : nbData.census_key ? "Income not published for this block group" : "Income: add a Census key in Map setup"}</b><br>`
+        + (c ? `${c.n} new patient${c.n > 1 ? "s" : ""} · $${money(c.total)} collected` : "No new patients here this month"), {sticky: true, direction: "top"});
+      l.on("mouseover", () => l.setStyle({weight: 2.5})); l.on("mouseout", () => l.setStyle({weight: 0.8}));
+    }}).addTo(mapView);
+  nbLayers.push(layer);
+  layer.eachLayer(l => {   // a numbered dot in each block group with patients
+    const c = per[l.feature.properties.geoid]; if (!c) return;
+    const size = Math.round(18 + Math.sqrt(c.n) * 5);
+    nbLayers.push(L.marker(l.getBounds().getCenter(), {interactive: false, icon: L.divIcon({className: "", iconSize: [size, size],
+      html: `<div class="mp-nb-count" style="width:${size}px;height:${size}px">${c.n}</div>`})}).addTo(mapView));
+  });
+  if (fit && layer.getBounds().isValid()) {   // leave room on the left for the neighborhoods box when the map is wide enough
+    const roomy = mapView.getSize().x > 640;
+    mapView.fitBounds(layer.getBounds(), {maxZoom: 15, paddingTopLeft: [roomy ? 290 : 20, 20], paddingBottomRight: [20, 20]});
+  }
+  const notes = [];
+  if (n && placed < n) notes.push(`${n - placed} of ${n} not placed (no address in the uploaded patient lists, or one the Census couldn't match).`);
+  if (!nbData.census_key) notes.push("Add a free Census API key in Map setup to shade by income.");
+  box.innerHTML = head + `<p>${n ? `${placed} of ${n} new patient${n > 1 ? "s" : ""} placed on a neighborhood (numbered dots).` : "No new patients from this ZIP with these filters."}</p>`
+    + `<div class="mp-nb-key">${INCOME_BANDS.map(b => `<i style="background:${b[1]}"></i><span>${b[2]}</span>`).join("")}<i style="background:#e5e7eb"></i><span>not published</span></div>`
+    + `<p class="hint" title="Each area is a Census block group, about 600–3,000 residents.">Median household income, US Census ACS ${esc(nbData.income_year || "")}.</p>`
+    + notes.map(t => `<p class="hint">${esc(t)}</p>`).join("") + buttons;
+  wire();
+}
 function renderMap(fit) {
   if (!mapData || !mapView) return;
   mapLayers.forEach(l => l.remove()); mapLayers = [];
-  const zips = mapZips(), metric = $("mp-metric").value, ringMi = +$("mp-ring").value;
+  const zips = mapZips(), metric = $("mp-metric").value;
   const officeSel = rpSel.office;
   const pins = mapData.pins.filter(p => !officeSel || p.office === officeSel);
   // Color classes from the data (see classBreaks); each class gets a shade of the ramp, spread out when there are fewer than 5.
@@ -3793,7 +3986,7 @@ function renderMap(fit) {
       const z = byZip[f.properties.zip]; if (!z) return;
       layer.on("mousemove", e => { const t = layer.getTooltip(); if (t) t.options.direction = tooltipSide(e); });   // before bindTooltip: runs first
       layer.bindTooltip(() => zipList(z, 8), {direction: "top", sticky: true});
-      layer.bindPopup(() => zipList(z, 500), {maxWidth: 360});
+      layer.on("click", () => openNeighborhoods(z.zip));   // the patient list is one click away in the neighborhoods box
       layer.on("mouseover", () => layer.setStyle({weight: 2.5, color: "#111827", dashArray: null}));
       layer.on("mouseout", () => layer.setStyle(styleFor(f)));
     }}).addTo(mapView));
@@ -3807,9 +4000,6 @@ function renderMap(fit) {
     c.bindPopup(() => zipList(z, 500), {maxWidth: 360});
     mapLayers.push(c.addTo(mapView));
   });
-  // Office rings (straight-line distance, a stand-in for drive time), drawn over the areas.
-  if (ringMi) pins.forEach(p => mapLayers.push(L.circle([p.lat, p.lon], {radius: ringMi * MILE, color: "#111827", weight: 1.5,
-    opacity: 0.7, dashArray: "5 5", fill: false, interactive: false}).addTo(mapView)));
   // Offices within about half a mile of each other (the two Gardena offices) share one pin, labelled "5·13".
   const groups = [];
   mapData.pins.forEach(p => { const g = groups.find(g => miles([g.lat, g.lon], [p.lat, p.lon]) < 0.7); g ? g.members.push(p) : groups.push({lat: p.lat, lon: p.lon, members: [p]}); });
@@ -3835,19 +4025,16 @@ function renderMap(fit) {
     const reach = Math.max(8, ...keep.map(pt => miles(pt, center)));
     const nearPins = pins.filter(p => miles([p.lat, p.lon], center) <= reach * 1.1).map(p => [p.lat, p.lon]);
     const pts = [...keep, ...(nearPins.length ? nearPins : pins.map(p => [p.lat, p.lon]))];
-    if (pts.length) mapView.fitBounds(pts, {padding: [30, 30], maxZoom: 11});
+    if (pts.length) { mapHome = L.latLngBounds(pts); mapView.fitBounds(mapHome, {padding: [30, 30], maxZoom: 11}); }
   }
   drawInset(zips, pins);
   // Title, subtitle, legend, notes
   const md = d => d.slice(5).replace("-", "/");
   const thru = mapData.thru?.max ? ` (through ${mapData.thru.min === mapData.thru.max ? md(mapData.thru.max) : `${md(mapData.thru.min)}–${md(mapData.thru.max)}, by office`})` : "";
   $("mp-title").textContent = `New patients by home ZIP code · ${mapData.month ? monthName(mapData.month) + thru : "no data yet"}`;
-  const outside = ringMi ? zips.reduce((a, z) => a + (z.nearest && z.nearest.miles > ringMi ? z.n : 0), 0) : 0;
   const passes = zips.reduce((a, z) => a + (z.passes ? z.n : 0), 0);
-  const ringWho = officeSel ? shortName(officeSel) : "any office";
   $("mp-sub").textContent = mapData.month
     ? `n = ${total} new patients from ${zips.length} ZIP codes · $${money(totalAmt)} collected`
-      + (ringMi && pins.length ? ` · ${outside} (${total ? Math.round(outside / total * 100) : 0}%) live more than ${ringMi} miles from ${ringWho}` : "")
       + (passes && !officeSel ? ` · ${passes} visit an office that isn't their nearest` : "") + "."
     : "No data yet: upload the month's Referral Production Listing (Excel, grouped by Zip Code) on the Upload tab.";
   const measureName = {count: "new patients", collection: "$ collected", per10k: "new patients per 10k residents", office: "office most of them visit"}[metric];
@@ -3867,7 +4054,7 @@ function renderMap(fit) {
     ramp = `<div class="key">${breaks.map((b, i) => `<div><span class="sw" style="background:${classColor(i)}"></span>${label(i)}</div>`).join("")}`
       + (metric === "per10k" && zips.some(z => z.per10k == null) ? `<div><span class="sw" style="background:${NO_FIGURE}"></span>no population figure</div>` : "") + `</div>`;
   }
-  const ringNote = ringMi && mapData.pins.length ? `<div class="note">Dashed ring = ${ringMi} miles from ${officeSel ? esc(shortName(officeSel)) : "each office"} (straight line, not drive time).</div>` : "";
+  const ringNote = "";
   // The legend folds (tap "Legend"); it starts folded on a phone so it doesn't cover the map.
   const legendOpen = lg.querySelector("details")?.open ?? !window.matchMedia("(max-width: 640px)").matches;
   lg.style.maxHeight = Math.round(mapView.getSize().y * (window.matchMedia("(max-width: 640px)").matches ? 0.45 : 0.6)) + "px";   // scrolls past that
@@ -3887,15 +4074,31 @@ function renderMap(fit) {
   if (farN) notes.push(`${farN} patient(s) from ${far.length} ZIP(s) live outside the map area (other counties or states): ${far.map(z => z.zip).join(", ")}. They count in the totals and the table.`);
   if (metric === "per10k") { const noPop = zips.filter(z => z.per10k == null).length; if (noPop) notes.push(`${noPop} ZIP(s) have no population figure (shown gray).`); }
   mapNotes = notes; mapShown = zips; updateOutNote(); drawZipLabels(); drawCityLabels();
+  if (nbZip) drawNeighborhoods();   // the filters changed: recount the open ZIP's neighborhoods
 }
 // City names, only for cities that matter: the ones an office is in, or that hold the ZIPs of the patients on show.
 // Zoomed out, only the bigger of those are named (by population); zoomed in, all of them. Names never overlap
 // each other or an office pin: bigger cities are placed first and anything that would collide is skipped.
 const cityLabel = name => (name.match(/\(([^)]+)\)/) || [, name])[1];   // "San Buenaventura (Ventura)" -> "Ventura"
+// Labels are plain text placed on the map in one go (one HTML string per redraw): adding them one by one as Leaflet
+// tooltips made the browser re-measure the page for every label, which took seconds on each pan or zoom.
+function labelBox(id, pane) {
+  let d = document.getElementById(id);
+  if (!d) {
+    d = L.DomUtil.create("div", "mp-labelbox", mapView.getPane(pane)); d.id = id;
+    mapView.on("zoomstart", () => { d.style.display = "none"; });   // redrawn at the new zoom on zoomend/moveend
+  }
+  d.style.display = "";
+  return d;
+}
+const placeLabel = (latlng, text, cls, dy = 0) => { const pt = mapView.latLngToLayerPoint(latlng);
+  return `<div class="leaflet-tooltip ${cls}" style="left:${Math.round(pt.x)}px;top:${Math.round(pt.y + dy)}px">${esc(text)}</div>`; };
 function drawCityLabels() {
-  mapCityLabels.forEach(l => l.remove()); mapCityLabels = [];
   const cities = mapData?.cities || {}, where = mapData?.where || {};
-  if (!mapView || !Object.keys(cities).length) return;
+  if (!mapView) return;
+  const box = labelBox("mp-citylabels", "labels"); box.innerHTML = "";
+  if (!Object.keys(cities).length) return;
+  const html = [];
   const zoom = mapView.getZoom(), b = mapView.getBounds();
   const withOffice = new Set(mapData.pins.map(p => where[`office:${p.office}`]).filter(Boolean));
   const withPatients = new Set(mapShown.map(z => where[z.zip]).filter(Boolean));
@@ -3914,19 +4117,17 @@ function drawCityLabels() {
       if (dy === undefined) return;
       taken.push({x: at.x, y: at.y + dy, w, h});
       const cls = "mp-city" + (withOffice.has(name) ? " mp-city-office" : "") + (big ? " mp-city-big" : small ? " mp-city-small" : "");
-      mapCityLabels.push(L.tooltip({permanent: true, direction: "center", offset: [0, dy], className: cls, interactive: false, opacity: 1, pane: "labels"})
-        .setLatLng(c.c).setContent(text).addTo(mapView));
+      html.push(placeLabel(c.c, text, cls, dy));
     });
+  box.innerHTML = html.join("");
 }
 // ZIP numbers inside the areas, only when zoomed in (and only the busiest 150 in view, so they never clutter).
 function drawZipLabels() {
-  mapZipLabels.forEach(l => l.remove()); mapZipLabels = [];
-  if (!mapView || mapView.getZoom() < ZIP_LABEL_ZOOM) return;
+  if (!mapView) return;
+  const box = labelBox("mp-ziplabels", "labels");
+  if (mapView.getZoom() < ZIP_LABEL_ZOOM) { box.innerHTML = ""; return; }
   const b = mapView.getBounds();
-  mapShown.filter(z => b.contains([z.lat, z.lon])).slice(0, 150).forEach(z => {
-    mapZipLabels.push(L.tooltip({permanent: true, direction: "center", className: "mp-zipno", interactive: false, opacity: 1})
-      .setLatLng([z.lat, z.lon]).setContent(z.zip).addTo(mapView));
-  });
+  box.innerHTML = mapShown.filter(z => b.contains([z.lat, z.lon])).slice(0, 150).map(z => placeLabel([z.lat, z.lon], z.zip, "mp-zipno")).join("");
 }
 // The note under the map: data problems plus what's outside the current view (recomputed after every pan/zoom).
 function updateOutNote() {
@@ -3974,6 +4175,7 @@ async function loadMapAdmin() {
   $("mp-shapestate").textContent = mapData.shapes_data ? `✓ Done (${mapData.shapes_data.toLocaleString()} ZIP areas).` + (mapData.no_shape.length ? ` ${mapData.no_shape.length} ZIP(s) with patients are outside that region: click again to add them.` : "")
                                                        : "(US Census, about 1 MB, one time; also brings each ZIP's population)";
   $("mp-types").textContent = mapData.types_loaded.length ? `✓ Loaded: ${mapData.types_loaded.map(shortName).join(", ")}.` : "";
+  loadNeighborhoodState();
   const pin = Object.fromEntries(mapData.pins.map(p => [p.office, p]));
   $("mp-offices").innerHTML = mapData.offices.map((o, i) => `<tr><td>${esc(o)} <span class="hint">(${esc(shortName(o))})</span></td>
     <td><input data-mp-addr="${i}" placeholder="e.g. 123 Main St, Torrance, CA 90503" style="width:min(300px,50vw)"></td>
@@ -3989,20 +4191,44 @@ async function loadMapAdmin() {
     catch (e) { msg($("mp-msg"), e.message, false); }
   });
 }
+let nbPoll = null;
+async function loadNeighborhoodState() {
+  let st; try { st = await api("/api/maps/neighborhoods"); } catch { return; }
+  $("mp-censusstate").textContent = st.census_key ? "✓ Saved." : "";
+  const running = Object.entries(st.jobs).filter(([, j]) => j.state === "running" || j.state === "waiting");
+  const parts = Object.entries(st.offices).map(([o, c]) => `${shortName(o)} ${c.placed.toLocaleString()}/${c.patients.toLocaleString()}`);
+  const errs = Object.entries(st.jobs).filter(([, j]) => j.state === "error").map(([o, j]) => `${shortName(o)}: ${j.error}`);
+  $("mp-nbstate").textContent = (running.length ? `Placing addresses on neighborhoods: ${running.map(([o, j]) => `${shortName(o)} ${j.state === "waiting" ? "waiting" : `${j.done}/${j.total}`}`).join(", ")}… ` : "")
+    + (parts.length ? `Patients placed on a neighborhood: ${parts.join(", ")}.` : "") + (errs.length ? ` Stopped: ${errs.join("; ")} (upload again to retry).` : "");
+  clearTimeout(nbPoll); if (running.length) nbPoll = setTimeout(loadNeighborhoodState, 5000);
+}
+$("mp-censussave").onclick = async () => {
+  msg($("mp-msg"), "Checking the key with the Census…", true);
+  try { await api("/api/maps/census-key", JSON.stringify({key: $("mp-censuskey").value}), {"Content-Type": "application/json"});
+        $("mp-censuskey").value = ""; msg($("mp-msg"), "Census key saved. Click a ZIP on the map to see its neighborhoods by income.", true); loadNeighborhoodState(); }
+  catch (e) { msg($("mp-msg"), e.message, false); }
+};
 $("mp-shapedl").onclick = async () => {
   msg($("mp-msg"), "Downloading ZIP boundaries from the US Census… (up to a minute)", true);
   try { const r = await api("/api/maps/shapes-download", "{}", {"Content-Type": "application/json"});
         mapShapes = null; msg($("mp-msg"), `Saved ${r.zips.toLocaleString()} ZIP areas.`, true); loadMaps($("mp-month").value); }
   catch (e) { msg($("mp-msg"), e.message, false); }
 };
-$("mp-typefile").onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  msg($("mp-msg"), `Reading ${f.name}…`, true);
-  try { const r = await api("/api/maps/patient-types", f, {"X-Filename": encodeURIComponent(f.name)});
-        msg($("mp-msg"), `${r.office}: ${r.general.toLocaleString()} general and ${r.ortho.toLocaleString()} ortho patients loaded.`, true);
-        loadMaps($("mp-month").value); }
-  catch (err) { msg($("mp-msg"), err.message, false); }
-  e.target.value = "";
+$("mp-typefile").onchange = async e => {   // one or many offices' patient lists, read one after another
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+  const done = [], failed = [];
+  let queued = 0;
+  for (const [k, f] of files.entries()) {
+    msg($("mp-msg"), `Reading ${f.name}${files.length > 1 ? ` (${k + 1} of ${files.length})` : ""}…`, true);
+    try {
+      const r = await api("/api/maps/patient-types", f, {"X-Filename": encodeURIComponent(f.name)});
+      done.push(`${shortName(r.office)} (${r.patients.toLocaleString()} patients${r.addresses ? "" : ", no addresses found"})`); queued += r.to_place || 0;
+    } catch (err) { failed.push(`${f.name}: ${err.message}`); }
+  }
+  msg($("mp-msg"), (done.length ? `Loaded ${done.length} office${done.length > 1 ? "s" : ""}: ${done.join(", ")}. ` : "")
+    + (queued ? `Placing ${queued.toLocaleString()} addresses on neighborhoods now (a few minutes; progress below Step 3). ` : "")
+    + (failed.length ? `Couldn't read: ${failed.join("; ")}` : ""), !failed.length);
+  loadNeighborhoodState(); loadMaps($("mp-month").value);
 };
 loadLog();   // the Log tab opens first
 </script>
