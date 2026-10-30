@@ -347,7 +347,9 @@ def parse_patient_types(path):
     if not type_c:
         raise ParseError("This patient list has no 'General / Ortho' column")
     addr_cols = _address_columns(head)
-    types, addresses = {}, {}
+    name_c = next((c for h, c in head.items() if h in ("patient name", "name", "patient")), None)
+    dob_c = next((c for h, c in head.items() if h in ("dob", "birth date", "date of birth", "birthdate")), None)
+    types, addresses, people = {}, {}, {}
     for r in keys:
         if r <= head_r:
             continue
@@ -358,10 +360,16 @@ def parse_patient_types(path):
             a = _address_of(rows[r], addr_cols)
             if a:
                 addresses[pid] = a
+            if name_c is not None and dob_c is not None:
+                last = str(rows[r].get(name_c, "")).split(",")[0].strip()
+                dob = excel_date(str(rows[r].get(dob_c, "")).split(".")[0] if re.fullmatch(r"\d+(\.0+)?", str(rows[r].get(dob_c, "")).strip()) else str(rows[r].get(dob_c, "")))
+                if last or dob:
+                    people[pid] = (last, dob)
     if not types:
         raise ParseError("No patients found in this patient list")
-    # addresses: only handed to the neighborhood lookup (app.geocode_patients), which keeps the Census block group, not the address
-    return {"office": office, "types": types, "addresses": addresses}
+    # addresses: only handed to the neighborhood lookup (app.geocode_patients), which keeps the Census block group, not the address.
+    # people (surname, birth date): only handed to app.compute_demographics, which keeps office totals by month and age group.
+    return {"office": office, "types": types, "addresses": addresses, "people": people}
 
 
 def _address_columns(head):

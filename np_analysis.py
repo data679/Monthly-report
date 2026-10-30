@@ -81,6 +81,16 @@ def lender_named(text):
             return name
     return "Financing"
 
+def lender_canon(text):
+    """One name per lender however it's typed ("CareCredit", "care credit" -> "Care Credit"); unknown ones title-cased."""
+    name = lender_named(text or "")
+    return name if name != "Financing" else (" ".join(str(text or "").split()).title() or "(not named)")
+
+
+def _tally(tally, kind, name):
+    return tally[kind].setdefault(name, {"apps": 0, "approved": 0, "approved_amount": 0.0, "collected_amount": 0.0, "funded": 0})
+
+
 # Notes saying the patient has no SSN / no ITIN, in the many ways staff write it:
 # "no itin or social", "no social and no itin", "no ss#", "patient has no itin or ssn",
 # "no ssn only itin", "itin only". A plain "no id" does not count.
@@ -334,6 +344,10 @@ def parse_month(wb, chosen, default_office=None):
     # Every new patient's collected amounts per lender, to check against Denticon's Daily Journal. The Pat ID is
     # only here so the app can replace it with a keyed hash (app.scrub_patients) before saving or sending it.
     details["_patients"] = []
+    # Per lender, for the financing-by-lender chart: applications, approvals, $ approved / collected, patients funded.
+    # Prime per lender column; subprime from the "Subprime Co. Ran" / "Subprime Co. Approved" names. The sums match
+    # the Log's # prime / subprime apps ran and approved.
+    lender_tally = {"prime": {}, "subprime": {}}
     # Each row's contribution to every count, under the day the row is listed below (the sheet groups patients
     # under date lines), so any run of days can be added up. Counts only: no names or IDs.
     contrib, cur_day, prev, row_day = {}, None, None, {}
@@ -524,6 +538,26 @@ def parse_month(wb, chosen, default_office=None):
             if apps_approved:
                 counts["prime_apps_approved"] += len(apps_approved)
                 details["prime_apps_approved"].append({"row": r, "approved": apps_approved, "apps": len(apps_approved)})
+            for L in cols["prime_lenders"]:
+                amt = max(_amount(cells.get(L["approved"])), 0) if L["approved"] else 0
+                coll = abs(_amount(cells.get(L["collected"]))) if L["collected"] else 0
+                ran = cells.get(L["ran"], "").lower().startswith("y")
+                if ran or amt or coll:
+                    t = _tally(lender_tally, "prime", lender_canon(L["name"]))
+                    t["apps"] += ran; t["approved"] += bool(ran and (amt or coll))
+                    t["approved_amount"] += amt; t["collected_amount"] += coll; t["funded"] += bool(coll)
+            if subprime or s_appr_amt or s_coll_amt:
+                ran_names = list(dict.fromkeys(lender_canon(x) for x in subprime))
+                appr_names = list(dict.fromkeys(lender_canon(x) for x in named))
+                for nm in ran_names:
+                    _tally(lender_tally, "subprime", nm)["apps"] += 1
+                if subprime and (appr_names or s_appr_amt or s_coll_amt):
+                    for nm in appr_names or [ran_names[0] if len(ran_names) == 1 else "(not named)"]:
+                        _tally(lender_tally, "subprime", nm)["approved"] += 1
+                # The row has one subprime amount: it goes to the lender who approved it (or the only one run).
+                who = appr_names[0] if appr_names else ran_names[0] if len(ran_names) == 1 else "(not named)"
+                t = _tally(lender_tally, "subprime", who)
+                t["approved_amount"] += max(s_appr_amt, 0); t["collected_amount"] += s_coll_amt; t["funded"] += bool(s_coll_amt)
             hit = _first_match(EXISTING_FIN_RE, text_cells, header_labels)
             if hit:
                 counts["existing_finance_patients"] += 1
@@ -549,6 +583,7 @@ def parse_month(wb, chosen, default_office=None):
             slot = contrib.setdefault(r_, {"day": d_.isoformat() if d_ else "", "m": {}})["m"]
             slot[key] = slot.get(key, 0) + 1
     details["_by_row"] = {str(r_): {"day": v["day"], "m": {k: round(x, 2) for k, x in v["m"].items()}} for r_, v in contrib.items()}
+    details["_lenders"] = {kind: {nm: {k: round(v, 2) for k, v in t.items()} for nm, t in d.items()} for kind, d in lender_tally.items()}
     details["fin_approved_funded"] = [{"row": r, "source": source(r, p_fund, s_fund)} for r in both]
 
     if cols is not None and patient_rows == 0:

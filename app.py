@@ -58,12 +58,12 @@ LOCAL_ONLY_PATHS = {"/api/sql", "/api/assistant/status", "/api/assistant/key", "
 # View-only mode, for sharing the log through a tunnel: set VIEWER_PASSWORD to require a password,
 # allow only reading the log, benchmarks and changes, and refuse every change.
 VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
-VIEWER_PATHS = {"/", "/index.html", "/api/log", "/api/log/days", "/api/days", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends"}
+VIEWER_PATHS = {"/", "/index.html", "/preview", "/api/log", "/api/log/days", "/api/days", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends", "/api/financing/lenders"}
 VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
   body.viewer nav button[data-tab="sql"], body.viewer nav button[data-tab="calls"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
-  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"],
+  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"], body.viewer nav button[data-tab="whatif"], body.viewer #whatif, body.viewer nav button[data-tab="demo"], body.viewer #demo,
   body.viewer #mp-section, body.viewer #mp-admin { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
@@ -316,6 +316,43 @@ CREATE TABLE IF NOT EXISTS np_patients (
     subprime     REAL NOT NULL,       -- Subprime $Amt Coll
     other        REAL NOT NULL DEFAULT 0,  -- "Other form of payment" on the row (cash etc., may be in $Amt Coll)
     PRIMARY KEY (office, period_from, row)
+);
+-- New patients' age groups and estimated ethnicity, per office and month: totals only (the estimate is the sum of each
+-- patient's probabilities, from the Census surname table and their neighborhood). No names, birth dates or per-patient rows.
+CREATE TABLE IF NOT EXISTS demo_counts (
+    office       TEXT NOT NULL,
+    month        TEXT NOT NULL,      -- YYYY-MM of the new-patient listing
+    age_band     TEXT NOT NULL,      -- 0-12 | 13-17 | 18-34 | 35-54 | 55-64 | 65+ | unknown
+    n            INTEGER NOT NULL,
+    hispanic     REAL NOT NULL, white REAL NOT NULL, asian REAL NOT NULL, black REAL NOT NULL, other REAL NOT NULL,
+    surname_found INTEGER NOT NULL,  -- how many had a surname in the Census table (the rest use its "all other names" row)
+    updated_at   TEXT NOT NULL,
+    with_family  INTEGER NOT NULL DEFAULT 0,   -- share a home (same address in the office's patient list) with another patient
+    kids_home    INTEGER NOT NULL DEFAULT 0,   -- their home has a patient under 18 (themselves included)
+    minor_with_adult INTEGER NOT NULL DEFAULT 0,  -- under 18 and their home also has an adult patient (a parent, usually)
+    PRIMARY KEY (office, month, age_band)
+);
+-- Each office's monthly collection goal, from the % TO GOAL sheet's "Goal" column (for the What-if card).
+CREATE TABLE IF NOT EXISTS office_goals (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,
+    goal         REAL NOT NULL,
+    read_at      TEXT NOT NULL,
+    PRIMARY KEY (office, period_from)
+);
+-- Financing applications per lender, per office and month, from the New Patient Analysis sheets (counts and dollars only).
+CREATE TABLE IF NOT EXISTS lender_apps (
+    office            TEXT NOT NULL,
+    period_from       TEXT NOT NULL,
+    as_of             TEXT NOT NULL,
+    kind              TEXT NOT NULL,     -- prime | subprime
+    lender            TEXT NOT NULL,
+    apps              INTEGER NOT NULL,  -- applications run with this lender
+    approved          INTEGER NOT NULL,  -- of those, approved
+    approved_amount   REAL NOT NULL,
+    collected_amount  REAL NOT NULL,
+    funded            INTEGER NOT NULL,  -- patients with money collected through this lender
+    PRIMARY KEY (office, period_from, kind, lender)
 );
 -- Lender payments and merchant fees per patient from a Daily Journal (Patient Type: Both), per office and month.
 CREATE TABLE IF NOT EXISTS lender_payments (
@@ -688,6 +725,10 @@ def _setup(conn):
         conn.execute("ALTER TABLE np_patients ADD COLUMN other REAL NOT NULL DEFAULT 0")
     if "replaced_by" not in {r["name"] for r in conn.execute("PRAGMA table_info(metric_history)")}:
         conn.execute("ALTER TABLE metric_history ADD COLUMN replaced_by TEXT")
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(demo_counts)")}
+    for col in ("with_family", "kids_home", "minor_with_adult"):
+        if have and col not in have:
+            conn.execute(f"ALTER TABLE demo_counts ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
     if "route" not in {r["name"] for r in conn.execute("PRAGMA table_info(assistant_log)")}:
         conn.execute("ALTER TABLE assistant_log ADD COLUMN route TEXT")
     if "caller_fp" not in {r["name"] for r in conn.execute("PRAGMA table_info(invoca_calls)")}:
@@ -946,6 +987,7 @@ def save_metrics(payload):
                     conn.execute("DELETE FROM np_daily WHERE office = ? AND period_from = ?", (office, period_from))
                     conn.executemany("INSERT INTO np_daily VALUES (?, ?, ?, ?, ?, ?)",
                                      [(office, period_from, d, m, v, as_of) for (d, m), v in merged.items() if v])
+            save_lender_apps(conn, office, period_from, as_of, (row.get("details") or {}).get("_lenders"))
             patients = (row.get("details") or {}).get("_patients")
             if patients is not None:
                 newer = conn.execute("SELECT as_of FROM office_metrics WHERE office = ? AND period_from = ? AND "
@@ -965,6 +1007,90 @@ def save_metrics(payload):
     write_csv(conn)
     conn.close()
     return counts
+
+
+def save_lender_apps(conn, office, period_from, as_of, lenders):
+    """Replace an office-month's per-lender financing counts, unless a later sheet date is already saved."""
+    if lenders is None:
+        return
+    if conn.execute("SELECT 1 FROM lender_apps WHERE office = ? AND period_from = ? AND as_of > ? LIMIT 1",
+                    (office, period_from, as_of)).fetchone():
+        return
+    conn.execute("DELETE FROM lender_apps WHERE office = ? AND period_from = ?", (office, period_from))
+    conn.executemany("INSERT INTO lender_apps VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     [(office, period_from, as_of, kind, name, int(t["apps"]), int(t["approved"]), float(t["approved_amount"]),
+                       float(t["collected_amount"]), int(t["funded"]))
+                      for kind, d in lenders.items() for name, t in d.items()
+                      if t["apps"] or t["approved"] or t["approved_amount"] or t["collected_amount"]])
+
+
+def backfill_lender_apps(since="2026-01"):
+    """Read every month tab since `since` from the office sheets and save only the per-lender financing counts
+    (no Log numbers are touched, so edits made to old tabs since can't change the Log)."""
+    conn = db()
+    sources = [dict(r) for r in conn.execute("SELECT * FROM sheet_sources WHERE kind = 'np' ORDER BY office")]
+    conn.close()
+    done = []
+    for src in sources:
+        try:
+            wb = google_sheets.SheetsWorkbook(account, src["spreadsheet_id"])
+        except google_sheets.GoogleError as e:
+            done.append(f"{src['office']}: {e}"); continue
+        office_seen = None
+        for month in np_analysis.dated_months(wb):
+            key = f"{month['year']}-{month['month']:02d}"
+            if key < since:
+                break
+            if date(month["year"], month["month"], 1) > date.today():
+                continue
+            try:
+                parsed = np_analysis.parse_month(wb, month, office_seen or src["office"])
+            except np_analysis.NPAnalysisError:
+                continue
+            o = parsed["offices"][0]
+            office_seen = office_seen or o["office"]
+            conn = db()
+            office = map_office_name(conn, o["office"])
+            with conn:
+                save_lender_apps(conn, office, parsed["period"]["from"], month_thru(parsed, month), o["details"].get("_lenders"))
+            conn.close()
+            done.append(f"{office} {key}")
+    return done
+
+
+def whatif_data():
+    """For the What if tab (everyone with the password; not on view-only links): per office and month, the drivers of gross collections and the goal.
+    Financing drivers exist from May 2026, when the sheets started tracking each lender."""
+    conn = db()
+    goals = {(r["office"], r["period_from"]): r["goal"] for r in conn.execute("SELECT * FROM office_goals")}
+    rows = [r for r in log_rows(conn) if r["period_from"] >= "2025-01-01"]
+    conn.close()
+    today = date.today().isoformat()
+    out = {}
+    for r in sorted(rows, key=lambda r: r["period_from"]):
+        o = out.setdefault(r["office"], {"months": []})
+        last_day = (date.fromisoformat(r["period_from"]).replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        num = lambda k: float(r.get(k) or 0)
+        o["months"].append({"m": r["period_from"][:7], "np": num("new_patients"), "applicants": num("financing_applicants"),
+                            "approved": num("fin_approved"), "funded": num("fin_funded"),
+                            "fin": num("prime_collected_amount") + num("subprime_collected_amount"),
+                            "gross": num("total_collection"), "goal": goals.get((r["office"], r["period_from"])),
+                            "partial": (r.get("period_thru") or today) < last_day.isoformat()})
+    for office, o in out.items():
+        latest = max((k for k in goals if k[0] == office), key=lambda k: k[1], default=None)
+        o["goal"] = goals[latest] if latest else None
+    return {"offices": out}
+
+
+def financing_lenders():
+    """Per-lender applications and approvals by month and office, for the Charts tab (counts and dollars only)."""
+    conn = db()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT substr(period_from, 1, 7) AS month, office, kind, lender, apps, approved, approved_amount, collected_amount, funded, as_of "
+        "FROM lender_apps ORDER BY period_from, office, kind, lender")]
+    short = office_short_names(conn)
+    conn.close()
+    return {"rows": rows, "months": sorted({r["month"] for r in rows}), "short": short}
 
 
 def save_lender_journal(payload):
@@ -2126,6 +2252,49 @@ def sync_refunds(wb, result, since=None):
     return sorted(unmatched)
 
 
+def sync_goals(wb, since=None, how_many=2):
+    """Each office's monthly goal from the % TO GOAL sheet's month tabs ("Goal" column, office name in the first
+    column, matched like refunds). The newest `how_many` tabs, or every tab since `since` (YYYY-MM). Returns tabs read."""
+    conn = db()
+    aliases = {r["alias"]: r["office"] for r in conn.execute("SELECT alias, office FROM office_alias")}
+    known = {normalize(o): o for o in known_offices(conn)}
+    conn.close()
+    read = []
+    for month in np_analysis.dated_months(wb):
+        key = f"{month['year']}-{month['month']:02d}"
+        if date(month["year"], month["month"], 1) > date.today():
+            continue
+        if since and key < since:
+            break
+        if not since and len(read) >= how_many:
+            break
+        try:
+            rows = wb.values_get(month["sheet"])
+        except google_sheets.GoogleError:
+            continue
+        head = next((r for r in rows[:6] if any(str(x).strip().lower() == "goal" for x in r)), None)
+        if not head:
+            continue
+        gi = [str(x).strip().lower() for x in head].index("goal")
+        goals = {}
+        for r in rows:
+            if len(r) <= gi or not str(r[0]).strip():
+                continue
+            office = aliases.get(normalize(str(r[0]))) or known.get(normalize(str(r[0])))
+            amount = re.sub(r"[^\d.]", "", str(r[gi]))
+            if office and amount and office not in goals:   # the first row per office is its main line
+                goals[office] = float(amount)
+        if goals:
+            now = datetime.now().isoformat(timespec="seconds")
+            conn = db()
+            with conn:
+                conn.executemany("INSERT OR REPLACE INTO office_goals VALUES (?, ?, ?, ?)",
+                                 [(o, f"{key}-01", g, now) for o, g in goals.items()])
+            conn.close()
+            read.append(month["sheet"])
+    return read
+
+
 def month_thru(parsed, month):
     """Thru date: the latest date on the tab, else today (this month) or the month's last day."""
     if parsed["period"].get("thru"):
@@ -2153,6 +2322,10 @@ def sync_all(since=None):
                 read, office_seen, unmatched = 0, None, []
                 if src.get("kind") == "refunds":
                     unmatched = sync_refunds(wb, result, since)
+                    try:
+                        sync_goals(wb, since)
+                    except (google_sheets.GoogleError, ValueError) as e:
+                        print(f"{datetime.now():%H:%M} Goals not read: {e}")
                 for month in ([] if src.get("kind") == "refunds" else np_analysis.dated_months(wb)):
                     # latest + previous month with patients (or every month since `since`)
                     if since and f"{month['year']}-{month['month']:02d}" < since:
@@ -2290,7 +2463,8 @@ def notes_fingerprint(conn):
                                      q("SELECT COUNT(*) FROM office_metrics"), q("SELECT COUNT(*) FROM office_summary"),
                                      q("SELECT MAX(logged_at) FROM office_daily"), q("SELECT MAX(logged_at) FROM daily_metrics"),
                                      q("SELECT COUNT(*) FROM daily_imports"),
-                                     q("SELECT COUNT(*) || MAX(updated_at) FROM benchmarks")))
+                                     q("SELECT COUNT(*) || MAX(updated_at) FROM benchmarks"),
+                                     q("SELECT COUNT(*) FROM check_ok")))
 
 
 def notes_sheet_info():
@@ -2321,6 +2495,50 @@ def _notes_from(rows, month=None):
                 pass
         if note and office and office != "Total" and m:
             out[(office, m)] = note
+    return out
+
+
+# Cell notes on the notes sheet: the data checks the Log flags on a cell (unless marked OK), one per line. Patient rows
+# are sheet row numbers only, never names.
+def _rate_max_keys():
+    page = (ROOT / "static" / "index.html").read_text()
+    m = re.search(r"const RATE_MAX = \[([^\]]*)\]", page)
+    return set(re.findall(r'"(\w+)"', m.group(1))) if m else set()
+
+
+def _fmt(v, kind):
+    if v is None:
+        return "—"
+    return f"${v:,.2f}" if kind == "money" else f"{v * 100:.2f}%" if kind == "pct" else f"{v:,.0f}" if float(v).is_integer() else f"{v:,.2f}"
+
+
+def _js_str(v):   # String(number) in the page, for matching "marked OK" checks
+    return str(int(v)) if isinstance(v, float) and v.is_integer() else repr(v) if isinstance(v, float) else str(v)
+
+
+def sheet_checks(r, cols, rate_max, ok):
+    """The Log's data checks for one row (checksFor on the page), minus those marked OK: {column: [problem, ...]}."""
+    label = {k: lab for k, lab, _, _ in cols}; kind = {k: kd for k, _, kd, _ in cols}
+    out = {}
+    def add(col, check_key, sig, text):
+        if (r["office"], r["period_from"], check_key, sig) not in ok:
+            out.setdefault(col, []).append(text)
+    for k, lab, kd, ratio in cols:
+        v = r.get(k)
+        if k not in rate_max or v is None or v <= 1 + 1e-9:
+            continue
+        name = lambda x: re.sub(r"\s*\$(?=\s|$)", "", label.get(x, x))
+        parts = f" ({' + '.join(f'{name(x)} {_fmt(r.get(x), kind.get(x))}' for x in ratio[0])} ÷ {name(ratio[1])} {_fmt(r.get(ratio[1]), kind.get(ratio[1]))})" if ratio else ""
+        add(k, f"rate:{k}", _js_str(v), f"{lab} is {v * 100:.2f}%, over 100%{parts}.")
+    try:
+        over = json.loads(r.get("collected_over_approved_detail") or "[]")
+    except ValueError:
+        over = []
+    for d in over:
+        for i in d.get("issues") or []:
+            col = "prime_collected_amount" if i.get("kind") == "Prime" else "subprime_collected_amount"
+            add(col, f"row:{d.get('row')}:{i.get('kind')}:{i.get('lender')}", f"{i.get('collected')}>{i.get('approved')}",
+                f"Row {d.get('row')}: {i.get('kind')} {i.get('lender')} collected {i.get('collected')}, more than the {i.get('approved')} approved.")
     return out
 
 
@@ -2368,6 +2586,8 @@ def write_notes_sheet(force=False):
             return None
         cols = log_sheet_columns()
         bench = {r["metric"]: dict(r) for r in conn.execute("SELECT * FROM benchmarks")}
+        ok = {(r["office"], r["period_from"], r["check_key"], r["value_sig"]) for r in conn.execute("SELECT * FROM check_ok")}
+        rate_max = _rate_max_keys()
         log = sorted(log_rows(conn, [m + "_detail" for m in DETAIL_METRICS]), key=lambda r: (r["period_from"], r["office"]))
         log.sort(key=lambda r: r["period_from"], reverse=True)   # newest month first, offices A-Z inside
         conn.close()
@@ -2439,6 +2659,10 @@ def write_notes_sheet(force=False):
                 if bench:
                     reqs.append({"updateCells": {"start": {"sheetId": sid, "rowIndex": 1, "columnIndex": 2}, "fields": BENCH_FIELDS,
                                                  "rows": [{"values": [_bench_cell(bench.get(k), r[k]) for k, _, _, _ in cols]} for r in rows]}})
+                # Notes: only the data checks the Log flags on a cell, one per line; written over the whole data block (empty clears).
+                reqs.append({"updateCells": {"start": {"sheetId": sid, "rowIndex": 1, "columnIndex": 2}, "fields": "note",
+                                             "rows": [{"values": [{"note": "\n".join(chk.get(k, []))} for k, _, _, _ in cols]}
+                                                      for r in rows for chk in [sheet_checks(r, cols, rate_max, ok)]]}})
             reqs += [{"deleteSheet": {"sheetId": wb.sheet_ids[t]}} for t in gone if t in wb.sheet_ids]
             reqs += [{"updateSheetProperties": {"properties": {"sheetId": wb.sheet_ids[m], "index": i}, "fields": "index"}}
                      for i, m in enumerate(months)]
@@ -3235,6 +3459,7 @@ def _map_fingerprint(conn):
     q = lambda sql: conn.execute(sql).fetchone()
     files = tuple(f.stat().st_mtime_ns if f.exists() else 0 for f in (SHAPES_FILE, CITY_FILE, ZIP_FILE, NO_ZCTA_FILE))
     return (q("SELECT COUNT(*), MAX(rowid), MAX(as_of) FROM map_patients"), q("SELECT MAX(rowid) FROM patient_types"),
+            q("SELECT COUNT(*), MAX(rowid) FROM patient_phones"),
             q("SELECT COUNT(*), GROUP_CONCAT(office || lat || lon) FROM office_locations"),
             q("SELECT COUNT(*) FROM office_alias"), files)
 
@@ -3347,7 +3572,7 @@ def save_patient_types(path, filename):
                          [(office, pid, t, now) for pid, t in parsed["types"].items() if t])
     conn.close()
     vals = list(parsed["types"].values())
-    queued = geocode_patients(office, parsed.get("addresses") or {})
+    queued = geocode_patients(office, parsed.get("addresses") or {}, parsed.get("people") or {})   # addresses also group homes
     return {"office": office, "general": vals.count("General"), "ortho": vals.count("Ortho"), "patients": len(vals),
             "addresses": len(parsed.get("addresses") or {}), "to_place": queued}
 
@@ -3391,7 +3616,7 @@ def _addr_hash(a):
     return hashlib.sha256("|".join(a).lower().encode()).hexdigest()[:16]
 
 
-def geocode_patients(office, addresses):
+def geocode_patients(office, addresses, people=None):
     """Queue the addresses that are new or changed since last time; the lookup runs in the background. Returns how many."""
     conn = db()
     known = {r[0]: r[1] for r in conn.execute("SELECT pat_id, addr_hash FROM patient_blocks WHERE office = ?", (office,))}
@@ -3403,7 +3628,8 @@ def geocode_patients(office, addresses):
     if todo:
         with _geo_lock:
             _geo_jobs[office] = {"total": len(todo), "done": 0, "placed": 0, "state": "waiting", "error": None}
-        threading.Thread(target=_geocode_run, args=(office, todo), daemon=True).start()
+    if todo or people:   # demographics wait for the neighborhoods, so they run after the lookup in the same thread
+        threading.Thread(target=_geocode_run, args=(office, todo, people or {}, addresses), daemon=True).start()
     return len(todo)
 
 
@@ -3430,11 +3656,18 @@ def _geocode_batch(items):
     return out
 
 
-def _geocode_run(office, todo):
+def _geocode_run(office, todo, people=None, addresses=None):
     with _geo_turn:
-        with _geo_lock:
-            _geo_jobs[office]["state"] = "running"
-        _geocode_office(office, todo)
+        if todo:
+            with _geo_lock:
+                _geo_jobs[office]["state"] = "running"
+            _geocode_office(office, todo)
+        if people:
+            try:
+                r = compute_demographics(office, people, addresses)
+                print(f"{datetime.now():%H:%M} Demographics for {office}: {r}")
+            except Exception as e:   # keep the rest of the upload; the next upload tries again
+                print(f"{datetime.now():%H:%M} Demographics for {office} stopped: {e}")
 
 
 def _geocode_office(office, todo):
@@ -3571,7 +3804,286 @@ def warm_neighborhoods():
         print(f"{datetime.now():%H:%M} Neighborhood warm-up stopped: {e}")
 
 
-def maps_blocks(zipc, month=None):
+# ------------------------------------------------------------------ demographics (Demographics tab, this computer only)
+# Age from each new patient's birth date (at their listing month); ethnicity estimated with the Census's own method
+# (BISG): the 2010 Census surname table's shares for the surname, combined with the make-up of the patient's Census
+# block group (or ZIP) relative to the area. Only office x month x age-group totals are kept. The area around each office
+# comes from the Census American Community Survey for the ZIP areas within OFFICE_AREA_MILES of the office.
+
+SURNAME_SOURCE = "https://www2.census.gov/topics/genealogy/2010surnames/names.zip"
+SURNAME_FILE = DATA_DIR / "census_surnames.json"     # SURNAME -> [hispanic, white, asian/pi, black, other] shares
+ACS_RACE_DIR = DATA_DIR / "acs_race"                 # {county}.json: block group GEOID -> resident counts by group
+ACS_ZCTA_FILE = DATA_DIR / "acs_zcta.json"           # ZCTA -> {"race": [5 counts], "age": [6 counts]}
+OFFICE_AREA_MILES = 5
+ETHNIC = ["hispanic", "white", "asian", "black", "other"]
+AGE_BANDS = ["0-12", "13-17", "18-34", "35-54", "55-64", "65+"]
+_surnames = None
+
+
+def census_surnames():
+    """The Census surname table, downloaded once (about 13 MB zipped, kept as about 5 MB of JSON)."""
+    global _surnames
+    if _surnames:
+        return _surnames
+    if not SURNAME_FILE.exists():
+        import io
+        with urllib.request.urlopen(SURNAME_SOURCE, timeout=180) as r:
+            z = zipfile.ZipFile(io.BytesIO(r.read()))
+        text = z.read("Names_2010Census.csv").decode("latin-1")
+        out = {}
+        for row in list(csv.reader(text.splitlines()))[1:]:
+            if len(row) < 11:
+                continue
+            vals = row[5:11]   # white, black, api, aian, 2+races, hispanic
+            known = [float(v) for v in vals if v not in ("(S)", "")]
+            fill = max(0.0, 100 - sum(known)) / max(1, sum(1 for v in vals if v in ("(S)", "")))   # suppressed: share the rest
+            w, b, a, ai, two, h = [float(v) if v not in ("(S)", "") else fill for v in vals]
+            out[row[0]] = [round(x / 100, 4) for x in (h, w, a, b, ai + two)]
+        _write_json_file(SURNAME_FILE, out)
+        _surnames = out
+    else:
+        _surnames = _load_json_file(SURNAME_FILE)
+    return _surnames
+
+
+def _surname_probs(last):
+    table, s = census_surnames(), re.sub(r"[^A-Z ]", "", (last or "").upper()).strip()
+    for key in (s.replace(" ", ""), *s.replace("-", " ").split()):
+        if key in table:
+            return table[key], True
+    return table.get("ALL OTHER NAMES", [0.137, 0.667, 0.080, 0.085, 0.032]), False
+
+
+def _acs(params):
+    key = census_key()
+    if not key:
+        raise ValueError("Add the free Census API key in Map setup (step 4) first.")
+    with urllib.request.urlopen(f"{ACS_URL}?" + urllib.parse.urlencode({**params, "key": key}), timeout=180) as r:
+        body = r.read()
+    if not body.strip():
+        raise ValueError("the Census has no figures for that area")
+    return json.loads(body)
+
+
+RACE_VARS = ["B03002_012E", "B03002_003E", "B03002_006E", "B03002_007E", "B03002_004E", "B03002_005E", "B03002_008E", "B03002_009E"]
+
+
+def _race_counts(row, start):   # [hispanic, white, asian/pi, black, other] from the RACE_VARS columns
+    v = [max(0, int(x or 0)) for x in row[start:start + 8]]
+    return [v[0], v[1], v[2] + v[3], v[4], v[5] + v[6] + v[7]]
+
+
+def acs_race(county):
+    """Block group GEOID -> resident counts by group, for one county; cached."""
+    ACS_RACE_DIR.mkdir(parents=True, exist_ok=True)
+    f = ACS_RACE_DIR / f"{county}.json"
+    data = _load_json_file(f)
+    if data.get("year") == ACS_YEAR:
+        return data["race"]
+    rows = _acs({"get": ",".join(RACE_VARS), "for": "block group:*", "in": f"state:{county[:2]} county:{county[2:]}"})
+    head = rows[0]
+    race = {r[head.index("state")] + r[head.index("county")] + r[head.index("tract")] + r[head.index("block group")]: _race_counts(r, 0) for r in rows[1:]}
+    _write_json_file(f, {"year": ACS_YEAR, "race": race})
+    return race
+
+
+AGE_COLS = {   # B01001 (sex by age): male 003-025, female 027-049; split into the marketing bands
+    "0-12": [(3, 1), (4, 1), (5, .6)], "13-17": [(5, .4), (6, 1)], "18-34": [(n, 1) for n in range(7, 13)],
+    "35-54": [(n, 1) for n in range(13, 17)], "55-64": [(n, 1) for n in range(17, 20)], "65+": [(n, 1) for n in range(20, 26)]}
+
+
+def acs_zcta():
+    """Every ZIP area's residents by group and by age band (two Census calls, cached for the ACS year)."""
+    data = _load_json_file(ACS_ZCTA_FILE)
+    if data.get("year") == ACS_YEAR and data.get("v") == 3:
+        return data["zcta"]
+    geo = "zip code tabulation area"
+    race_rows = _acs({"get": ",".join(RACE_VARS), "for": f"{geo}:*"})
+    age_vars = [f"B01001_{n:03d}E" for n in list(range(3, 26)) + list(range(27, 50))]
+    age_rows = _acs({"get": ",".join(age_vars), "for": f"{geo}:*"})
+    out = {r[-1]: {"race": _race_counts(r, 0)} for r in race_rows[1:]}
+    for r in _acs({"get": "B11005_001E,B11005_002E", "for": f"{geo}:*"})[1:]:   # households, and those with someone under 18
+        out.setdefault(r[-1], {"race": [0] * 5})["hh"] = [max(0, int(r[0] or 0)), max(0, int(r[1] or 0))]
+    for r in age_rows[1:]:
+        v = {n: max(0, int(x or 0)) for n, x in zip(list(range(3, 26)) + list(range(27, 50)), r[:-1])}
+        out.setdefault(r[-1], {"race": [0] * 5})["age"] = [round(sum((v[n] + v[n + 24]) * w for n, w in AGE_COLS[b])) for b in AGE_BANDS]
+    # Languages at home and Asian groups (one call each).
+    lang_rows = _acs({"get": ",".join(f"C16001_{n:03d}E" for n in range(1, 39)), "for": f"{geo}:*"})
+    for r in lang_rows[1:]:
+        v = [max(0, int(x or 0)) for x in r[:38]]   # v[n-1] = C16001_n
+        known = sum(v[c - 1] for _, _, c, _ in LANGS if c)
+        out.setdefault(r[-1], {"race": [0] * 5})["lang"] = {k: [v[c - 1] if c else max(0, v[0] - known), v[l - 1] if l else 0]
+                                                            for k, _, c, l in LANGS}
+        out[r[-1]]["lang"]["other"][1] = sum(v[n - 1] for n in (8, 11, 14, 38))
+    asian_rows = _acs({"get": ",".join(f"B02015_{n:03d}E" for n in range(1, 35)), "for": f"{geo}:*"})
+    for r in asian_rows[1:]:
+        v = [max(0, int(x or 0)) for x in r[:34]]
+        out.setdefault(r[-1], {"race": [0] * 5})["asian"] = {k: sum(v[c - 1] for c in cols) for k, _, cols in ASIAN}
+    _write_json_file(ACS_ZCTA_FILE, {"year": ACS_YEAR, "v": 3, "zcta": out})
+    return out
+
+
+# Languages spoken at home (people 5+; ACS C16001): (key, label, speakers column, "speak English less than very well" column)
+LANGS = [("english", "English only", 2, None), ("spanish", "Spanish", 3, 5), ("chinese", "Chinese (Mandarin, Cantonese)", 21, 23),
+         ("tagalog", "Tagalog / Filipino", 27, 29), ("vietnamese", "Vietnamese", 24, 26), ("korean", "Korean", 18, 20),
+         ("other_asian", "Other Asian & Pacific Island languages", 30, 32), ("arabic", "Arabic", 33, 35),
+         ("other_indo", "Other Indo-European (e.g. Hindi, Farsi, Armenian)", 15, 17), ("other", "Other languages", None, None)]
+# Asian residents by group (ACS B02015): key -> (label, columns)
+ASIAN = [("chinese", "Chinese", [2, 8]), ("filipino", "Filipino", [12]), ("korean", "Korean", [5]), ("vietnamese", "Vietnamese", [19]),
+         ("japanese", "Japanese", [4, 7]), ("indian", "Asian Indian", [21]), ("cambodian", "Cambodian", [11]), ("thai", "Thai", [18]),
+         ("other", "Other Asian", [3, 6, 9, 10, 13, 14, 15, 16, 17, 20] + list(range(22, 35)))]
+
+
+def _age_band(dob, month):
+    try:
+        b, ref = date.fromisoformat(dob), date.fromisoformat(month + "-15")
+    except (TypeError, ValueError):
+        return "unknown"
+    age = ref.year - b.year - ((ref.month, ref.day) < (b.month, b.day))
+    if age < 0 or age > 110:
+        return "unknown"
+    return "0-12" if age <= 12 else "13-17" if age <= 17 else "18-34" if age <= 34 else "35-54" if age <= 54 else "55-64" if age <= 64 else "65+"
+
+
+def _home_key(a):   # one key per home: street and ZIP, tidied ("123 Main St." == "123 MAIN ST"); kept only in memory
+    street, _, _, zipc = a
+    return re.sub(r"[^A-Z0-9]", "", street.upper()) + "|" + (zipc or "")[:5]
+
+
+def _age_on(dob, day):
+    try:
+        b = date.fromisoformat(dob)
+    except (TypeError, ValueError):
+        return None
+    return day.year - b.year - ((day.month, day.day) < (b.month, b.day))
+
+
+def compute_demographics(office, people, addresses=None):
+    """Age group and estimated ethnicity of the office's new patients (from the map listings), summed per month and
+    age group into demo_counts, plus family measures from homes shared with other patients of the office (same address
+    in the Patient List). `people` (pat_id -> (surname, birth date)) and `addresses` are used here and not kept."""
+    addresses = addresses or {}
+    homes = {}
+    for pid, a in addresses.items():   # who lives together, among everyone on the office's list
+        homes.setdefault(_home_key(a), []).append(pid)
+    conn = db()
+    pts = {}
+    for r in conn.execute("SELECT pat_id, MIN(period_from) AS pf, zip FROM map_patients WHERE office = ? GROUP BY pat_id", (office,)):
+        pts[r["pat_id"]] = (r["pf"][:7], r["zip"])
+    blocks = {r[0]: r[1] for r in conn.execute("SELECT pat_id, geoid FROM patient_blocks WHERE office = ? AND geoid != ''", (office,))}
+    conn.close()
+    zcta = acs_zcta()
+    counties = {g[:5] for g in blocks.values()}
+    bg = {}
+    for c in counties:
+        try:
+            bg.update(acs_race(c))
+        except (ValueError, urllib.error.URLError, OSError):   # e.g. US territories, which the survey doesn't cover
+            pass
+    # The area's overall make-up (the "prior" the neighborhood is compared with): all block groups of those counties.
+    tot = [sum(v[i] for v in bg.values()) for i in range(5)] if bg else [sum(v["race"][i] for v in zcta.values()) for i in range(5)]
+    prior = [t / max(1, sum(tot)) for t in tot]
+    agg, found = {}, 0
+    for pid, (month, zipc) in pts.items():
+        if pid not in people:
+            continue
+        last, dob = people[pid]
+        ps, ok = _surname_probs(last)
+        found += ok
+        geo = bg.get(blocks.get(pid, "")) or (zcta.get(zipc) or {}).get("race")
+        if geo and sum(geo) > 0:
+            share = [g / sum(geo) for g in geo]
+            post = [ps[i] * (share[i] + 1e-4) / max(prior[i], 1e-4) for i in range(5)]
+        else:
+            post = list(ps)
+        t = sum(post) or 1
+        post = [x / t for x in post]
+        key = (month, _age_band(dob, month))
+        a = agg.setdefault(key, [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0])
+        a[0] += 1; a[6] += ok
+        if pid in addresses:   # family measures, at the patient's listing month
+            ref = date.fromisoformat(month + "-15")
+            others = [q for q in homes.get(_home_key(addresses[pid]), []) if q != pid]
+            ages = [_age_on((people.get(q) or (None, None))[1], ref) for q in others]
+            me = _age_on(dob, ref)
+            a[7] += bool(others)
+            a[8] += (me is not None and me < 18) or any(x is not None and x < 18 for x in ages)
+            a[9] += (me is not None and me < 18) and any(x is not None and x >= 18 for x in ages)
+        for i in range(5):
+            a[1 + i] += post[i]
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = db()
+    with conn:
+        conn.execute("DELETE FROM demo_counts WHERE office = ?", (office,))
+        conn.executemany("INSERT INTO demo_counts (office, month, age_band, n, hispanic, white, asian, black, other, surname_found, "
+                         "updated_at, with_family, kids_home, minor_with_adult) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         [(office, m, b, a[0], *[round(x, 3) for x in a[1:6]], a[6], now, a[7], a[8], a[9]) for (m, b), a in agg.items()])
+    conn.close()
+    n = sum(a[0] for a in agg.values())
+    return {"patients": n, "surname_found": found, "with_neighborhood": sum(1 for pid in pts if pid in people and pid in blocks)}
+
+
+def _miles(a, b):
+    from math import radians, sin, cos, asin, sqrt
+    la1, lo1, la2, lo2 = map(radians, (a[0], a[1], b[0], b[1]))
+    return 3958.8 * 2 * asin(sqrt(sin((la2 - la1) / 2) ** 2 + cos(la1) * cos(la2) * sin((lo2 - lo1) / 2) ** 2))
+
+
+def _area_lang_asian(zcta, zs):
+    """Languages at home ([speakers, speak English less than very well]) and Asian residents by group, summed over ZIPs."""
+    lang = {k: [sum((zcta[z].get("lang") or {}).get(k, [0, 0])[i] for z in zs) for i in (0, 1)] for k, _, _, _ in LANGS}
+    asian = {k: sum((zcta[z].get("asian") or {}).get(k, 0) for z in zs) for k, _, _ in ASIAN}
+    return {"lang": lang, "asian": asian}
+
+
+def demographics_info(frm=None, to=None):
+    """Per office: its new patients by age group and estimated ethnicity (months frm..to), and the residents within
+    OFFICE_AREA_MILES of it by the same groups."""
+    conn = db()
+    q, args = "SELECT * FROM demo_counts", []
+    if frm or to:
+        q += " WHERE month BETWEEN ? AND ?"; args = [frm or "0000-00", to or "9999-99"]
+    rows = [dict(r) for r in conn.execute(q, args)]
+    months = [r[0] for r in conn.execute("SELECT DISTINCT month FROM demo_counts ORDER BY 1")]
+    pins = {r["office"]: (r["lat"], r["lon"]) for r in conn.execute("SELECT office, lat, lon FROM office_locations")}
+    short = office_short_names(conn)
+    conn.close()
+    try:
+        zcta = acs_zcta()
+    except (ValueError, urllib.error.URLError, OSError) as e:
+        zcta, area_error = {}, str(e)
+    else:
+        area_error = None
+    centers = {z: v["c"] for z, v in zip_shapes().items() if v.get("c")}
+    out = {}
+    for r in rows:
+        o = out.setdefault(r["office"], {"n": 0, "age": {b: 0 for b in AGE_BANDS + ["unknown"]}, "eth": {e: 0.0 for e in ETHNIC},
+                                         "eth_by_age": {b: {e: 0.0 for e in ETHNIC} for b in AGE_BANDS + ["unknown"]}, "surname_found": 0,
+                                         "with_family": 0, "kids_home": 0, "minor_with_adult": 0})
+        o["n"] += r["n"]; o["age"][r["age_band"]] += r["n"]; o["surname_found"] += r["surname_found"]
+        for f in ("with_family", "kids_home", "minor_with_adult"):
+            o[f] += r.get(f) or 0
+        for e in ETHNIC:
+            o["eth"][e] += r[e]; o["eth_by_age"][r["age_band"]][e] += r[e]
+    for office, o in out.items():
+        pin = pins.get(office)
+        zs = [z for z, c in centers.items() if pin and _miles(pin, c) <= OFFICE_AREA_MILES and z in zcta]
+        o["area"] = {"zips": len(zs), "miles": OFFICE_AREA_MILES,
+                     "eth": dict(zip(ETHNIC, [sum(zcta[z]["race"][i] for z in zs) for i in range(5)])),
+                     "age": dict(zip(AGE_BANDS, [sum((zcta[z].get("age") or [0] * 6)[i] for z in zs) for i in range(6)])),
+                     "households": sum((zcta[z].get("hh") or [0, 0])[0] for z in zs), "households_kids": sum((zcta[z].get("hh") or [0, 0])[1] for z in zs),
+                     **_area_lang_asian(zcta, zs)} if zs else None
+    # All offices together: every ZIP area within reach of any office, counted once.
+    allz = {z for z, c in centers.items() if z in zcta and any(_miles(pins[o], c) <= OFFICE_AREA_MILES for o in out if o in pins)}
+    all_area = {"zips": len(allz), "miles": OFFICE_AREA_MILES,
+                "eth": dict(zip(ETHNIC, [sum(zcta[z]["race"][i] for z in allz) for i in range(5)])),
+                "age": dict(zip(AGE_BANDS, [sum((zcta[z].get("age") or [0] * 6)[i] for z in allz) for i in range(6)])),
+                "households": sum((zcta[z].get("hh") or [0, 0])[0] for z in allz), "households_kids": sum((zcta[z].get("hh") or [0, 0])[1] for z in allz),
+                **_area_lang_asian(zcta, allz)} if allz else None
+    return {"offices": out, "all_area": all_area, "lang_labels": {k: l for k, l, _, _ in LANGS}, "asian_labels": {k: l for k, l, _ in ASIAN}, "months": months, "short": short, "area_error": area_error, "bands": AGE_BANDS, "groups": ETHNIC}
+
+
+def maps_blocks(zipc, month=None, frm=None, to=None):
     """A ZIP's neighborhoods for the map: block group outlines with median household income, and which block group
     each of the month's new patients from that ZIP lives in (office|pat_id -> GEOID; the page does the counting so
     its filters apply)."""
@@ -3579,10 +4091,10 @@ def maps_blocks(zipc, month=None):
     if not re.fullmatch(r"\d{5}", zipc):
         raise ValueError("Pick a ZIP code on the map.")
     conn = db()
-    q = "SELECT m.office, m.pat_id, b.geoid FROM map_patients m LEFT JOIN patient_blocks b ON b.office = m.office AND b.pat_id = m.pat_id WHERE m.zip = ?"
+    q = "SELECT DISTINCT m.office, m.pat_id, b.geoid FROM map_patients m LEFT JOIN patient_blocks b ON b.office = m.office AND b.pat_id = m.pat_id WHERE m.zip = ?"
     args = [zipc]
-    if month:
-        q += " AND substr(m.period_from, 1, 7) = ?"; args.append(month)
+    if frm or to or month:
+        q += " AND substr(m.period_from, 1, 7) BETWEEN ? AND ?"; args += [frm or month or "0000-00", to or month or "9999-99"]
     pats = conn.execute(q, args).fetchall()
     conn.close()
     try:
@@ -3697,24 +4209,51 @@ def set_office_location(c):
     return {"office": office, "lat": lat, "lon": lon}
 
 
-def maps_info(month=None):
-    return _memo("info", _maps_info, month)
+def maps_info(month=None, frm=None, to=None):
+    return _memo("info", _maps_info, month, frm, to)
 
 
-def _maps_info(month=None):
-    """New patients by ZIP for a month (YYYY-MM), with each ZIP's center, the offices' pins and General/Ortho."""
-    conn = db()
+def _map_range(conn, month=None, frm=None, to=None):
+    """The months to show: from–to (YYYY-MM, as the Charts filters pick them), or one month; default the latest."""
     months = [r[0][:7] for r in conn.execute("SELECT DISTINCT period_from FROM map_patients ORDER BY period_from DESC")]
-    month = month if month in months else (months[0] if months else None)
-    rows = conn.execute("SELECT m.*, t.type FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND "
-                        "t.pat_id = m.pat_id WHERE m.period_from = ?", (f"{month}-01",)).fetchall() if month else []
+    if frm or to:
+        frm = frm if frm in months else (months[-1] if months else None)
+        to = to if to in months else (months[0] if months else None)
+        if frm and to and frm > to:
+            frm, to = to, frm
+    else:
+        month = month if month in months else (months[0] if months else None)
+        frm = to = month
+    return months, frm, to
+
+
+def _maps_info(month=None, frm=None, to=None):
+    """New patients by ZIP for a month or a run of months (YYYY-MM), with each ZIP's center, the offices' pins and
+    General/Ortho. Over several months each patient counts once (dollars added up)."""
+    conn = db()
+    months, frm, to = _map_range(conn, month, frm, to)
+    month = to   # the latest month shown (some callers still read "month")
+    # fv = the patient's first visit from the uploaded New Patients Lists (for the map's week-by-week time slider)
+    raw = conn.execute("SELECT m.*, t.type, f.fv FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND "
+                       "t.pat_id = m.pat_id LEFT JOIN (SELECT office, pat_id, MIN(first_visit) AS fv FROM patient_phones "
+                       "GROUP BY office, pat_id) f ON f.office = m.office AND f.pat_id = m.pat_id "
+                       "WHERE m.period_from BETWEEN ? AND ? ORDER BY m.period_from",
+                       (f"{frm}-01", f"{to}-01")).fetchall() if frm else []
+    seen = {}
+    for r in raw:   # one entry per patient: the ZIP from their latest listing, dollars from every month in the range,
+        k = (r["office"], r["pat_id"])   # and the month they first appear in (for the time slider)
+        if k in seen:
+            seen[k] = {**seen[k], "zip": r["zip"], "collection": seen[k]["collection"] + r["collection"]}
+        else:
+            seen[k] = dict(r)
+    rows = list(seen.values())
     pins = [dict(r) for r in conn.execute("SELECT office, lat, lon FROM office_locations ORDER BY office")]
     offices = known_offices(conn)
     short = office_short_names(conn)
     types_loaded = types_loaded_offices(conn)
     # Each office's listing has its own Thru date; show the range when they differ.
     thru = dict(zip(("min", "max"), conn.execute("SELECT MIN(as_of), MAX(as_of) FROM map_patients WHERE period_from = ?",
-                                                   (f"{month}-01",)).fetchone())) if month else None
+                                                   (f"{to}-01",)).fetchone())) if to else None
     region = map_region(conn)
     conn.close()
     zips, missing, pops, shapes = zip_centroids(), {}, zip_population(), zip_shapes()
@@ -3723,7 +4262,8 @@ def _maps_info(month=None):
     for r in rows:
         z = by_zip.setdefault(r["zip"], {"zip": r["zip"], "patients": []})
         z["patients"].append({"pat_id": r["pat_id"], "office": r["office"], "collection": r["collection"],
-                              "type": r["type"] or "Unknown", "referral": r["referral_type"]})
+                              "type": r["type"] or "Unknown", "referral": r["referral_type"],
+                              "m": r["period_from"][:7], "fv": r["fv"] if r["fv"] and r["fv"][:4] >= "2000" else None})
     out = []
     # Three cases for a ZIP without a boundary: the Census has no area for it ("missing": not on the map), or it just
     # hasn't been downloaded yet ("no_shape": step 1 again adds it; drawn as a dot meanwhile if its center is known).
@@ -3744,7 +4284,7 @@ def _maps_info(month=None):
         elif not shapes:   # step 1 never run and no center known either
             missing[z["zip"]] = len(z["patients"])
     cn = city_names()
-    return {"month": month, "months": months, "thru": thru, "region": region, "zips": out, "missing": missing, "no_shape": sorted(no_shape),
+    return {"month": month, "from": frm, "to": to, "months": months, "thru": thru, "region": region, "zips": out, "missing": missing, "no_shape": sorted(no_shape),
             "cities": cn.get("cities", {}), "where": cn.get("where", {}),
             "pins": pins, "offices": offices, "short": short, "zip_data": bool(zips or shapes), "shapes_data": len(shapes),
             "pop_data": bool(shapes or pops), "types_loaded": types_loaded}
@@ -4013,8 +4553,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self._blocked():
             return
-        if self.path in ("/", "/index.html"):
-            page = (ROOT / "static" / "index.html").read_bytes()
+        if self.path in ("/", "/index.html", "/preview"):
+            # /preview: a reworked page waiting for approval (static/preview.html), same data and permissions as the live one
+            name = "preview.html" if self.path == "/preview" and (ROOT / "static" / "preview.html").exists() else "index.html"
+            page = (ROOT / "static" / name).read_bytes()
             if VIEWER_PASSWORD:
                 page = page.replace(b"</head>", VIEWER_HTML.encode() + b"</head>", 1).replace(
                     b'<body class="hide-select">', b'<body class="hide-select viewer">', 1)
@@ -4057,17 +4599,25 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, zip_shapes_geojson(), extra={"ETag": tag, "Cache-Control": "no-cache"})
         elif self.path == "/api/maps/trends":
             self._send(200, maps_trends())
+        elif self.path.startswith("/api/demographics"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._send(200, demographics_info((q.get("from") or [None])[0], (q.get("to") or [None])[0]))
+        elif self.path == "/api/whatif":
+            self._send(200, whatif_data())
+        elif self.path == "/api/financing/lenders":
+            self._send(200, financing_lenders())
         elif self.path.startswith("/api/maps/blocks"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             try:
-                self._send(200, maps_blocks((q.get("zip") or [""])[0], (q.get("month") or [None])[0]))
+                self._send(200, maps_blocks((q.get("zip") or [""])[0], (q.get("month") or [None])[0],
+                                            (q.get("from") or [None])[0], (q.get("to") or [None])[0]))
             except ValueError as e:
                 self._send(400, {"error": str(e)})
         elif self.path == "/api/maps/neighborhoods":
             self._send(200, neighborhoods_status())
         elif self.path.startswith("/api/maps"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            self._send(200, maps_info((q.get("month") or [None])[0]))
+            self._send(200, maps_info((q.get("month") or [None])[0], (q.get("from") or [None])[0], (q.get("to") or [None])[0]))
         elif self.path == "/api/denticon/status":
             self._send(200, denticon_status())
         elif self.path == "/api/invoca/status":

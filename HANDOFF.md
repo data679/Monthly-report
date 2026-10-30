@@ -497,6 +497,64 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   `notes_sheet_loop` checks a fingerprint every 2 minutes and writes only when the log changed; Write now forces.
   Table `notes_sheet`; endpoints `/api/google/notes-sheet[/write|/delete]`.
 
+- **Charts layout per person** (2026-10-23): every Charts card has `data-card` (summary, months, top25, lenders, map,
+  smalls, table, offices) inside one grid `#ch-cards` (2 columns; `.ch-half` = one column, stacks under 1000px).
+  "Customize layout" turns on edit bars (drag handle, ↑/↓, Half/Full width, Hide/Show; hidden cards stay in place faded
+  while editing) and "Reset to default". Saved per browser in localStorage `chartLayout` {order, half, hidden}
+  (`CH_DEFAULT`); new cards added later go last. After a change the charts re-render to their new width and the map
+  re-measures. The Map setup card stays outside the grid.
+
+- **Demographics tab** (`<section id="demo">`, 2026-10-26; Reports group, for every password user on any
+  computer since 2026-10-29, `GET /api/demographics?from=&to=`; hidden on view-only links). New patients (map listings)
+  by age at first visit (bands 0-12, 13-17, 18-34, 35-54, 55-64, 65+) and estimated ethnicity (Hispanic, White, Asian /
+  PI, Black, Other) next to the residents of the Census ZIP areas whose center is within 5 miles of the office
+  (`OFFICE_AREA_MILES`; "all offices" = the union, counted once). Ethnicity is BISG: the 2010 Census surname table
+  (`census_surnames()`, downloaded once to `data/census_surnames.json`) × the patient's block group make-up (ACS B03002,
+  `acs_race`, cached per county in `data/acs_race/`; ZIP make-up when no block group; surname alone outside Census areas,
+  e.g. US territories) ÷ the area's overall make-up, normalised. Area figures: `acs_zcta()` (B03002 + B01001 for every
+  ZCTA, `data/acs_zcta.json`; 0-12 vs 13-17 split from the 10-14 group 60/40). Patient List uploads now also read the
+  surname and DOB (in memory only); `compute_demographics` runs after the address lookup in the same background thread
+  and replaces `demo_counts` (office × month × age band: n and summed probabilities). No names, birth dates or per-patient
+  labels are stored. The page: headline on the biggest gap, paired bars (new patients vs area) for age and ethnicity,
+  and an "Every office" table with gaps and the most under-reached group.
+  Families (2026-10-26): `compute_demographics(office, people, addresses)` groups everyone on the office's Patient List
+  by home (`_home_key`: tidied street + ZIP, in memory only) and adds, per office × month × age band: `with_family` (shares
+  a home with another patient), `kids_home` (home has a patient under 18, themselves included), `minor_with_adult` (under
+  18 with an adult patient at home). Area: households and households with someone under 18 (ACS B11005, in `acs_zcta`).
+  Languages and Asian groups (2026-10-26): `acs_zcta` (cache "v": 3) adds per ZCTA `lang` (C16001, people 5+:
+  [speakers, speak English less than "very well"] for `LANGS`: English only, Spanish, Chinese, Tagalog, Vietnamese, Korean,
+  other Asian/PI, Arabic, other Indo-European, other) and `asian` (B02015 grouped as `ASIAN`: Chinese incl. Taiwanese,
+  Filipino, Korean, Vietnamese, Japanese, Asian Indian, Cambodian, Thai, other). `_area_lang_asian` sums them per office
+  area and for all offices. The card "Languages and Asian communities around …" names the three languages with the most
+  neighbors who speak English less than "very well" (staffing / ads), with bars per language and per Asian group.
+  Japanese has no row of its own in C16001 (it sits in "Other Asian & Pacific Island languages").
+  The page's "Families with children" tiles compare them; when a child age band is the biggest gap the headline speaks to
+  parents; the office table has a "Homes with kids" column (patients vs area).
+- **What if tab** (`<section id="whatif">`, card `#wi-card`, 2026-10-26; Reports group, for everyone with the app password
+  on any computer; hidden on view-only links: not in VIEWER_PATHS, and VIEWER_HTML hides the button and section): pick an office, its latest goal
+  fills in (editable), and sliders move the average % of new patients applying, % of approved funded, new patients a
+  month and other collections. A seeded Monte Carlo in the page (20,000 months) draws each driver from that office's own
+  finished months with financing tracked (May 2026 on): gross = (gross − financing collected) + NP × apply × approve ×
+  fund × $ per funded; a moved lever keeps 60% of its spread. Tiles: chance of hitting goal (vs now), average month,
+  8-in-10 range, goals hit so far; a histogram with the goal line; "what it takes" (applying share for 70% / 80%).
+  Layout (2026-10-26): the answer first ("hits its goal in about N of 10 months", a 0–100% chance bar with a tick at today),
+  then two columns: "Change these" (Try buttons built from the office's own months, sliders with a now tick and +/− vs now)
+  and "How an average month adds up" (stacked bars Now / With changes: other collections + financing, goal line), tiles,
+  and "How much months vary" (the histogram).
+  Goals: `office_goals` from the % TO GOAL sheet's "Goal" column (`sync_goals`, run with every sync for the newest two
+  tabs; loaded back to March 2025). `whatif_data()` builds the per-month drivers from `log_rows`.
+- **/preview** serves `static/preview.html` (same permissions as `/`) while a reworked page waits for approval.
+
+- **Financing applications by lender** (Charts tab card `#fl-card`, 2026-10-23): per lender, prime and subprime,
+  applied / approved / approval rate / $ approved / $ collected / patients funded, for the report's Office and From–To
+  months, plus a month-by-month applied/approved table. `np_analysis.parse_month` keeps `details["_lenders"]` (prime per
+  lender column: applied = "Ran" yes, approved = ran and an approved or collected amount; subprime: names under
+  "Subprime Co. Ran", approvals from "Subprime Co. Approved", the row's one amount going to the approving lender;
+  names normalised by `lender_canon`). Sums equal the Log's prime/subprime apps ran and approved. Saved per office-month
+  in `lender_apps` by `save_metrics` → `save_lender_apps` (later as_of wins); `backfill_lender_apps(since)` re-reads old
+  tabs and saves only lender rows (never Log values). `GET /api/financing/lenders` (also on view-only links: counts and
+  dollars only). The sheets track lenders from May 2026; earlier months have no lender columns.
+
 - **The map** (formerly the Maps tab; now the `#mp-section` card in the Charts report; everyone with the password,
   hidden on view-only links): new patients by ZIP for a month. Its Office comes from the report's Office filter; the
   Maps ZIP table was removed (the report's table covers it).
@@ -531,6 +589,22 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     collapsible, folded by default on phones) lists each class's real range. Office colors (`assignOfficeColors`)
     are stable per office and chosen so offices within 10 miles get the most different hues; mixed ZIPs get a dark
     dashed outline. The numbered office key sits under the map (`#mp-key`). The map canvas stays light in dark mode.
+    **Months** (2026-10-23): the map has no month picker any more; it follows the Charts page's From–To filters
+    (`GET /api/maps?from=&to=`, `maps_info(month, frm, to)` via `_map_range`; one month when From = To). Over several
+    months each patient (office + Pat ID) counts once: ZIP from their latest listing, dollars added up. The neighborhood
+    box counts the same range (`/api/maps/blocks?zip=&from=&to=`). Changing the filters reloads the map and reopens an
+    open neighborhood box.
+    **Colors over several months** (`mapScale`): one month keeps the data-driven classes (`classBreaks`). Over k months
+    the steps come from single months: the 95th percentile of every ZIP's figure in each month of the range (after the
+    office / patient type / $0 filters, from `ztData.rows`) × k = the darkest shade's threshold, and each lighter shade is
+    half the one above (always five shades; e.g. 2 months ≤5/6–11/12–22/23–44/45+, Jan–Oct 1–28/…/221+). Works for
+    new patients, $ collected and per 10k. The legend explains the scaling.
+    **Time slider** (2026-10-23): under the map, ▶ Play / slider / Step (Months | Weeks) / Show (That period only |
+    Running total) / Back to whole range, over the Charts From–To months. Each map patient now carries `m` (first listing
+    month in the range) and `fv` (first visit from `patient_phones`, i.e. the uploaded New Patients Lists; Care Dental
+    Center and Gardena Dental Care have none, so they're left out of weeks and a note says so). `mapTime` filters
+    `mapZips()`; `timeScale` fixes one color scale for the whole run (95th-percentile ZIP-period × periods when running);
+    the neighborhood box counts the current frame too. Frames redraw in ~0.3–0.4 s; months play at 1.1 s, weeks 0.5 s.
     **Getting around** (2026-10-23): office rings removed (the select and the ring drawing/notes); zoom 8–16 in half
     steps; from zoom 12 a softened Esri World Street Map under the data (overlay pane fades to 0.65 / 0.45 at 12 / 13+ so
     streets and names show through); Ctrl/⌘ + scroll zooms (plain scroll scrolls the page and flashes a hint; in full
@@ -561,6 +635,14 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     {zip|"office:<name>": city}}. The page (`drawCityLabels`) names only cities with an office or with patients on
     show, thinning by population when zoomed out; without that file it falls back to Esri's labels-only tiles. ZIP table adds per-10k, nearest office (miles) and
     multi-office flags; hover lists Pat ID · office · $ (General/Ortho column only once a patient list is loaded).
+
+- **Cell notes on the notes sheet** (2026-10-28): every write sets a Google Sheets **note** (not a threaded comment; the
+  API can't anchor those to cells) on each number cell of each month tab: the data checks the Log flags there, one per
+  line (e.g. "Row 12: Prime LenderName collected $X, more than the $Y approved."), and nothing else.
+  `sheet_checks` ports the Log's `checksFor` (rates in RATE_MAX over 100%; collected over approved per patient) and leaves
+  out checks marked OK. One `updateCells` (`fields: note`) per tab over the data block, so cells without a check are
+  cleared and hand-typed notes on number cells are replaced; Office, Thru and Notes columns are never touched. Marking a
+  check OK changes the fingerprint (`check_ok` count), so the sheet is rewritten.
 
 ## 11. Known office/data quirks
 

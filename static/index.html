@@ -361,6 +361,89 @@
   .tr-tip .tr-row b { font-weight: 600; }
   .tr-tip .tr-row span { color: var(--muted); }
   .hm-tip { position: fixed; }
+  /* Charts page: one grid of cards each person can reorder, resize (half / full width) and hide. */
+  .wi-answer.dm-answer { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
+  .dm-pairs .g { margin: 0 0 12px; } .dm-pairs .t { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .dm-pairs .t .gap { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; } .dm-pairs .t .gap.up { color: var(--good); } .dm-pairs .t .gap.down { color: var(--bad); }
+  .dm-pairs .b { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 8px; margin: 2px 0; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .dm-pairs .b span { display: block; height: 10px; border-radius: 3px; } .dm-pairs .b.p span { background: var(--series); } .dm-pairs .b.a span { background: var(--series-dim); }
+  .dm-pairs .b em { font-style: normal; text-align: right; }
+  .dm-fam { grid-template-columns: repeat(4, minmax(0, 1fr)); } .dm-fam .v { font-size: 20px; }
+  @media (max-width: 900px) { .dm-fam { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .dm-list .r { margin: 0 0 10px; } .dm-list .t { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; }
+  .dm-list .t b { font-weight: 600; font-variant-numeric: tabular-nums; } .dm-list .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .dm-list .bar { height: 8px; margin-top: 4px; border-radius: 3px; background: var(--border); } .dm-list .bar span { display: block; height: 100%; border-radius: 3px; background: var(--series); }
+  .dm-list .bar span.lep { background: var(--series-dim); }
+  .dm-keys { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .dm-keys i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .dm-table td .gap { margin-left: 6px; font-size: 12px; color: var(--muted); } .dm-table td .gap.down { color: var(--bad); } .dm-table td .gap.up { color: var(--good); }
+  .dm-table tbody tr { cursor: pointer; } .dm-table tbody tr[aria-selected="true"] td { background: var(--accent-soft); }
+  #whatif #wi-card { max-width: 1180px; } #whatif .wi-controls { margin: 0 0 6px; }
+  .wi-answer { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 16px 32px; align-items: center;
+               margin: 12px 0 20px; padding: 16px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+  .wi-headline { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 600; letter-spacing: -.01em; }
+  .wi-headline em { font-style: normal; color: var(--accent-ink); }
+  .wi-sentence { margin: 8px 0 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .wi-meter .wi-big { font-size: 24px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .wi-meter .wi-big small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  .wi-bar { position: relative; height: 12px; margin: 10px 0 6px; border-radius: 999px; background: var(--border); }
+  .wi-bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); transition: width .15s ease-out; }
+  .wi-bar .now { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 1px; }
+  .wi-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); }
+  .wi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px 40px; }
+  @media (max-width: 1000px) { .wi-grid, .wi-answer { grid-template-columns: minmax(0, 1fr); } }
+  .wi-h { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .wi-try { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+  .wi-try button { height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text);
+                   font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s; }
+  .wi-try button:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent-ink); }
+  .wi-sliders { display: flex; flex-direction: column; gap: 18px; }
+  .wi-slider { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text); font-weight: 500; }
+  .wi-slider > span:first-child { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .wi-slider b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wi-slider b .d { margin-left: 6px; font-size: 12px; font-weight: 500; }
+  .wi-slider b .d.up { color: var(--good); } .wi-slider b .d.down { color: var(--bad); }
+  .wi-track { position: relative; display: block; }
+  .wi-track input { width: 100%; margin: 6px 0 2px; accent-color: var(--accent); position: relative; z-index: 1; }
+  .wi-now { position: absolute; top: 5px; width: 2px; height: 18px; margin-left: -1px; background: var(--text); opacity: .55; border-radius: 1px; pointer-events: none; }
+  .wi-slider small { font-size: 12px; color: var(--faint); font-weight: 400; }
+  .wi-stack .row { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+  .wi-stack .lab { color: var(--muted); font-weight: 500; } .wi-stack .lab b { display: block; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wi-stack .bars { position: relative; height: 28px; }
+  .wi-stack .seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 8px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; transition: left .15s ease-out, width .15s ease-out; }
+  .wi-stack .seg.other { background: var(--series-dim); color: var(--text); border-radius: 4px 0 0 4px; }
+  .wi-stack .seg.fin { background: var(--series); color: var(--accent-text); border-radius: 0 4px 4px 0; }
+  .wi-stack .goal { position: absolute; top: -6px; bottom: -6px; width: 0; border-left: 2px dashed var(--text); }
+  .wi-stack .goal-l { position: absolute; top: -22px; transform: translateX(-50%); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .wi-stack .keys { display: flex; gap: 16px; margin: 10px 0 0 106px; font-size: 12px; color: var(--muted); }
+  .wi-stack .keys i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .wi-stack .wrap { padding-top: 20px; }
+  .wi-tiles { margin-top: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); } .wi-tiles .v { font-size: 20px; }
+  @media (max-width: 600px) { .wi-tiles { grid-template-columns: minmax(0, 1fr); } }
+  .wi-chart svg { display: block; width: 100%; height: auto; }
+  .wi-chart text { font-size: 12px; fill: var(--muted); } .wi-chart .wi-bin { fill: var(--series-dim); } .wi-chart .wi-bin.hit { fill: var(--series); }
+  .wi-chart .wi-goal { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 4 3; } .wi-chart .wi-goal-t { fill: var(--text); font-weight: 600; }
+  .wi-take { margin: 20px 0 4px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; } .wi-take b { font-weight: 600; }
+  .ch-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .ch-cards > .card { margin: 0; grid-column: span 2; min-width: 0; }
+  .ch-cards > .card.ch-half { grid-column: span 1; }
+  @media (max-width: 1000px) { .ch-cards > .card.ch-half { grid-column: span 2; } }
+  .ch-cards > .card.ch-hidden { display: none; }
+  .ch-bar { display: none; }
+  .ch-editing .ch-bar { display: flex; align-items: center; gap: 4px; margin: -4px -4px 12px; padding: 6px 8px; border-radius: 8px;
+                        background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 600; }
+  .ch-bar .ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch-bar button { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: var(--surface); color: var(--text);
+                   font: inherit; font-weight: 500; font-size: 12px; cursor: pointer; }
+  .ch-bar button:hover:not(:disabled) { border-color: var(--border); } .ch-bar button:disabled { opacity: .35; cursor: default; }
+  .ch-bar .ch-grip { cursor: grab; background: none; font-size: 16px; letter-spacing: -2px; color: var(--accent-ink); }
+  .ch-editing .ch-cards > .card { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+  .ch-editing .ch-cards > .card.ch-hidden { display: block; opacity: .55; }
+  .ch-editing .ch-cards > .card.ch-hidden > :not(.ch-bar) { display: none; }
+  .ch-cards > .card.ch-dragging { opacity: .4; }
+  .ch-editbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 16px; padding: 12px 16px;
+                border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; }
+  .ch-editbar[hidden] { display: none; } .ch-editbar p { margin: 0; flex: 1; min-width: 240px; }
   .rp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; margin-bottom: 16px; }
   .rp-grid2 .card { margin-bottom: 0; }
   .rp-chart { position: relative; } .rp-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
@@ -419,6 +502,23 @@
   .mp-pop .num { text-align: right; }
   .mp-pin { background: #111827; color: #fff; border: 2px solid #fff; border-radius: 50%; width: 22px; height: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.5); font: 700 11px/18px system-ui, sans-serif; text-align: center; }
   .leaflet-tooltip.mp-label { font-size: 12px; padding: 2px 6px; }
+  .fl-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .fl-tiles { margin: 12px 0; }
+  .fl-table td.fl-barcol, .fl-table th.fl-barcol { width: 26%; min-width: 90px; }
+  .fl-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  .fl-table th, .fl-table td { padding-left: 8px; padding-right: 8px; } .fl-table th { min-width: 0; }
+  .fl-table td { white-space: nowrap; }
+  .fl-bar { position: relative; height: 14px; border-radius: 3px; background: var(--accent-soft); }
+  .fl-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
+  .fl-key-ok { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); vertical-align: -1px; }
+  .fl-table .fl-kind { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .fl-months { margin-top: 12px; } .fl-months summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+  .fl-months table td, .fl-months table th { white-space: nowrap; }
+  .mp-time { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+  .mp-time #mp-slider { flex: 1; min-width: 180px; accent-color: var(--accent); }
+  .mp-time .mp-when { min-width: 150px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mp-time #mp-play { min-width: 84px; }
+  #mp-time-note:empty { display: none; }
   .mp-nb { background: var(--surface); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.4; width: 270px; max-height: calc(100% - 120px); overflow: auto; max-width: calc(100vw - 80px); box-shadow: var(--shadow); }
   .mp-map.nb-open .mp-legend, .mp-map.nb-open .mp-inset { display: none; }   /* room for the neighborhoods */
   .mp-nb h3 { font-size: 13px; margin: 0 0 2px; } .mp-nb p { margin: 4px 0; } .mp-nb .hint { font-size: 11px; }
@@ -625,6 +725,8 @@
     <span class="nav-group">Reports</span>
     <button data-tab="charts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13V8M8 13V3M13 13V6"/></svg>Charts</button>
     <button data-tab="calls"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 2.5h2.1l1.1 2.7-1.4 1a7.6 7.6 0 0 0 4.4 4.4l1-1.4 2.7 1.1v2.1a1.2 1.2 0 0 1-1.3 1.2A10.8 10.8 0 0 1 2.4 3.8a1.2 1.2 0 0 1 1.2-1.3z"/></svg>Calls</button>
+    <button data-tab="whatif"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h4M9.5 4.5h4M2.5 8h7M12.5 8h1M2.5 11.5h2M7.5 11.5h6"/><circle cx="8" cy="4.5" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>What if</button>
+    <button data-tab="demo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.2"/><path d="M2 13.5c0-2.4 1.8-4.2 4-4.2s4 1.8 4 4.2"/><circle cx="11.5" cy="6.5" r="1.7"/><path d="M10.8 9.6c1.9-.3 3.6 1.2 3.6 3.9"/></svg>Demographics</button>
     <span class="nav-group nav-admin">Admin · this computer</span>
     <button data-tab="google" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M2.5 9.5h11M6.5 2.5v11"/></svg>Google Sheets</button>
     <button data-tab="sql" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6.5 8 3 11.5M8 12h5"/></svg>SQL</button>
@@ -903,36 +1005,54 @@
   <section id="charts">
     <div id="ch-report">
       <div class="page-head">
-        <div><h1>Charts</h1><p class="page-sub">New-patient collections by home ZIP code: the totals, the months, the biggest ZIPs, the map and every ZIP as a table.</p></div>
-        <div class="page-actions"><button class="btn quiet" id="rp-copy">Copy ZIP table</button></div>
+        <div><h1>Charts</h1><p class="page-sub">New-patient collections by home ZIP code (the totals, the months, the biggest ZIPs, the map and every ZIP as a table) and financing applications by lender.</p></div>
+        <div class="page-actions"><button class="btn quiet" id="ch-custom" aria-pressed="false">Customize layout</button><button class="btn quiet" id="rp-copy">Copy ZIP table</button></div>
       </div>
       <div class="row tr-controls toolbar" role="group" aria-label="Report filters (apply to the whole report)">
         <label>Office <select id="rp-office"></select></label>
         <label>From <select id="rp-from"></select></label>
         <label>To <select id="rp-to"></select></label>
       </div>
-      <div class="card">
+      <div class="ch-editbar" id="ch-editbar" hidden>
+        <p><strong>Customizing your Charts page.</strong> Drag a card by its handle (or use the arrows) to move it, switch it between
+          half and full width, or hide it. Saved in this browser only; other people keep their own layout.</p>
+        <div class="row"><button class="btn" id="ch-reset">Reset to default</button><button class="btn primary" id="ch-done">Done</button></div>
+      </div>
+      <div class="ch-cards" id="ch-cards">
+      <div class="card" data-card="summary">
         <h2 class="tr-title">Summary</h2>
         <p class="hint tr-sub" id="rp-lead"></p>
         <div class="rp-tiles" id="rp-tiles"></div>
       </div>
-      <div class="rp-grid2">
-        <div class="card">
+        <div class="card" data-card="months">
           <h2 class="tr-title">Collected per month</h2>
           <p class="hint tr-sub" id="rp-month-note"></p>
           <div class="rp-chart" id="rp-months"></div>
         </div>
-        <div class="card">
+        <div class="card" data-card="top25">
           <h2 class="tr-title">Top 25 ZIP codes by dollars collected</h2>
           <p class="hint tr-sub">All months in the range together. Hover a bar for patients, dollars per patient and the nearest office.</p>
           <div class="rp-chart" id="rp-top"></div>
         </div>
+      <div class="card" id="fl-card" data-card="lenders">
+        <div class="fl-head">
+          <div><h2 class="tr-title">Financing applications by lender</h2>
+            <p class="hint tr-sub" id="fl-sub">Which lenders patients applied to, and how many were approved. Office and months from the filters above.</p></div>
+          <div class="seg" role="group" aria-label="Lender type" id="fl-kind">
+            <button type="button" data-k="prime" aria-pressed="true">Prime</button><button type="button" data-k="subprime" aria-pressed="false">Subprime</button><button type="button" data-k="all" aria-pressed="false">Both</button>
+          </div>
+        </div>
+        <div class="rp-tiles fl-tiles" id="fl-tiles"></div>
+        <div class="table-wrap"><table class="fl-table"><thead><tr><th>Lender</th><th class="fl-barcol">Applied <span class="fl-key-ok"></span> approved</th>
+          <th class="num">Applied</th><th class="num">Approved</th><th class="num">Approval rate</th><th class="num">$ approved</th><th class="num">$ collected</th><th class="num">Funded</th></tr></thead>
+          <tbody id="fl-rows"></tbody><tfoot id="fl-foot"></tfoot></table></div>
+        <details class="fl-months"><summary>Month by month</summary><div class="table-wrap" id="fl-bymonth"></div></details>
+        <p class="hint" id="fl-note"></p>
       </div>
-      <div class="card" id="mp-section">
+      <div class="card" id="mp-section" data-card="map">
         <h2 class="tr-title" id="mp-title">New patients by home ZIP code</h2>
         <p class="hint tr-sub" id="mp-sub"></p>
         <div class="row tr-controls" role="group" aria-label="Map filters (the Office filter above applies too)">
-          <label>Month <select id="mp-month"></select></label>
           <label>Patients <select id="mp-type"><option value="">General + Ortho</option><option>General</option>
             <option>Ortho</option><option value="Unknown">General/Ortho not loaded</option></select></label>
           <label>Color by <select id="mp-metric"><option value="count">new patients</option><option value="collection">$ collected</option>
@@ -942,15 +1062,24 @@
           <label class="tr-check"><input type="checkbox" id="mp-paid"> Hide $0 patients</label>
         </div>
         <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
+        <div class="mp-time" role="group" aria-label="Move through time">
+          <button type="button" class="btn" id="mp-play" aria-label="Play through time">▶ Play</button>
+          <input type="range" id="mp-slider" min="0" max="0" value="0" step="1" aria-label="Time" aria-valuetext="Whole range">
+          <span class="mp-when" id="mp-when" aria-live="polite">Whole range</span>
+          <label>Step <select id="mp-step"><option value="month">Months</option><option value="week">Weeks</option></select></label>
+          <label>Show <select id="mp-mode"><option value="period">That period only</option><option value="running">Running total</option></select></label>
+          <button type="button" class="btn quiet" id="mp-whole" hidden>Back to whole range</button>
+        </div>
+        <p class="hint" id="mp-time-note"></p>
         <div id="mp-key" class="mp-key" aria-label="Office pin numbers"></div>
         <p class="hint" id="mp-note"></p>
       </div>
-      <div class="card">
+      <div class="card" data-card="smalls">
         <h2 class="tr-title">The top 10 ZIP codes, month by month</h2>
         <p class="hint tr-sub" id="rp-smalls-note"></p>
         <div class="rp-smalls" id="rp-smalls"></div>
       </div>
-      <div class="card">
+      <div class="card" data-card="table">
         <h2 class="tr-title">Every ZIP code</h2>
         <p class="hint tr-sub">Ranked by dollars collected. Click a heading to sort; type to search by ZIP, city or office. Click a ZIP to see it on the map.</p>
         <div class="row" style="margin-bottom:10px"><input type="search" id="rp-search" placeholder="Search ZIP, city or office" aria-label="Search ZIP codes" style="width:min(300px,70vw)"><span class="hint" id="rp-count" style="align-self:center"></span></div>
@@ -960,10 +1089,11 @@
           <th class="num" data-sort="top10">Months in top 10</th><th data-sort="nearest">Nearest office</th><th class="num" data-sort="miles">Miles</th></tr></thead>
           <tbody id="rp-rows"></tbody></table></div>
       </div>
-      <div class="card">
+      <div class="card" data-card="offices">
         <h2 class="tr-title">Where each office's dollars come from</h2>
         <p class="hint tr-sub">Each office's five biggest ZIP codes by dollars collected, and that ZIP's share of the office's new-patient collections.</p>
         <div class="rp-offices" id="rp-offices"></div>
+      </div>
       </div>
       <p class="hint rp-foot" id="rp-foot"></p>
       <div class="card" id="mp-admin" hidden style="margin-top:16px">
@@ -991,6 +1121,92 @@
     </div>
 
     <div class="tr-tip hm-tip" id="zt-tip" hidden></div>
+  </section>
+
+  <!-- What if: simulate an office's month against its goal (everyone with the password; not on view-only links) -->
+  <section id="whatif">
+    <div class="page-head">
+      <div><h1>What if</h1><p class="page-sub">Simulate an office's month: how its chance of reaching the collection goal changes with more patients applying for financing, more approvals funded, more new patients or more other collections.</p></div>
+    </div>
+      <div class="card" id="wi-card">
+        <div class="row tr-controls wi-controls">
+          <label>Office <select id="wi-office"></select></label>
+          <label>Monthly goal <input id="wi-goal" type="text" inputmode="numeric" autocomplete="off" style="width:140px"></label>
+          <button type="button" class="btn quiet" id="wi-reset">Reset to how they're doing</button>
+        </div>
+        <p class="hint tr-sub" id="wi-sub"></p>
+        <div class="wi-answer">
+          <div class="wi-answer-text">
+            <p class="wi-headline" id="wi-headline"></p>
+            <p class="wi-sentence" id="wi-sentence"></p>
+          </div>
+          <div class="wi-meter" id="wi-meter" role="img"></div>
+        </div>
+        <div class="wi-grid">
+          <div class="wi-levers">
+            <h3 class="wi-h">Change these</h3>
+            <div class="wi-try" id="wi-try" role="group" aria-label="Try a scenario"></div>
+            <div class="wi-sliders">
+              <label class="wi-slider"><span>New patients who apply for financing <b id="wi-apply-v"></b></span>
+                <span class="wi-track"><input type="range" id="wi-apply" min="5" max="90" step="1"><i class="wi-now" id="wi-apply-mark"></i></span><small id="wi-apply-now"></small></label>
+              <label class="wi-slider"><span>Approved patients who get funded <b id="wi-fund-v"></b></span>
+                <span class="wi-track"><input type="range" id="wi-fund" min="20" max="98" step="1"><i class="wi-now" id="wi-fund-mark"></i></span><small id="wi-fund-now"></small></label>
+              <label class="wi-slider"><span>New patients a month <b id="wi-np-v"></b></span>
+                <span class="wi-track"><input type="range" id="wi-np" min="10" max="300" step="1"><i class="wi-now" id="wi-np-mark"></i></span><small id="wi-np-now"></small></label>
+              <label class="wi-slider"><span>Other collections a month <b id="wi-base-v"></b></span>
+                <span class="wi-track"><input type="range" id="wi-base" min="-50000" max="100000" step="5000"><i class="wi-now" id="wi-base-mark"></i></span><small id="wi-base-now"></small></label>
+            </div>
+          </div>
+          <div class="wi-results">
+            <h3 class="wi-h">How an average month adds up</h3>
+            <div class="wi-stack" id="wi-stack" role="img"></div>
+            <div class="rp-tiles wi-tiles" id="wi-tiles"></div>
+            <h3 class="wi-h" style="margin-top:20px">How much months vary</h3>
+            <div class="wi-chart" id="wi-chart" role="img"></div>
+          </div>
+        </div>
+        <p class="wi-take" id="wi-take"></p>
+        <p class="hint" id="wi-note"></p>
+      </div>
+  </section>
+
+  <!-- Demographics (admin: only on the computer running the app) -->
+  <section id="demo">
+    <div class="page-head">
+      <div><h1>Demographics</h1><p class="page-sub">Who your new patients are, by age and estimated ethnicity, next to the people who live around each office. Shows where an office is under-reaching its neighborhood.</p></div>
+    </div>
+    <div class="row tr-controls toolbar" role="group" aria-label="Demographics filters">
+      <label>Office <select id="dm-office"></select></label>
+      <label>From <select id="dm-from"></select></label>
+      <label>To <select id="dm-to"></select></label>
+    </div>
+    <div class="card">
+      <div class="wi-answer dm-answer"><div><p class="wi-headline" id="dm-headline">Loading…</p><p class="wi-sentence" id="dm-sentence"></p></div></div>
+      <h3 class="wi-h">Families with children</h3>
+      <div class="rp-tiles dm-fam" id="dm-fam"></div>
+      <p class="hint" id="dm-fam-note" style="margin:8px 0 20px"></p>
+      <div class="wi-grid">
+        <div><h3 class="wi-h">Age at first visit</h3><div class="dm-pairs" id="dm-age" role="img"></div></div>
+        <div><h3 class="wi-h">Ethnicity (estimated)</h3><div class="dm-pairs" id="dm-eth" role="img"></div></div>
+      </div>
+      <div class="dm-keys"><span><i style="background:var(--series)"></i>New patients</span><span><i style="background:var(--series-dim)"></i>People living within <span id="dm-miles">5</span> miles of the office</span></div>
+    </div>
+    <div class="card">
+      <h2 class="tr-title" id="dm-lang-title">Languages and Asian communities around the office</h2>
+      <p class="hint tr-sub">From the Census for the people living within <span id="dm-miles2">5</span> miles. Use it to choose which languages to staff, list on the Google profile and advertise in.</p>
+      <p class="wi-take" id="dm-lang-take" style="border-top:0;padding-top:0;margin-top:4px"></p>
+      <div class="wi-grid">
+        <div><h3 class="wi-h">Languages spoken at home</h3><div class="dm-list" id="dm-lang"></div></div>
+        <div><h3 class="wi-h">Asian residents by group</h3><div class="dm-list" id="dm-asian"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="tr-title">Every office</h2>
+      <p class="hint tr-sub">Share of new patients in each group, and the gap to the people living around the office (points). Click an office to see it above.</p>
+      <div class="table-wrap"><table class="dm-table"><thead><tr><th>Office</th><th class="num">New patients</th><th class="num">Hispanic</th><th class="num">White</th>
+        <th class="num">Asian / PI</th><th class="num">Black</th><th class="num">Under 18</th><th class="num">Homes with kids</th><th class="num">55+</th><th>Most under-reached</th></tr></thead><tbody id="dm-rows"></tbody></table></div>
+    </div>
+    <p class="hint" id="dm-note"></p>
   </section>
 
   <!-- Audit (admin: only on the computer running the app) -->
@@ -1396,6 +1612,8 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.tab === "log") loadLog();
   if (b.dataset.tab === "charts") loadCharts();
   if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); loadAssistant(); }
+  if (b.dataset.tab === "whatif") loadWhatIf();
+  if (b.dataset.tab === "demo") loadDemographics();
   if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
   if (b.dataset.tab === "changes") loadChanges();
   if (b.dataset.tab === "upload") loadInbox();
@@ -3108,12 +3326,324 @@ $("sql-csv").onclick = () => {
 // Charts tab: the collections report, from the same per-ZIP data as the Maps tab (/api/maps/trends: per ZIP ×
 // month × office × General/Ortho: patients, paid patients, $ collected). ZIP totals only, nothing per patient.
 let ztData = null;
+// Charts page layout, per browser: card order, which are half width, which are hidden. {order, half, hidden} in localStorage.
+const CH_DEFAULT = {order: ["summary", "months", "top25", "lenders", "map", "smalls", "table", "offices"], half: ["months", "top25"], hidden: []};
+let chLayout = (() => { try { const v = JSON.parse(localStorage.getItem("chartLayout")); if (v && Array.isArray(v.order)) return v; } catch {} return structuredClone(CH_DEFAULT); })();
+const chCards = () => [...$("ch-cards").querySelectorAll(":scope > .card[data-card]")];
+const chName = c => c.querySelector(".tr-title")?.textContent.replace(/ ·.*$/, "").trim() || c.dataset.card;
+function chSave() { try { localStorage.setItem("chartLayout", JSON.stringify(chLayout)); } catch {} }
+function chApply(rerender = true) {
+  const box = $("ch-cards"), byId = Object.fromEntries(chCards().map(c => [c.dataset.card, c]));
+  const order = [...chLayout.order.filter(id => byId[id]), ...Object.keys(byId).filter(id => !chLayout.order.includes(id))];   // new cards go last
+  chLayout.order = order;
+  order.forEach((id, i) => {
+    const c = byId[id];
+    box.appendChild(c);
+    c.classList.toggle("ch-half", chLayout.half.includes(id));
+    c.classList.toggle("ch-hidden", chLayout.hidden.includes(id));
+    let bar = c.querySelector(":scope > .ch-bar");
+    if (!bar) { bar = document.createElement("div"); bar.className = "ch-bar"; c.prepend(bar); }
+    const hid = chLayout.hidden.includes(id), half = chLayout.half.includes(id), name = esc(chName(c));
+    bar.innerHTML = `<button type="button" class="ch-grip" data-ch="grip" title="Drag to move" aria-label="Drag ${name}">⠿</button><span class="ch-name">${name}${hid ? " (hidden)" : ""}</span>
+      <button type="button" data-ch="up" ${i === 0 ? "disabled" : ""} aria-label="Move ${name} up" title="Move up">↑</button>
+      <button type="button" data-ch="down" ${i === order.length - 1 ? "disabled" : ""} aria-label="Move ${name} down" title="Move down">↓</button>
+      <button type="button" data-ch="size" ${hid ? "disabled" : ""} title="${half ? "Make full width" : "Make half width (two side by side)"}">${half ? "Full width" : "Half width"}</button>
+      <button type="button" data-ch="hide">${hid ? "Show" : "Hide"}</button>`;
+  });
+  if (rerender) {   // charts draw to their card's width; the map needs to know its new size
+    requestAnimationFrame(() => { if (ztData && $("rp-months").clientWidth) renderReport(); renderLenders(); if (mapView) mapView.invalidateSize(); });
+  }
+}
+function chEdit(on) {
+  document.getElementById("charts").classList.toggle("ch-editing", on);
+  $("ch-editbar").hidden = !on; $("ch-custom").setAttribute("aria-pressed", on); $("ch-custom").textContent = on ? "Done customizing" : "Customize layout";
+}
+$("ch-custom").onclick = () => chEdit(!document.getElementById("charts").classList.contains("ch-editing"));
+$("ch-done").onclick = () => chEdit(false);
+$("ch-reset").onclick = () => { chLayout = structuredClone(CH_DEFAULT); chSave(); chApply(); };
+$("ch-cards").addEventListener("click", e => {
+  const b = e.target.closest(".ch-bar button[data-ch]"); if (!b || b.dataset.ch === "grip") return;
+  const id = b.closest(".card").dataset.card, o = chLayout.order, i = o.indexOf(id);
+  if (b.dataset.ch === "up" && i > 0) [o[i - 1], o[i]] = [o[i], o[i - 1]];
+  if (b.dataset.ch === "down" && i < o.length - 1) [o[i + 1], o[i]] = [o[i], o[i + 1]];
+  const flip = (list, on) => on ? [...new Set([...list, id])] : list.filter(x => x !== id);
+  if (b.dataset.ch === "size") chLayout.half = flip(chLayout.half, !chLayout.half.includes(id));
+  if (b.dataset.ch === "hide") chLayout.hidden = flip(chLayout.hidden, !chLayout.hidden.includes(id));
+  chSave(); chApply();
+  chCards().find(c => c.dataset.card === id)?.querySelector(`.ch-bar [data-ch="${b.dataset.ch}"]`)?.focus();   // keep the keyboard where it was
+});
+// Drag by the handle: the card follows the pointer through the list; the order is saved on drop.
+let chDrag = null;
+$("ch-cards").addEventListener("pointerdown", e => { const g = e.target.closest('[data-ch="grip"]'); if (g) { const c = g.closest(".card"); c.draggable = true; chDrag = c; } });
+$("ch-cards").addEventListener("dragstart", e => { if (!chDrag) return e.preventDefault(); chDrag.classList.add("ch-dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", chDrag.dataset.card); });
+$("ch-cards").addEventListener("dragover", e => {
+  if (!chDrag) return; e.preventDefault();
+  const over = e.target.closest(".ch-cards > .card"); if (!over || over === chDrag) return;
+  const r = over.getBoundingClientRect(), after = (e.clientY - r.top) / r.height > 0.5 || ((e.clientY - r.top) / r.height > 0.2 && e.clientX > r.left + r.width / 2);
+  over.parentNode.insertBefore(chDrag, after ? over.nextSibling : over);
+});
+const chEndDrag = () => { if (!chDrag) return; chDrag.classList.remove("ch-dragging"); chDrag.draggable = false; chDrag = null;
+  chLayout.order = chCards().map(c => c.dataset.card); chSave(); chApply(); };
+$("ch-cards").addEventListener("drop", e => { e.preventDefault(); chEndDrag(); });
+$("ch-cards").addEventListener("dragend", chEndDrag);
+document.addEventListener("pointerup", () => { if (chDrag && !chDrag.classList.contains("ch-dragging")) { chDrag.draggable = false; chDrag = null; } });
+chApply(false);
+// What if (everyone with the password; hidden on view-only links): a Monte Carlo of an office's monthly gross collections against its goal, from its own
+// months since the sheets started tracking financing (May 2026). Gross = other collections + financing collected, and
+// financing collected = new patients x % applying x % approved x % of approved funded x $ per funded patient. Each
+// driver varies month to month as it has for that office; the sliders move a driver's average.
+let wiData = null, wiStats = null, wiOffice = null, wiFrame = 0;
+async function loadWhatIf() {
+  if (wiData) return wiRender();
+  try { wiData = await api("/api/whatif"); }
+  catch (e) { $("wi-note").textContent = e.message; return; }
+  const offices = Object.keys(wiData.offices).sort();
+  $("wi-office").innerHTML = offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  wiPick(rpSel.office && wiData.offices[rpSel.office] ? rpSel.office : offices.includes("Dentist Of West Covina") ? "Dentist Of West Covina" : offices[0]);
+}
+const wiMean = a => a.reduce((x, y) => x + y, 0) / a.length;
+const wiSd = a => a.length < 2 ? 0 : Math.sqrt(a.reduce((x, y) => x + (y - wiMean(a)) ** 2, 0) / (a.length - 1));
+function wiPick(office) {
+  wiOffice = office; $("wi-office").value = office;
+  const o = wiData.offices[office], ms = o.months.filter(m => m.applicants > 0 && m.approved > 0 && m.funded > 0 && !m.partial && m.gross > 0);
+  const col = f => ms.map(f);
+  wiStats = ms.length < 3 ? {months: ms} : {months: ms,
+    np: [wiMean(col(m => m.np)), wiSd(col(m => m.np))], apply: [wiMean(col(m => m.applicants / m.np)), wiSd(col(m => m.applicants / m.np))],
+    approve: [wiMean(col(m => m.approved / m.applicants)), wiSd(col(m => m.approved / m.applicants))],
+    fund: [wiMean(col(m => m.funded / m.approved)), wiSd(col(m => m.funded / m.approved))],
+    per: [wiMean(col(m => m.fin / m.funded)), wiSd(col(m => m.fin / m.funded))], base: [wiMean(col(m => m.gross - m.fin)), wiSd(col(m => m.gross - m.fin))]};
+  $("wi-goal").value = o.goal ? Math.round(o.goal).toLocaleString() : "";
+  if (wiStats.np) wiTry();
+  wiReset();
+}
+function wiReset() {
+  const s = wiStats; if (!s.np) return wiRender();
+  $("wi-apply").value = Math.round(s.apply[0] * 100); $("wi-fund").value = Math.round(s.fund[0] * 100);
+  $("wi-np").min = Math.max(5, Math.round(s.np[0] * 0.4)); $("wi-np").max = Math.round(s.np[0] * 1.8); $("wi-np").value = Math.round(s.np[0]);
+  $("wi-base").value = 0;
+  wiRender();
+}
+function wiRng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function wiSim(p, n = 20000) {
+  const s = wiStats, r = wiRng(20261026), clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const g = (m, sd) => { const u = 1 - r(), v = r(); return m + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const NP = Math.max(1, g(p.np, s.np[1])), A = clamp(g(p.apply, s.apply[1] * (p.applyMoved ? 0.6 : 1)), 0.02, 0.97);
+    const OK = clamp(g(s.approve[0], s.approve[1]), 0.3, 1), FU = clamp(g(p.fund, s.fund[1] * (p.fundMoved ? 0.6 : 1)), 0.05, 0.99);
+    const PER = Math.max(500, g(s.per[0], s.per[1])), B = Math.max(0, g(s.base[0], s.base[1]) + p.base);
+    out[i] = B + NP * A * OK * FU * PER;
+  }
+  out.sort();
+  let hits = 0; for (const v of out) if (v >= p.goal) hits++;
+  return {chance: hits / n, mean: out.reduce((a, b) => a + b, 0) / n, lo: out[Math.floor(n * 0.1)], hi: out[Math.floor(n * 0.9)], draws: out};
+}
+const wiGoal = () => +String($("wi-goal").value).replace(/[^\d.]/g, "") || 0;
+function wiParams() {   // a slider left where Reset put it means "as now" exactly (not its rounded position)
+  const s = wiStats, applyMoved = Math.round(s.apply[0] * 100) !== +$("wi-apply").value, fundMoved = Math.round(s.fund[0] * 100) !== +$("wi-fund").value;
+  const npMoved = Math.round(s.np[0]) !== +$("wi-np").value;
+  return {apply: applyMoved ? $("wi-apply").value / 100 : s.apply[0], fund: fundMoved ? $("wi-fund").value / 100 : s.fund[0],
+          np: npMoved ? +$("wi-np").value : s.np[0], base: +$("wi-base").value, goal: wiGoal(), applyMoved, fundMoved};
+}
+function wiTry() {   // one-click scenarios built from the office's own months
+  const s = wiStats, best = Math.max(...s.months.map(m => m.applicants / m.np)), bestFund = Math.max(...s.months.map(m => m.funded / m.approved));
+  const items = [["Apply like their best month", {apply: best}], ["Fund 80% of approvals", {fund: Math.max(.8, s.fund[0])}],
+                 ["Both", {apply: best, fund: Math.max(.8, s.fund[0])}], ["10 more new patients", {np: s.np[0] + 10}]];
+  if (bestFund > s.fund[0] + .05 && bestFund < .8) items.splice(2, 0, [`Fund like their best month (${Math.round(bestFund * 100)}%)`, {fund: bestFund}]);
+  $("wi-try").innerHTML = `<span class="hint" style="align-self:center;margin-right:2px">Try:</span>` + items.map(([t], i) => `<button type="button" data-i="${i}">${esc(t)}</button>`).join("");
+  $("wi-try").onclick = e => { const b = e.target.closest("button[data-i]"); if (!b) return; const v = items[+b.dataset.i][1];
+    if (v.apply != null) $("wi-apply").value = Math.round(v.apply * 100); if (v.fund != null) $("wi-fund").value = Math.round(v.fund * 100);
+    if (v.np != null) $("wi-np").value = Math.round(v.np); wiRender(); };
+}
+function wiMark(id, value) {   // the "now" tick on a slider's track
+  const el = $(id), pct = (value - el.min) / (el.max - el.min);
+  $(id + "-mark").style.left = `calc(${pct * 100}% + ${8 - pct * 16}px)`;   // a range thumb's centre runs 8px in from each end
+}
+function wiRender() {
+  clearTimeout(wiFrame);   // coalesce a burst of slider moves into one redraw (a timer, so it also runs when the page isn't painting)
+  wiFrame = setTimeout(() => {
+    const s = wiStats, o = wiData.offices[wiOffice], pct = v => `${Math.round(v * 100)}%`, money0 = v => "$" + Math.round(v).toLocaleString();
+    const k = v => `$${Math.round(v / 1000).toLocaleString()}K`, inTen = c => Math.round(c * 10);
+    const hist = o.months.filter(m => m.goal && !m.partial && m.gross > 0), hit = hist.filter(m => m.gross >= m.goal).length;
+    const short = wiOffice.replace(/^Dentists? Of /, "");
+    if (!s.np) {
+      ["wi-tiles", "wi-chart", "wi-stack", "wi-meter", "wi-try"].forEach(id => $(id).innerHTML = ""); $("wi-take").textContent = ""; $("wi-sentence").textContent = "";
+      $("wi-headline").textContent = `Not enough data for ${short} yet.`;
+      $("wi-note").textContent = `${o.months.length ? "It needs 3 finished months" : "No months logged yet"} with applicants, approvals and funding on the New Patient Analysis sheet.`;
+      return;
+    }
+    const p = wiParams(), now = wiSim({...p, apply: s.apply[0], fund: s.fund[0], np: s.np[0], base: 0, applyMoved: false, fundMoved: false}), sim = wiSim(p);
+    const moved = p.applyMoved || p.fundMoved || Math.round(p.np) !== Math.round(s.np[0]) || p.base !== 0;
+    // Sliders: value, change from now, and the "now" tick.
+    const chg = (v, base, f, unit = "") => { const d = v - base, r = f(Math.abs(d)); return Math.abs(d) < 1e-9 || r === "0" + unit || r === "$0" ? "" : `<span class="d ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${r}${unit}</span>`; };
+    $("wi-apply-v").innerHTML = pct(p.apply) + chg(p.apply * 100, s.apply[0] * 100, v => String(Math.round(v)), " pts");
+    $("wi-fund-v").innerHTML = pct(p.fund) + chg(p.fund * 100, s.fund[0] * 100, v => String(Math.round(v)), " pts");
+    $("wi-np-v").innerHTML = Math.round(p.np).toLocaleString() + chg(p.np, s.np[0], v => String(Math.round(v)));
+    $("wi-base-v").innerHTML = (p.base ? (p.base > 0 ? "+" : "−") + k(Math.abs(p.base)) : "as now");
+    wiMark("wi-apply", s.apply[0] * 100); wiMark("wi-fund", s.fund[0] * 100); wiMark("wi-np", s.np[0]); wiMark("wi-base", 0);
+    $("wi-apply-now").textContent = `Now ${pct(s.apply[0])} (their months ran from ${pct(Math.min(...s.months.map(m => m.applicants / m.np)))} to ${pct(Math.max(...s.months.map(m => m.applicants / m.np)))})`;
+    $("wi-fund-now").textContent = `Now ${pct(s.fund[0])}. ${pct(s.approve[0])} of applicants get approved`;
+    $("wi-np-now").textContent = `Now ${Math.round(s.np[0])} a month`;
+    $("wi-base-now").textContent = `Insurance, cash and existing patients: now about ${k(s.base[0])} a month`;
+    // The answer, in words and on a 0–100% bar.
+    $("wi-headline").innerHTML = moved
+      ? `With these changes, ${esc(short)} would hit its ${k(p.goal)} goal in about <em>${inTen(sim.chance)} of 10 months</em>`
+      : `${esc(short)} hits its ${k(p.goal)} goal in about <em>${inTen(now.chance)} of 10 months</em>`;
+    $("wi-sentence").textContent = moved
+      ? `Today it's about ${inTen(now.chance)} of 10. An average month would go from ${k(now.mean)} to ${k(sim.mean)}.`
+      : `An average month brings in ${k(now.mean)}. Move a slider or try a scenario to see what would change it.`;
+    $("wi-meter").setAttribute("aria-label", `Chance of hitting the goal: ${pct(sim.chance)}${moved ? `, up from ${pct(now.chance)}` : ""}`);
+    $("wi-meter").innerHTML = `<div class="wi-big">${pct(sim.chance)}<small>chance in a month${moved ? ` · now ${pct(now.chance)}` : ""}</small></div>
+      <div class="wi-bar"><span class="fill" style="width:${sim.chance * 100}%"></span>${moved ? `<span class="now" style="left:${now.chance * 100}%" title="Now ${pct(now.chance)}"></span>` : ""}</div>
+      <div class="wi-scale"><span>0%</span><span>50%</span><span>100%</span></div>`;
+    // How an average month adds up: other collections + financing, now and with changes, against the goal.
+    const finNow = now.mean - s.base[0], finSim = sim.mean - (s.base[0] + p.base), otherSim = s.base[0] + p.base;
+    const top = Math.max(now.mean, sim.mean, p.goal) * 1.08, X = v => `${Math.max(0, v) / top * 100}%`;
+    const bar = (label, other, fin, total) => `<div class="row"><div class="lab">${label}<b>${k(total)}</b></div><div class="bars">
+        <span class="seg other" style="left:0;width:${X(other)}">${other / top > .14 ? k(other) : ""}</span>
+        <span class="seg fin" style="left:${X(other)};width:${X(fin)}">${fin / top > .12 ? k(fin) : ""}</span></div></div>`;
+    $("wi-stack").setAttribute("aria-label", `Average month now ${k(now.mean)}, with changes ${k(sim.mean)}, goal ${k(p.goal)}`);
+    $("wi-stack").innerHTML = `<div class="wrap" style="position:relative">${bar("Now", s.base[0], finNow, now.mean)}${moved ? bar("With changes", otherSim, finSim, sim.mean) : ""}
+      <div style="position:absolute;left:106px;right:0;top:20px;bottom:0;pointer-events:none"><span class="goal" style="left:${X(p.goal)}"></span><span class="goal-l" style="left:${X(p.goal)}">Goal ${k(p.goal)}</span></div></div>
+      <div class="keys"><span><i style="background:var(--series-dim)"></i>Insurance, cash, existing patients</span><span><i style="background:var(--series)"></i>Financing collected</span></div>`;
+    // Tiles
+    const tile = (kk, v, n) => `<div class="rp-tile"><div class="k">${kk}</div><div class="v">${v}</div><div class="s">${esc(n)}</div></div>`;
+    $("wi-tiles").innerHTML = tile("Most months land between", `${k(sim.lo)} – ${k(sim.hi)}`, "8 out of 10 months")
+      + tile("Goal hit so far", `${hit} of ${hist.length}`, hist.length ? `months since ${monthName(hist[0].m)}` : "no goals on file")
+      + tile("Each extra applicant", money0(s.approve[0] * p.fund * s.per[0]), `each funded patient ${money0(s.per[0])}`);
+    // How much months vary: the simulated months, with the goal marked.
+    const box = $("wi-chart"), W = Math.max(320, box.clientWidth || 560), H = 130, ML = 8, MR = 8, MT = 18, MB = 24, d = sim.draws;
+    const lo = d[Math.floor(d.length * 0.005)], hi = d[Math.floor(d.length * 0.995)], bins = 32, w = (hi - lo) / bins, cnt = new Array(bins).fill(0);
+    for (const v of d) { const i = Math.floor((v - lo) / w); if (i >= 0 && i < bins) cnt[i]++; }
+    const maxC = Math.max(...cnt), x = v => ML + (W - ML - MR) * (v - lo) / (hi - lo), bw = (W - ML - MR) / bins, gx = Math.min(W - MR, Math.max(ML, x(p.goal)));
+    box.setAttribute("aria-label", `Simulated months: ${pct(sim.chance)} reach the goal of ${money0(p.goal)}`);
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${cnt.map((c, i) => { const h = (H - MT - MB) * c / maxC, x0 = ML + i * bw;
+        return `<rect class="wi-bin${lo + (i + 0.5) * w >= p.goal ? " hit" : ""}" x="${x0 + 1}" y="${H - MB - h}" width="${Math.max(1, bw - 2)}" height="${h}" rx="2"/>`; }).join("")}
+      <line class="wi-goal" x1="${gx}" x2="${gx}" y1="${MT - 6}" y2="${H - MB}"/><text class="wi-goal-t" x="${gx}" y="${MT - 8}" text-anchor="${gx > W - 120 ? "end" : gx < 120 ? "start" : "middle"}">Goal ${k(p.goal)}</text>
+      <text x="${ML}" y="${H - 6}">${k(lo)}</text><text x="${W - MR}" y="${H - 6}" text-anchor="end">${k(hi)}</text>
+      <text x="${W / 2}" y="${H - 6}" text-anchor="middle">each bar: how often a month lands there · darker: goal reached</text></svg>`;
+    // What it takes
+    const need = t => { for (let a = 5; a <= 95; a++) if (wiSim({...p, apply: a / 100, applyMoved: true}, 5000).chance >= t) return a; return null; };
+    const n70 = need(0.7), n80 = need(0.8);
+    $("wi-take").innerHTML = `<b>What it takes:</b> ${n70 ? `about <b>${n70}%</b> of new patients applying to hit the goal 7 months in 10` : "applying alone can't get to 7 months in 10"}`
+      + `${n80 ? `, <b>${n80}%</b> for 8 in 10` : ""} (with ${pct(p.fund)} of approved patients funded).`;
+    $("wi-sub").textContent = `Based on ${short}'s ${s.months.length} finished months with financing tracked (${monthName(s.months[0].m)} – ${monthName(s.months[s.months.length - 1].m)}).`;
+    $("wi-note").textContent = `A simulation of 20,000 possible months, each part varying the way it has for this office. A guide, not a promise: `
+      + `few months of data; extra applicants are assumed to be approved and funded like today's; some financing replaces cash a patient would have paid anyway; the parts are treated as independent.`;
+  }, 16);
+}
+$("wi-office").onchange = () => wiPick($("wi-office").value);
+["wi-apply", "wi-fund", "wi-np", "wi-base"].forEach(id => $(id).addEventListener("input", wiRender));
+$("wi-goal").addEventListener("input", wiRender);
+$("wi-goal").addEventListener("change", () => { const g = wiGoal(); if (g) $("wi-goal").value = Math.round(g).toLocaleString(); });
+$("wi-reset").onclick = () => wiPick(wiOffice);
+// Demographics (this computer only): new patients' age at first visit and estimated ethnicity (Census surname table +
+// neighborhood, summed per office and month on the server), next to the residents within a few miles of the office.
+const DM_AGE = {"0-12": "Children 0–12", "13-17": "Teens 13–17", "18-34": "18–34", "35-54": "35–54", "55-64": "55–64", "65+": "65 and over"};
+const DM_ETH = {hispanic: "Hispanic", white: "White", asian: "Asian / Pacific Islander", black: "Black", other: "Other / mixed"};
+let dmData = null, dmSel = {office: "", from: "", to: ""};
+async function loadDemographics() {
+  try { dmData = await api(`/api/demographics${dmSel.from ? `?from=${dmSel.from}&to=${dmSel.to}` : ""}`); }
+  catch (e) { $("dm-headline").textContent = e.message; return; }
+  const ms = dmData.months, opt = (v, t) => `<option value="${v}">${esc(t)}</option>`;
+  if (!dmSel.from) { dmSel.from = ms[0] || ""; dmSel.to = ms[ms.length - 1] || ""; }
+  $("dm-from").innerHTML = ms.map(m => opt(m, monthName(m))).join(""); $("dm-to").innerHTML = ms.slice().reverse().map(m => opt(m, monthName(m))).join("");
+  const offices = Object.keys(dmData.offices).sort();
+  $("dm-office").innerHTML = opt("", "All offices") + offices.map(o => opt(o, o)).join("");
+  $("dm-office").value = dmSel.office; $("dm-from").value = dmSel.from; $("dm-to").value = dmSel.to;
+  renderDemographics();
+}
+["dm-from", "dm-to"].forEach(id => $(id).onchange = () => { dmSel[id.slice(3)] = $(id).value; if (dmSel.from > dmSel.to) [dmSel.from, dmSel.to] = [dmSel.to, dmSel.from]; loadDemographics(); });
+$("dm-office").onchange = () => { dmSel.office = $("dm-office").value; renderDemographics(); };
+function dmShares(obj, keys) { const t = keys.reduce((a, k) => a + (obj?.[k] || 0), 0); return Object.fromEntries(keys.map(k => [k, t ? (obj[k] || 0) / t : null])); }
+function renderDemographics() {
+  if (!dmData) return;
+  const offices = dmData.offices, sel = dmSel.office, bands = dmData.bands, groups = dmData.groups, pct = v => v == null ? "—" : `${Math.round(v * 100)}%`;
+  // The office picked (or all of them together).
+  let pat, area;
+  if (sel && offices[sel]) { pat = offices[sel]; area = pat.area; }
+  else {
+    pat = {n: 0, age: {}, eth: {}, with_family: 0, kids_home: 0, minor_with_adult: 0};
+    Object.values(offices).forEach(o => { pat.n += o.n; ["with_family", "kids_home", "minor_with_adult"].forEach(f => pat[f] += o[f] || 0); bands.concat("unknown").forEach(b => pat.age[b] = (pat.age[b] || 0) + o.age[b]); groups.forEach(g => pat.eth[g] = (pat.eth[g] || 0) + o.eth[g]); });
+    area = dmData.all_area;
+  }
+  const pa = dmShares(pat.age, bands), aa = dmShares(area?.age, bands), pe = dmShares(pat.eth, groups), ae = dmShares(area?.eth, groups);
+  const pairs = (keys, labels, p, a) => keys.map(k => { const gap = p[k] != null && a[k] != null ? Math.round((p[k] - a[k]) * 100) : null;
+    return `<div class="g"><div class="t"><span>${labels[k]}</span>${gap == null ? "" : `<span class="gap ${gap > 0 ? "up" : gap < 0 ? "down" : ""}">${gap > 0 ? "+" : gap < 0 ? "−" : "±"}${Math.abs(gap)} pts</span>`}</div>
+      <div class="b p"><span style="width:${(p[k] || 0) * 100}%"></span><em>${pct(p[k])}</em></div><div class="b a"><span style="width:${(a[k] || 0) * 100}%"></span><em>${pct(a[k])}</em></div></div>`; }).join("");
+  $("dm-age").innerHTML = pairs(bands, DM_AGE, pa, aa); $("dm-eth").innerHTML = pairs(groups, DM_ETH, pe, ae);
+  $("dm-age").setAttribute("aria-label", "New patients vs area by age: " + bands.map(b => `${DM_AGE[b]} ${pct(pa[b])} vs ${pct(aa[b])}`).join(", "));
+  $("dm-eth").setAttribute("aria-label", "New patients vs area by estimated ethnicity: " + groups.map(g => `${DM_ETH[g]} ${pct(pe[g])} vs ${pct(ae[g])}`).join(", "));
+  $("dm-miles").textContent = area?.miles || 5;
+  // Families with children: children come with a parent, so the audience is the household.
+  const minors = (pat.age["0-12"] || 0) + (pat.age["13-17"] || 0), homesKids = area && area.households ? area.households_kids / area.households : null;
+  const famTile = (k, v, n) => `<div class="rp-tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${esc(n)}</div></div>`;
+  $("dm-fam").innerHTML = famTile("Homes around the office with children", pct(homesKids), area ? `${(area.households_kids || 0).toLocaleString()} of ${(area.households || 0).toLocaleString()} households` : "no map pin yet")
+    + famTile("New patients from a home with children", pct(pat.n ? pat.kids_home / pat.n : null), "the child, a parent or a sibling is a patient")
+    + famTile("Share a home with another patient", pct(pat.n ? pat.with_family / pat.n : null), "same address on the office's patient list")
+    + famTile("Children and teens with a parent who's a patient", pct(minors ? pat.minor_with_adult / minors : null), `${minors.toLocaleString()} new patients under 18`);
+  $("dm-fam-note").textContent = `Children come with a parent, so the audience to reach is parents in the ${pct(homesKids)} of nearby homes with children. A "home" is everyone on the office's patient list at the same address; addresses are only compared, never kept.`;
+  // The headline: the group most under-reached (biggest share of the area that isn't showing up as new patients).
+  const who = sel ? sel.replace(/^Dentists? Of /, "") : "Across all offices, new patients";
+  const gaps = [...groups.map(g => ["eth", g, (pe[g] ?? 0) - (ae[g] ?? 0)]), ...bands.map(b => ["age", b, (pa[b] ?? 0) - (aa[b] ?? 0)])].filter(x => area);
+  const worst = gaps.sort((x, y) => x[2] - y[2])[0];
+  if (!pat.n) { $("dm-headline").textContent = "No new patients with ages and names yet."; $("dm-sentence").textContent = "Upload each office's Patient List – Address (Charts › Map setup, step 3) to fill this in."; }
+  else if (!area) { $("dm-headline").textContent = `${pat.n.toLocaleString()} new patients`; $("dm-sentence").textContent = dmData.area_error || "This office has no map pin yet (Charts › Map setup, step 2), so the area around it can't be measured."; }
+  else {
+    const kidGap = worst[0] === "age" && (worst[1] === "0-12" || worst[1] === "13-17");
+    const lab = worst[0] === "eth" ? DM_ETH[worst[1]] : {"0-12": "children aged 0–12", "13-17": "teens aged 13–17", "65+": "people 65 and over"}[worst[1]] || `people aged ${DM_AGE[worst[1]]}`, p = worst[0] === "eth" ? pe : pa, a = worst[0] === "eth" ? ae : aa;
+    $("dm-headline").innerHTML = `${sel ? `${esc(who)}'s new patients are` : esc(who) + " are"} <em>${pct(p[worst[1]])} ${esc(lab)}</em>; the people living around ${sel ? "the office" : "the offices"} are <em>${pct(a[worst[1]])}</em>.`;
+    $("dm-sentence").textContent = (kidGap
+      ? `Children come with their parents, so the audience to reach is families: ${pct(homesKids)} of homes around ${sel ? "the office" : "the offices"} have children, and ${pct(pat.n ? pat.kids_home / pat.n : null)} of new patients come from such a home. Think parents (mostly 25–44), family offers and school-year timing.`
+      : `That's the biggest gap for ${sel ? "this office" : "the group"} (${Math.abs(Math.round(worst[2] * 100))} points), so it's the audience with the most room to grow.`)
+      + ` Based on ${pat.n.toLocaleString()} new patients, ${monthName(dmSel.from)} – ${monthName(dmSel.to)}.`;
+  }
+  // Languages and Asian communities around the office (Census): which languages to staff and advertise in.
+  const L = area?.lang, A = area?.asian, ll = dmData.lang_labels || {}, al = dmData.asian_labels || {}, num = v => Math.round(v).toLocaleString();
+  $("dm-miles2").textContent = area?.miles || 5;
+  $("dm-lang-title").textContent = sel ? `Languages and Asian communities around ${sel.replace(/^Dentists? Of /, "")}` : "Languages and Asian communities around the offices";
+  if (L) {
+    const people = Object.values(L).reduce((a, v) => a + v[0], 0), langs = Object.entries(L).filter(([k, v]) => k !== "english" && v[0] > 0).sort((a, b) => b[1][0] - a[1][0]);
+    const top = Math.max(1, ...langs.map(([, v]) => v[0]));
+    $("dm-lang").innerHTML = `<p class="hint" style="margin:0 0 10px">${pct(L.english[0] / people)} speak only English at home; ${pct(1 - L.english[0] / people)} speak another language.</p>`
+      + langs.filter(([, v]) => v[0] / people >= 0.003).map(([k, v]) => `<div class="r"><div class="t"><span>${esc(ll[k] || k)}</span><b>${pct(v[0] / people)}</b></div>
+        <div class="bar"><span style="width:${v[0] / top * 100}%"></span></div><div class="s">${num(v[0])} people${v[1] ? ` · ${num(v[1])} speak English less than "very well"` : ""}</div></div>`).join("");
+    const need = langs.filter(([k, v]) => k !== "other" && k !== "other_indo" && k !== "other_asian" && v[1] > 0).sort((a, b) => b[1][1] - a[1][1]).slice(0, 3);
+    $("dm-lang-take").innerHTML = need.length ? `<b>Languages most worth having on staff${sel ? " here" : ""}:</b> ` + need.map(([k, v]) => `<b>${esc(ll[k])}</b> (${num(v[1])} neighbors speak English less than "very well")`).join(", ") + "." : "";
+  } else { $("dm-lang").innerHTML = `<p class="hint">${esc(dmData.area_error || "No map pin for this office yet.")}</p>`; $("dm-lang-take").textContent = ""; }
+  if (A) {
+    const tot = Object.values(A).reduce((a, v) => a + v, 0), rows = Object.entries(A).filter(([, v]) => v > 0).sort((a, b) => (a[0] === "other") - (b[0] === "other") || b[1] - a[1]);
+    const top = Math.max(1, ...rows.map(([, v]) => v));
+    $("dm-asian").innerHTML = `<p class="hint" style="margin:0 0 10px">${num(tot)} Asian residents${area?.eth ? `, ${pct(tot / Object.values(area.eth).reduce((a, v) => a + v, 0))} of everyone living around the office${sel ? "" : "s"}` : ""}.</p>`
+      + rows.map(([k, v]) => `<div class="r"><div class="t"><span>${esc(al[k] || k)}</span><b>${pct(v / tot)}</b></div><div class="bar"><span style="width:${v / top * 100}%"></span></div><div class="s">${num(v)} people</div></div>`).join("");
+  } else $("dm-asian").innerHTML = "";
+  // Every office
+  const rows = Object.keys(offices).sort().map(o => {
+    const x = offices[o], e = dmShares(x.eth, groups), ag = dmShares(x.age, bands), ar = x.area ? dmShares(x.area.eth, groups) : null, aag = x.area ? dmShares(x.area.age, bands) : null;
+    const cell = (v, base) => `${pct(v)}${base == null || v == null ? "" : (g => `<span class="gap ${g <= -5 ? "down" : g >= 5 ? "up" : ""}">${g > 0 ? "+" : g < 0 ? "−" : "±"}${Math.abs(g)}</span>`)(Math.round((v - base) * 100))}`;
+    const kids = ag["0-12"] + ag["13-17"], kidsA = aag ? aag["0-12"] + aag["13-17"] : null, old = ag["55-64"] + ag["65+"], oldA = aag ? aag["55-64"] + aag["65+"] : null;
+    const under = ar ? groups.map(g => [g, e[g] - ar[g]]).sort((a, b) => a[1] - b[1])[0] : null;
+    return `<tr data-office="${esc(o)}" tabindex="0" aria-selected="${o === sel}"><td>${esc(o)}</td><td class="num">${x.n.toLocaleString()}</td>`
+      + groups.slice(0, 4).map(g => `<td class="num">${cell(e[g], ar?.[g])}</td>`).join("")
+      + `<td class="num">${cell(kids, kidsA)}</td><td class="num">${cell(x.n ? x.kids_home / x.n : null, x.area && x.area.households ? x.area.households_kids / x.area.households : null)}</td><td class="num">${cell(old, oldA)}</td>`
+      + `<td>${under && under[1] < -0.03 ? `${esc(DM_ETH[under[0]])} (−${Math.abs(Math.round(under[1] * 100))} pts)` : under ? "none by more than 3 pts" : "no map pin yet"}</td></tr>`; });
+  $("dm-rows").innerHTML = rows.join("") || `<tr><td colspan="10" class="hint">No offices yet.</td></tr>`;
+  $("dm-rows").querySelectorAll("tr[data-office]").forEach(tr => tr.onclick = tr.onkeydown = e => { if (e.type === "keydown" && e.key !== "Enter") return;
+    dmSel.office = tr.dataset.office; $("dm-office").value = dmSel.office; renderDemographics(); document.querySelector("main").scrollTo({top: 0, behavior: "smooth"}); });
+  const found = Object.values(offices).reduce((a, o) => a + o.surname_found, 0), tot = Object.values(offices).reduce((a, o) => a + o.n, 0);
+  $("dm-note").textContent = `Ethnicity is an estimate, never a fact about a person: each new patient's surname is looked up in the 2010 Census surname table `
+    + `(${tot ? Math.round(found / tot * 100) : 0}% were found; the rest use its "all other names" mix) and combined with the make-up of the Census block group or ZIP they live in, `
+    + `the method the Census and federal regulators use (BISG). It is good at telling Hispanic and Asian surnames apart from the rest, weaker for Black vs White, and can't tell national origins apart. `
+    + `Only totals per office, month and age group are kept; no names, birth dates or per-patient labels. Area = Census ZIP areas whose center is within ${area?.miles || 5} miles of the office `
+    + `(American Community Survey 2019–2023); children 0–12 vs teens is split from the Census 10–14 group. Use it to choose where and how to reach people, never to treat any patient differently.`;
+}
 async function loadCharts() {
   if (!ztData) $("rp-tiles").innerHTML = skelTiles(4, "rp-tile");
+  api("/api/financing/lenders").then(d => { flData = d; renderLenders(); }).catch(e => { $("fl-note").textContent = e.message; });
   try { ztData = await api("/api/maps/trends"); }
   catch (e) { $("rp-lead").textContent = e.message; return; }
   renderReport();
-  if (!document.body.classList.contains("viewer")) loadMaps($("mp-month").value || undefined);   // the map (not on view-only links)
+  if (!document.body.classList.contains("viewer")) loadMaps();   // the map (not on view-only links)   // the map (not on view-only links), for the report's months
 }
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // Charts tab, view 1: the collections report (the same report as the shared ZIP Collections Report page), from the
@@ -3121,7 +3651,7 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 let rpSel = {office: "", from: "", to: ""}, rpSort = {key: "rank", dir: 1}, rpQuery = "", rpRows = [];
 try { Object.assign(rpSel, JSON.parse(localStorage.getItem("zipReportSel")) || {}); } catch {}
 const saveRpSel = () => { try { localStorage.setItem("zipReportSel", JSON.stringify(rpSel)); } catch {} };
-["rp-office", "rp-from", "rp-to"].forEach(id => $(id).onchange = () => { rpSel[id.slice(3)] = $(id).value; saveRpSel(); renderReport(); });
+["rp-office", "rp-from", "rp-to"].forEach(id => $(id).onchange = () => { rpSel[id.slice(3)] = $(id).value; saveRpSel(); renderReport(); renderLenders(); });
 $("rp-search").oninput = () => { rpQuery = $("rp-search").value.trim().toLowerCase(); renderReportTable(); };
 $("rp-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
   const k = th.dataset.sort; if (rpSort.key === k) rpSort.dir = -rpSort.dir; else rpSort = {key: k, dir: ["zip", "city", "nearest", "rank"].includes(k) ? 1 : -1}; renderReportTable(); };
@@ -3130,6 +3660,53 @@ const rpCompact = v => "$" + new Intl.NumberFormat("en", {notation: "compact", m
 const rpTip = (el, html) => { const tip = $("zt-tip"); el.onmouseenter = el.onfocus = () => { tip.innerHTML = html(); const r = el.getBoundingClientRect(); tip.hidden = false;
     tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - tip.offsetWidth - 12)) + "px"; tip.style.top = (r.bottom + 6 + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 6 : r.bottom + 6) + "px"; };
   el.onmouseleave = el.onblur = () => tip.hidden = true; };
+// Financing applications by lender (from the New Patient Analysis sheets): applied, approved and dollars per lender
+// for the report's office and months; Prime / Subprime / Both.
+let flData = null, flKind = "prime";
+$("fl-kind").onclick = e => { const b = e.target.closest("button[data-k]"); if (!b) return; flKind = b.dataset.k;
+  $("fl-kind").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderLenders(); };
+function renderLenders() {
+  if (!flData) return;
+  const from = rpSel.from || flData.months[0], to = rpSel.to || flData.months[flData.months.length - 1];
+  const rows = flData.rows.filter(r => r.month >= from && r.month <= to && (!rpSel.office || r.office === rpSel.office) && (flKind === "all" || r.kind === flKind));
+  const byLender = {};
+  rows.forEach(r => { const k = flKind === "all" ? `${r.lender}|${r.kind}` : r.lender;
+    const t = byLender[k] = byLender[k] || {lender: r.lender, kind: r.kind, apps: 0, approved: 0, approved_amount: 0, collected_amount: 0, funded: 0};
+    ["apps", "approved", "approved_amount", "collected_amount", "funded"].forEach(f => t[f] += r[f]); });
+  const list = Object.values(byLender).sort((a, b) => b.apps - a.apps || b.approved - a.approved || b.collected_amount - a.collected_amount);
+  const tot = list.reduce((a, t) => { ["apps", "approved", "approved_amount", "collected_amount", "funded"].forEach(f => a[f] += t[f]); return a; },
+                          {apps: 0, approved: 0, approved_amount: 0, collected_amount: 0, funded: 0});
+  const pct = (a, b) => b ? `${Math.round(a / b * 100)}%` : "—";
+  const range = from === to ? monthName(from) : `${monthName(from)} – ${monthName(to)}`;
+  const who = rpSel.office ? (flData.short[rpSel.office] || rpSel.office) : "all offices";
+  const kindName = {prime: "prime", subprime: "subprime", all: "prime and subprime"}[flKind];
+  $("fl-sub").textContent = `${range} · ${who}. Which lenders patients applied to, and how many were approved (from the offices' New Patient Analysis sheets).`;
+  const top = list[0];
+  $("fl-tiles").innerHTML = [
+    [`${kindName[0].toUpperCase() + kindName.slice(1)} applications`, tot.apps.toLocaleString(), ""],
+    ["Approved", tot.approved.toLocaleString(), `${pct(tot.approved, tot.apps)} of applications`],
+    ["Most applied to", top ? esc(top.lender) : "—", top ? `${top.apps.toLocaleString()} applications, ${pct(top.approved, top.apps)} approved` : ""],
+    ["$ collected", rpMoney(tot.collected_amount), `${tot.funded.toLocaleString()} patients funded`]]
+    .map(([k, v, h]) => `<div class="rp-tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${esc(h)}</div></div>`).join("");
+  const max = Math.max(1, ...list.map(t => t.apps));
+  $("fl-rows").innerHTML = list.map(t => `<tr><td>${esc(t.lender)}${flKind === "all" ? `<span class="fl-kind">${t.kind}</span>` : ""}</td>
+    <td class="fl-barcol"><div class="fl-bar" style="width:${Math.max(2, t.apps / max * 100)}%" title="${t.apps} applied, ${t.approved} approved"><i style="width:${t.apps ? Math.min(100, t.approved / t.apps * 100) : 0}%"></i></div></td>
+    <td class="num">${t.apps.toLocaleString()}</td><td class="num">${t.approved.toLocaleString()}</td><td class="num">${pct(t.approved, t.apps)}</td>
+    <td class="num">${rpMoney(t.approved_amount)}</td><td class="num">${rpMoney(t.collected_amount)}</td><td class="num">${t.funded.toLocaleString()}</td></tr>`).join("")
+    || `<tr><td colspan="8" class="hint">No ${kindName} applications in these months${rpSel.office ? " for this office" : ""}.</td></tr>`;
+  $("fl-foot").innerHTML = list.length ? `<tr><td>Total</td><td></td><td class="num">${tot.apps.toLocaleString()}</td><td class="num">${tot.approved.toLocaleString()}</td>
+    <td class="num">${pct(tot.approved, tot.apps)}</td><td class="num">${rpMoney(tot.approved_amount)}</td><td class="num">${rpMoney(tot.collected_amount)}</td><td class="num">${tot.funded.toLocaleString()}</td></tr>` : "";
+  // Month by month: applied / approved per lender per month.
+  const months = [...new Set(rows.map(r => r.month))].sort();
+  const cell = {}; rows.forEach(r => { const k = (flKind === "all" ? `${r.lender}|${r.kind}` : r.lender) + "@" + r.month;
+    const c = cell[k] = cell[k] || [0, 0]; c[0] += r.apps; c[1] += r.approved; });
+  $("fl-bymonth").innerHTML = months.length > 0 ? `<table><thead><tr><th>Lender</th>${months.map(m => `<th class="num">${MONTH_ABBR[+m.slice(5) - 1]} ${m.slice(2, 4)}</th>`).join("")}</tr></thead><tbody>`
+    + list.map(t => { const k = flKind === "all" ? `${t.lender}|${t.kind}` : t.lender;
+        return `<tr><td>${esc(t.lender)}${flKind === "all" ? `<span class="fl-kind">${t.kind}</span>` : ""}</td>${months.map(m => { const c = cell[k + "@" + m];
+          return `<td class="num" title="${c ? `${c[0]} applied, ${c[1]} approved` : ""}">${c ? `${c[0]} <span class="hint">/ ${c[1]}</span>` : "—"}</td>`; }).join("")}</tr>`; }).join("")
+    + `</tbody></table><p class="hint">Each cell: applied / approved.</p>` : "";
+  $("fl-note").textContent = `An application is a lender the patient was run with ("Ran: Yes" for prime, a name under "Subprime Co. Ran"). Approved: the lender shows an approved or collected amount (prime), or is named under "Subprime Co. Approved". The totals match the Log's # apps ran and # apps approved.`;
+}
 function renderReport() {
   if (!ztData) return;
   const all = ztData.months, zShort = o => ztData.short[o] || o, city = z => ztData.where[z] || "";
@@ -3224,7 +3801,7 @@ function renderReport() {
     + (partials.length ? `${partials.map(r => monthName(r.m)).join(", ")} is loaded only part-way, so its figures are low. ` : "") + "One patient with a large payment can lift a small ZIP: a ZIP with one or two patients is a case, not a pattern.";
   bindZipLinks();
   // The map follows the report: its month stays inside the range, and the Office filter applies to it too.
-  if (mapData && mapView) { if (mapData.month && (mapData.month < rpSel.from || mapData.month > rpSel.to)) loadMaps(rpSel.to); else renderMap(true); }
+  if (mapData && mapView) { if (mapData.from !== rpSel.from || mapData.to !== rpSel.to) mapRangeChanged(); else renderMap(true); }
   $("rp-copy").onclick = e => copyGrid([["#", "ZIP", "City", "New patients", "Collected", "Per patient", "Share %", "Months in top 10", "Nearest office", "Miles"],
     ...ranked.map(z => [z.rank, z.zip, z.city, z.n, z.total.toFixed(2), z.per.toFixed(2), z.share.toFixed(2), z.top10, z.nearest, z.miles == null ? "" : z.miles.toFixed(1)])], "ZIP collections", e.currentTarget);
 }
@@ -3248,8 +3825,8 @@ function renderReportTable() {
 function bindZipLinks() {
   document.querySelectorAll("#charts .zt-zip").forEach(a => a.onclick = e => {
     e.preventDefault();
-    const z = a.dataset.zip, m = a.dataset.month || ztData.months.slice().reverse().find(mm => ztData.rows.some(r => r.zip === z && r.month === mm));
-    mapFocusZip = z; $("mp-section").scrollIntoView({block: "start", behavior: "smooth"}); loadMaps(m);
+    const z = a.dataset.zip;
+    mapFocusZip = z; $("mp-section").scrollIntoView({block: "start", behavior: "smooth"}); loadMaps();
   });
 }
 
@@ -3683,6 +4260,127 @@ function assignOfficeColors() {
 // Five classes drawn from the data itself (each shade covers about a fifth of the ZIPs), the top one starting at the
 // 95th percentile so a single hotspot can't wash out the rest; whole numbers for counts. Fewer classes when values
 // repeat (an office with twenty 1-patient ZIPs gets 1 | 2 | 6, not five shades of the same number).
+// Moving through time: a slider (and Play) over the Charts From–To months, by month (every office, from the monthly
+// listings) or by week (each patient's first visit from the uploaded New Patients Lists). "That period only" shows one
+// month or week; "Running total" adds up from the start. The colors keep one scale for the whole run, so a change on
+// screen is a change in patients, not a rescale.
+let mapTime = null, mapTimer = null;
+const weekOf = d => { const t = new Date(d + "T12:00:00"); t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t.toISOString().slice(0, 10); };
+const timeKey = (p, step) => step === "month" ? p.m : p.fv ? weekOf(p.fv) : null;
+function timeKeys(step) {
+  if (!mapData?.from) return [];
+  if (step === "month") return (mapData.months || []).filter(m => m >= mapData.from && m <= mapData.to).sort();
+  const end = new Date(+mapData.to.slice(0, 4), +mapData.to.slice(5, 7), 0), today = new Date();
+  const last = (end < today ? end : today).toISOString().slice(0, 10), out = [];
+  for (let w = weekOf(mapData.from + "-01"); w <= last; ) { out.push(w); const t = new Date(w + "T12:00:00"); t.setDate(t.getDate() + 7); w = t.toISOString().slice(0, 10); }
+  return out;
+}
+function inTimeWindow(p) {
+  const k = timeKey(p, mapTime.step), cur = mapTime.keys[mapTime.idx];
+  return k != null && (mapTime.mode === "running" ? k <= cur : k === cur);
+}
+const timeLabel = (k, step) => step === "month" ? monthName(k)
+  : `Week of ${new Date(k + "T12:00:00").toLocaleDateString(undefined, {month: "short", day: "numeric", year: "numeric"})}`;
+function timeScale(metric) {   // one scale for the whole run: a busy ZIP-period (95th percentile), × periods when adding up
+  if (metric === "office" || !mapTime) return null;
+  if (mapTime.scale?.metric === metric && mapTime.scale.sig === timeSig()) return mapTime.scale;
+  const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked, per = {};
+  mapData.zips.forEach(z => z.patients.forEach(p => {
+    if ((office && p.office !== office) || (type && p.type !== type) || (paidOnly && !(p.collection > 0))) return;
+    const k = timeKey(p, mapTime.step); if (!k) return;
+    const c = per[`${z.zip}|${k}`] = per[`${z.zip}|${k}`] || {pop: z.pop, n: 0, total: 0}; c.n++; c.total += p.collection;
+  }));
+  const vals = Object.values(per).map(c => metric === "collection" ? c.total : metric === "per10k" ? (c.pop ? c.n / c.pop * 10000 : null) : c.n)
+    .filter(v => v != null && v > 0).sort((a, b) => a - b);
+  if (!vals.length) return null;
+  const busy = vals[Math.min(vals.length - 1, Math.floor(vals.length * 0.95))], n = mapTime.keys.length;
+  const dark = mapTime.mode === "running" ? busy * n : busy;
+  let steps = [dark / 8, dark / 4, dark / 2, dark];
+  if (metric === "count") steps = steps.map(v => Math.max(1, Math.round(v)));
+  steps = [...new Set(steps)];
+  const unit = mapTime.step === "month" ? "month" : "week";
+  mapTime.scale = {metric, sig: timeSig(), breaks: [...steps, Infinity], dark: steps[steps.length - 1],
+    note: `One color scale for the whole run: the darkest shade is more than ${fmtMeasure(steps[steps.length - 1], metric)}`
+      + (mapTime.mode === "running" ? ` (a busy ${unit}, ${fmtMeasure(busy, metric)}, × ${n} ${unit}s)` : ` (a busy ${unit})`) + "; each lighter shade is half the one above."};
+  return mapTime.scale;
+}
+const timeSig = () => [mapTime?.step, mapTime?.mode, rpSel.office, $("mp-type").value, $("mp-paid").checked, mapData?.from, mapData?.to].join("|");
+function setTimeUi() {
+  const keys = timeKeys($("mp-step").value), on = !!mapTime;
+  $("mp-slider").max = Math.max(0, keys.length - 1);
+  if (on) $("mp-slider").value = mapTime.idx;
+  const label = on ? timeLabel(mapTime.keys[mapTime.idx], mapTime.step) + (mapTime.mode === "running" ? ` (since ${timeLabel(mapTime.keys[0], mapTime.step).replace("Week of ", "")})` : "") : "Whole range";
+  $("mp-when").textContent = label; $("mp-slider").setAttribute("aria-valuetext", label);
+  $("mp-whole").hidden = !on;
+  $("mp-play").textContent = mapTimer ? "❚❚ Pause" : "▶ Play"; $("mp-play").setAttribute("aria-label", mapTimer ? "Pause" : "Play through time");
+  let note = "";
+  if ($("mp-step").value === "week" && mapData) {
+    const missing = {}; mapData.zips.forEach(z => z.patients.forEach(p => { if (!p.fv) missing[p.office] = (missing[p.office] || 0) + 1; }));
+    const big = Object.entries(missing).filter(([, n]) => n >= 50).map(([o]) => shortName(o));
+    const n = Object.values(missing).reduce((a, b) => a + b, 0);
+    if (n) note = `Weeks use each patient's first visit from the uploaded New Patients Lists; ${n.toLocaleString()} patient(s) have none and aren't shown by week`
+      + (big.length ? ` (mostly ${big.join(", ")}: upload their New Patients List)` : "") + ".";
+  }
+  $("mp-time-note").textContent = note;
+}
+function startTime(idx) {
+  const step = $("mp-step").value, keys = timeKeys(step);
+  if (!keys.length) return false;
+  mapTime = {step, mode: $("mp-mode").value, keys, idx: Math.max(0, Math.min(keys.length - 1, idx)), scale: null};
+  return true;
+}
+function showTime() { setTimeUi(); renderMap(false); }
+function stopPlay() { clearInterval(mapTimer); mapTimer = null; setTimeUi(); }
+function endTime() { stopPlay(); mapTime = null; setTimeUi(); renderMap(false); }
+$("mp-slider").addEventListener("input", () => {
+  const at = +$("mp-slider").value;   // read first: stopping playback redraws the slider
+  stopPlay(); if (!mapTime && !startTime(at)) return; mapTime.idx = Math.min(at, mapTime.keys.length - 1); showTime(); });
+$("mp-play").onclick = () => {
+  if (mapTimer) return stopPlay();
+  if (!mapTime || mapTime.idx >= mapTime.keys.length - 1) { if (!startTime(0)) return; }
+  showTime();
+  mapTimer = setInterval(() => {
+    if (mapTime.idx >= mapTime.keys.length - 1) return stopPlay();
+    mapTime.idx++; showTime();
+  }, mapTime.step === "month" ? 1100 : 500);
+  setTimeUi();
+};
+["mp-step", "mp-mode"].forEach(id => $(id).addEventListener("change", () => {
+  if (!mapTime) return setTimeUi();
+  const cur = mapTime.keys[mapTime.idx], playing = !!mapTimer; stopPlay();
+  // keep roughly the same moment: the month of the current week, or the first week of the current month
+  const keys = timeKeys($("mp-step").value), at = Math.max(0, keys.findIndex(k => k >= (cur.length === 7 ? cur + "-01" : cur.slice(0, 7))));
+  startTime(id === "mp-step" ? at : mapTime.idx); showTime();
+  if (playing) $("mp-play").click();
+}));
+$("mp-whole").onclick = endTime;
+// Over several months the color steps come from single months, multiplied by the number of months: every ZIP's
+// figure in each month of the range (after the office / patient / $0 filters, from the Charts data) gives a typical
+// month's steps, so a long range isn't all dark red just because the numbers add up. One month: straight from the data.
+function mapScale(metric) {
+  if (!ztData || !mapData?.from || metric === "office") return null;
+  const months = ztData.months.filter(m => m >= mapData.from && m <= mapData.to);
+  if (months.length < 2) return null;
+  const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked, inRange = new Set(months);
+  const per = {};   // "zip|month" -> that ZIP's patients and dollars that month
+  ztData.rows.forEach(r => {
+    if (!inRange.has(r.month) || (office && r.office !== office) || (type && r.type !== type)) return;
+    const c = per[`${r.zip}|${r.month}`] = per[`${r.zip}|${r.month}`] || {zip: r.zip, n: 0, total: 0};
+    c.n += paidOnly ? r.n_paid : r.n; c.total += r.total;
+  });
+  const pop = Object.fromEntries(mapData.zips.map(z => [z.zip, z.pop]));
+  const vals = Object.values(per).map(c => metric === "collection" ? c.total : metric === "per10k" ? (pop[c.zip] ? c.n / pop[c.zip] * 10000 : null) : c.n)
+    .filter(v => v != null && v > 0).sort((a, b) => a - b);
+  const one = classBreaks(vals, metric === "count");
+  if (!one.length) return null;
+  // The darkest shade starts above a busy month (the 95th percentile of ZIP-months) times the months shown; each
+  // lighter shade halves it, so there are always five shades: e.g. 2 months: ≤5, 6–11, 12–22, 23–44, 45+.
+  const k = months.length, busy = one[one.length - 1], dark = busy * k;
+  let steps = [dark / 8, dark / 4, dark / 2, dark];
+  if (metric === "count") steps = steps.map(v => Math.max(1, Math.round(v)));
+  steps = [...new Set(steps)];
+  return {months: k, perMonth: busy, dark: steps[steps.length - 1], breaks: [...steps, Infinity]};
+}
 function classBreaks(vals, integer) {
   if (!vals.length) return [];
   const q = k => vals[Math.min(vals.length - 1, Math.floor(vals.length * k))];
@@ -3786,25 +4484,31 @@ $("mp-find").addEventListener("change", () => {
   }
   $("mp-find").blur();
 });
-async function loadMaps(month) {
+// The map shows the Charts page's From–To months (like every card there); a neighborhood box that's open is reopened
+// for the new months.
+function mapRangeChanged() {
+  const z = nbZip; closeNeighborhoods();
+  loadMaps().then(() => { if (z) setTimeout(() => openNeighborhoods(z), 400); });   // after the map's own fit
+}
+async function loadMaps() {
   try {
     await loadLeaflet();
-    let [data, shapes] = await Promise.all([api("/api/maps" + (month ? `?month=${month}` : "")),
+    const range = rpSel.from && rpSel.to ? `?from=${rpSel.from}&to=${rpSel.to}` : "";
+    let [data, shapes] = await Promise.all([api("/api/maps" + range),
                                             mapShapes ? Promise.resolve(mapShapes) : api("/api/maps/shapes").catch(() => null)]);
     const valid = g => g && g.type === "FeatureCollection" && Array.isArray(g.features);
     if (valid(shapes) && shapes.features.length !== (data.shapes_data || 0))   // boundaries were downloaded (or added) since this page loaded them
       shapes = await api("/api/maps/shapes").catch(() => shapes);
+    if (mapData && (mapData.from !== data.from || mapData.to !== data.to)) { clearInterval(mapTimer); mapTimer = null; mapTime = null; }
     mapData = data;
     mapShapes = valid(shapes) ? shapes : null;   // anything else: no areas yet
     assignOfficeColors();
     mapData.no_shape = mapData.no_shape || []; mapData.missing = mapData.missing || {}; mapData.types_loaded = mapData.types_loaded || [];
   } catch (e) { $("mp-note").textContent = e.message; return; }
-  $("mp-month").innerHTML = mapData.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No months yet</option>`;
   $("mp-type").closest("label").hidden = !mapData.types_loaded.length;   // General / Ortho only once a patient list is loaded
   if (!mapData.types_loaded.length) $("mp-type").value = "";
   const per10k = $("mp-metric").querySelector('[value="per10k"]'); per10k.hidden = per10k.disabled = !mapData.pop_data;
   if (!mapData.pop_data && $("mp-metric").value === "per10k") $("mp-metric").value = "count";
-  $("mp-month").value = mapData.month || "";
   if (!mapView) {
     // Zoom runs from "the whole office area fits" (set below, once the area is known) to neighborhood level; panning
     // can't leave the area, so there's never a screen of empty gray.
@@ -3837,10 +4541,10 @@ async function loadMaps(month) {
     mapView.setMaxBounds(mapRegion.pad(0.03));
     mapView.setMinZoom(Math.max(5, Math.min(10, mapView.getBoundsZoom(mapRegion, false))));
   } else { mapView.setMaxBounds(null); mapView.setMinZoom(3); }
-  const monthChanged = mapData.month !== mapMonthShown;
-  mapMonthShown = mapData.month;
+  const rangeKey = `${mapData.from}|${mapData.to}`, monthChanged = rangeKey !== mapMonthShown;
+  mapMonthShown = rangeKey;
   renderMap(monthChanged);
-  fillMapFinder();
+  fillMapFinder(); setTimeUi();
   if (mapFocusZip) {   // sent here from the Charts tab: zoom to that ZIP
     const z = mapData.zips.find(x => x.zip === mapFocusZip); mapFocusZip = null;
     if (z && !(mapRegion && !mapRegion.contains([z.lat, z.lon]))) mapView.setView([z.lat, z.lon], 12);
@@ -3848,12 +4552,12 @@ async function loadMaps(month) {
   loadMapAdmin();
 }
 ["mp-type", "mp-metric", "mp-paid"].forEach(id => $(id).onchange = () => renderMap(false));
-$("mp-month").onchange = () => { const z = nbZip; closeNeighborhoods(); loadMaps($("mp-month").value).then(() => { if (z) setTimeout(() => openNeighborhoods(z), 400); }); };   // after the map's own fit
 function mapZips() {   // the ZIPs after the filters, each with its matching patients and its measures
   const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked;   // office: the report's filter
   const pins = mapData.pins.filter(p => !office || p.office === office);   // the same offices the rings are drawn for
   return mapData.zips.map(z => {
-    const ps = z.patients.filter(p => (!office || p.office === office) && (!type || p.type === type) && (!paidOnly || p.collection > 0));
+    const ps = z.patients.filter(p => (!office || p.office === office) && (!type || p.type === type) && (!paidOnly || p.collection > 0)
+                                      && (!mapTime || inTimeWindow(p)));
     const per = {}; ps.forEach(p => per[p.office] = (per[p.office] || 0) + 1);
     const top = Object.entries(per).sort((a, b) => b[1] - a[1])[0];
     let nearest = null;
@@ -3898,7 +4602,7 @@ const incomeColor = v => v == null ? "#e5e7eb" : INCOME_BANDS.find(b => v < b[0]
 let nbZip = null, nbData = null, nbLayers = [], nbBox = null;
 async function openNeighborhoods(zip) {
   nbZip = zip; nbData = null; drawNeighborhoods();
-  try { nbData = await api(`/api/maps/blocks?zip=${zip}&month=${$("mp-month").value || ""}`); }
+  try { nbData = await api(`/api/maps/blocks?zip=${zip}&from=${mapData?.from || ""}&to=${mapData?.to || ""}`); }
   catch (e) { nbData = {error: e.message}; }
   if (nbZip === zip) drawNeighborhoods(true);
 }
@@ -3939,7 +4643,7 @@ function drawNeighborhoods(fit) {
     onEachFeature: (f, l) => {
       const inc = f.properties.income, c = per[f.properties.geoid];
       l.bindTooltip(`<b>${inc != null ? "Median household income $" + inc.toLocaleString() : nbData.census_key ? "Income not published for this block group" : "Income: add a Census key in Map setup"}</b><br>`
-        + (c ? `${c.n} new patient${c.n > 1 ? "s" : ""} · $${money(c.total)} collected` : "No new patients here this month"), {sticky: true, direction: "top"});
+        + (c ? `${c.n} new patient${c.n > 1 ? "s" : ""} · $${money(c.total)} collected` : "No new patients here in these months"), {sticky: true, direction: "top"});
       l.on("mouseover", () => l.setStyle({weight: 2.5})); l.on("mouseout", () => l.setStyle({weight: 0.8}));
     }}).addTo(mapView);
   nbLayers.push(layer);
@@ -3970,7 +4674,8 @@ function renderMap(fit) {
   const pins = mapData.pins.filter(p => !officeSel || p.office === officeSel);
   // Color classes from the data (see classBreaks); each class gets a shade of the ramp, spread out when there are fewer than 5.
   const vals = zips.map(z => measure(z, metric)).filter(v => v != null).sort((a, b) => a - b);
-  const breaks = classBreaks(vals, metric === "count");
+  const scale = mapTime ? timeScale(metric) : mapScale(metric);
+  const breaks = scale ? scale.breaks : classBreaks(vals, metric === "count");
   const classColor = i => breaks.length < 2 ? RAMP[2] : RAMP[Math.round(i * (RAMP.length - 1) / (breaks.length - 1))];
   const classOf = v => { const i = breaks.findIndex(b => v <= b); return i < 0 ? breaks.length - 1 : i; };
   const shade = v => classColor(classOf(v));
@@ -4031,10 +4736,13 @@ function renderMap(fit) {
   // Title, subtitle, legend, notes
   const md = d => d.slice(5).replace("-", "/");
   const thru = mapData.thru?.max ? ` (through ${mapData.thru.min === mapData.thru.max ? md(mapData.thru.max) : `${md(mapData.thru.min)}–${md(mapData.thru.max)}, by office`})` : "";
-  $("mp-title").textContent = `New patients by home ZIP code · ${mapData.month ? monthName(mapData.month) + thru : "no data yet"}`;
+  const span = !mapData.from ? "" : mapData.from === mapData.to ? monthName(mapData.from)
+    : `${monthName(mapData.from).split(" ")[0]}${mapData.from.slice(0, 4) !== mapData.to.slice(0, 4) ? " " + mapData.from.slice(0, 4) : ""} – ${monthName(mapData.to)}`;
+  $("mp-title").textContent = `New patients by home ZIP code · ${mapData.from ? span + thru : "no data yet"}`;
   const passes = zips.reduce((a, z) => a + (z.passes ? z.n : 0), 0);
-  $("mp-sub").textContent = mapData.month
+  $("mp-sub").textContent = mapData.from
     ? `n = ${total} new patients from ${zips.length} ZIP codes · $${money(totalAmt)} collected`
+      + (mapData.from !== mapData.to ? " (each patient counted once; pick the same month in From and To above for one month)" : "")
       + (passes && !officeSel ? ` · ${passes} visit an office that isn't their nearest` : "") + "."
     : "No data yet: upload the month's Referral Production Listing (Excel, grouped by Zip Code) on the Upload tab.";
   const measureName = {count: "new patients", collection: "$ collected", per10k: "new patients per 10k residents", office: "office most of them visit"}[metric];
@@ -4048,17 +4756,21 @@ function renderMap(fit) {
     // One row per class, labelled with the range it actually covers ("1", "2–3", "7+").
     const integer = metric === "count", top = vals[vals.length - 1];
     const label = i => { const lo = i ? (integer ? breaks[i - 1] + 1 : breaks[i - 1]) : vals[0], hi = breaks[i], last = i === breaks.length - 1;
+      if (scale && last) return integer ? `${lo}+` : `over ${fmtMeasure(lo, metric)}`;
+      if (scale && i === 0) return integer ? (hi <= 1 ? "1" : `1–${hi}`) : `up to ${fmtMeasure(hi, metric)}`;
       if (integer) return last && top > hi ? `${lo}+` : lo === hi ? `${lo}` : `${lo}–${hi}`;
       if (i === 0) return hi === vals[0] ? fmtMeasure(hi, metric) : `up to ${fmtMeasure(hi, metric)}`;   // e.g. "$0" when the lowest class is one value
       return last && top > hi ? `over ${fmtMeasure(lo, metric)}` : `${fmtMeasure(lo, metric)} – ${fmtMeasure(hi, metric)}`; };
     ramp = `<div class="key">${breaks.map((b, i) => `<div><span class="sw" style="background:${classColor(i)}"></span>${label(i)}</div>`).join("")}`
-      + (metric === "per10k" && zips.some(z => z.per10k == null) ? `<div><span class="sw" style="background:${NO_FIGURE}"></span>no population figure</div>` : "") + `</div>`;
+      + (metric === "per10k" && zips.some(z => z.per10k == null) ? `<div><span class="sw" style="background:${NO_FIGURE}"></span>no population figure</div>` : "") + `</div>`
+      + (scale?.note ? `<div class="note">${scale.note}</div>`
+         : scale ? `<div class="note">Over ${scale.months} months the steps grow with the months: the darkest shade is more than ${fmtMeasure(scale.dark, metric)} (a busy month, ${fmtMeasure(scale.perMonth, metric)}, × ${scale.months}); each lighter shade is half the one above.</div>` : "");
   }
   const ringNote = "";
   // The legend folds (tap "Legend"); it starts folded on a phone so it doesn't cover the map.
   const legendOpen = lg.querySelector("details")?.open ?? !window.matchMedia("(max-width: 640px)").matches;
   lg.style.maxHeight = Math.round(mapView.getSize().y * (window.matchMedia("(max-width: 640px)").matches ? 0.45 : 0.6)) + "px";   // scrolls past that
-  lg.innerHTML = `<details${legendOpen ? " open" : ""}><summary>Legend</summary><b>Color: ${esc(measureName)}</b>${ramp}${ringNote}<div class="note">Areas are ZIP codes (US Census boundaries), not patient addresses. Light gray areas: no new patients this month. Classes are relative to this view.</div></details>`;
+  lg.innerHTML = `<details${legendOpen ? " open" : ""}><summary>Legend</summary><b>Color: ${esc(measureName)}</b>${ramp}${ringNote}<div class="note">Areas are ZIP codes (US Census boundaries), not patient addresses. Light gray areas: no new patients in these months. ${scale ? "Color steps scale with the number of months." : "Classes are relative to this view."}</div></details>`;
   // The numbered office key sits under the map, where it never covers data.
   $("mp-key").innerHTML = mapData.pins.map(p => `<span><em>${pinNumber(p.office)}</em>${esc(shortName(p.office))}</span>`).join("");
   const notes = [];
@@ -4187,7 +4899,7 @@ async function loadMapAdmin() {
     const address = q("addr"), body = {office: mapData.offices[i], address};
     if (!address) { body.lat = q("lat"); body.lon = q("lon"); }
     try { const r = await api("/api/maps/office-location", JSON.stringify(body), {"Content-Type": "application/json"});
-          msg($("mp-msg"), `${r.office}: pinned at ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}.`, true); loadMaps($("mp-month").value); }
+          msg($("mp-msg"), `${r.office}: pinned at ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}.`, true); loadMaps(); }
     catch (e) { msg($("mp-msg"), e.message, false); }
   });
 }
@@ -4211,7 +4923,7 @@ $("mp-censussave").onclick = async () => {
 $("mp-shapedl").onclick = async () => {
   msg($("mp-msg"), "Downloading ZIP boundaries from the US Census… (up to a minute)", true);
   try { const r = await api("/api/maps/shapes-download", "{}", {"Content-Type": "application/json"});
-        mapShapes = null; msg($("mp-msg"), `Saved ${r.zips.toLocaleString()} ZIP areas.`, true); loadMaps($("mp-month").value); }
+        mapShapes = null; msg($("mp-msg"), `Saved ${r.zips.toLocaleString()} ZIP areas.`, true); loadMaps(); }
   catch (e) { msg($("mp-msg"), e.message, false); }
 };
 $("mp-typefile").onchange = async e => {   // one or many offices' patient lists, read one after another
@@ -4228,7 +4940,7 @@ $("mp-typefile").onchange = async e => {   // one or many offices' patient lists
   msg($("mp-msg"), (done.length ? `Loaded ${done.length} office${done.length > 1 ? "s" : ""}: ${done.join(", ")}. ` : "")
     + (queued ? `Placing ${queued.toLocaleString()} addresses on neighborhoods now (a few minutes; progress below Step 3). ` : "")
     + (failed.length ? `Couldn't read: ${failed.join("; ")}` : ""), !failed.length);
-  loadNeighborhoodState(); loadMaps($("mp-month").value);
+  loadNeighborhoodState(); loadMaps();
 };
 loadLog();   // the Log tab opens first
 </script>
