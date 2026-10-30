@@ -31,6 +31,8 @@
     --i-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='8' cy='8' r='5'/%3E%3C/svg%3E");
     --i-tri-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Cpath d='M8 3l6 10H2z'/%3E%3C/svg%3E");
     --i-tri-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Cpath d='M8 13L2 3h12z'/%3E%3C/svg%3E");
+    --i-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Cpath d='M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z'/%3E%3C/svg%3E");
+    --i-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Crect x='4' y='3' width='2.8' height='10' rx='.8'/%3E%3Crect x='9.2' y='3' width='2.8' height='10' rx='.8'/%3E%3C/svg%3E");
     --i-grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3E%3Ccircle cx='5.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='5.5' cy='8' r='1.5'/%3E%3Ccircle cx='10.5' cy='8' r='1.5'/%3E%3Ccircle cx='5.5' cy='12.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='12.5' r='1.5'/%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
@@ -340,6 +342,7 @@
   .fn-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
   .cl-tiles { display: flex; flex-wrap: wrap; margin: 8px 0 16px; }
   .rp-tile, .fn-step { background: var(--surface); padding: 12px 16px; position: relative; overflow: hidden; min-width: 0; }
+  .rp-tiles > .rp-tile { display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; }
   .rp-tile .k, .fn-step .k { font-size: 13px; color: var(--muted); font-weight: 500; position: relative; }
   .rp-tile .v, .fn-step .v { font-size: 24px; line-height: 1.15; margin-top: 4px; font-weight: 600; letter-spacing: -.01em; position: relative; }
   .rp-tile .s, .fn-step .s { font-size: 12px; color: var(--faint); margin-top: 4px; position: relative; white-space: normal; }
@@ -362,6 +365,10 @@
   .tr-tip .tr-row span { color: var(--muted); }
   .hm-tip { position: fixed; }
   /* Charts page: one grid of cards each person can reorder, resize (half / full width) and hide. */
+  @media (min-width: 901px) {
+    #ch-report > .toolbar { position: sticky; top: -24px; z-index: 20; margin: 0 -24px 16px; padding: 12px 24px;
+                            background: var(--bg); box-shadow: 0 1px 0 var(--border); }
+  }
   .wi-answer.dm-answer { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
   .dm-pairs .g { margin: 0 0 12px; } .dm-pairs .t { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
   .dm-pairs .t .gap { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; } .dm-pairs .t .gap.up { color: var(--good); } .dm-pairs .t .gap.down { color: var(--bad); }
@@ -378,6 +385,9 @@
   .dm-keys i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
   .dm-table td .gap { margin-left: 6px; font-size: 12px; color: var(--muted); } .dm-table td .gap.down { color: var(--bad); } .dm-table td .gap.up { color: var(--good); }
   .dm-table tbody tr { cursor: pointer; } .dm-table tbody tr[aria-selected="true"] td { background: var(--accent-soft); }
+  .lk-row { padding: 12px 0; border-top: 1px solid var(--border); } .lk-row:first-of-type { border-top: 0; }
+  .lk-h { margin: 0 0 4px; font-size: 14px; font-weight: 600; } .lk-h .hint { font-weight: 400; margin-left: 6px; }
+  .lk-status { margin: 0 0 8px; font-size: 13px; }
   #whatif #wi-card { max-width: 1180px; } #whatif .wi-controls { margin: 0 0 6px; }
   .wi-answer { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 16px 32px; align-items: center;
                margin: 12px 0 20px; padding: 16px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
@@ -436,7 +446,8 @@
   .ch-bar button { height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: var(--surface); color: var(--text);
                    font: inherit; font-weight: 500; font-size: 12px; cursor: pointer; }
   .ch-bar button:hover:not(:disabled) { border-color: var(--border); } .ch-bar button:disabled { opacity: .35; cursor: default; }
-  .ch-bar .ch-grip { cursor: grab; background: none; font-size: 16px; letter-spacing: -2px; color: var(--accent-ink); }
+  .ch-bar .ch-grip { cursor: grab; background: none; color: var(--accent-ink); }
+  .ch-bar button { display: inline-grid; place-items: center; }
   .ch-editing .ch-cards > .card { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
   .ch-editing .ch-cards > .card.ch-hidden { display: block; opacity: .55; }
   .ch-editing .ch-cards > .card.ch-hidden > :not(.ch-bar) { display: none; }
@@ -511,21 +522,27 @@
   .fl-bar { position: relative; height: 14px; border-radius: 3px; background: var(--accent-soft); }
   .fl-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
   .fl-key-ok { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent); vertical-align: -1px; }
-  .fl-table .fl-kind { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .fl-table .fl-kind { font-size: 12px; color: var(--muted); margin-left: 6px; }
   .fl-months { margin-top: 12px; } .fl-months summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent-ink); }
   .fl-months table td, .fl-months table th { white-space: nowrap; }
-  .mp-time { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
-  .mp-time #mp-slider { flex: 1; min-width: 180px; accent-color: var(--accent); }
-  .mp-time .mp-when { min-width: 150px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mp-time { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .mp-time #mp-slider { flex: 1; min-width: 180px; height: 32px; margin: 0; accent-color: var(--accent); }
+  .mp-time .mp-when { min-width: 170px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .mp-time #mp-play { min-width: 84px; }
   #mp-time-note:empty { display: none; }
+  :is(#mp-note, #fn-note) .mp-note-line { display: block; margin: 2px 0; }
+  :is(#mp-note, #fn-note) details > summary { cursor: pointer; list-style: none; color: var(--muted); }
+  :is(#mp-note, #fn-note) details > summary::-webkit-details-marker { display: none; }
+  :is(#mp-note, #fn-note) summary .link { color: var(--accent-ink); font-weight: 500; }
+  :is(#mp-note, #fn-note) summary:hover .link { text-decoration: underline; text-underline-offset: 3px; }
+  :is(#mp-note, #fn-note) .mp-zipnums { display: block; margin-top: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--muted); font-size: 12px; line-height: 1.6; }
   .mp-nb { background: var(--surface); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.4; width: 270px; max-height: calc(100% - 120px); overflow: auto; max-width: calc(100vw - 80px); box-shadow: var(--shadow); }
   .mp-map.nb-open .mp-legend, .mp-map.nb-open .mp-inset { display: none; }   /* room for the neighborhoods */
-  .mp-nb h3 { font-size: 13px; margin: 0 0 2px; } .mp-nb p { margin: 4px 0; } .mp-nb .hint { font-size: 11px; }
+  .mp-nb h3 { font-size: 13px; margin: 0 0 2px; } .mp-nb p { margin: 4px 0; } .mp-nb .hint { font-size: 12px; }
   .mp-nb-key { display: grid; grid-template-columns: 14px 1fr 14px 1fr; gap: 2px 6px; align-items: center; margin: 6px 0; }
-  .mp-nb-key i { width: 14px; height: 10px; border-radius: 2px; border: 1px solid #0001; }
+  .mp-nb-key i { width: 14px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--border); }
   .mp-nb-row { display: flex; gap: 6px; margin-top: 6px; } .mp-nb-row .btn { height: 26px; padding: 0 8px; font-size: 12px; }
-  .mp-nb-count { display: grid; place-items: center; border-radius: 50%; background: #111827; color: #fff; font: 700 11px/1 system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 3px #0005; }
+  .mp-nb-count { display: grid; place-items: center; border-radius: 50%; background: #111827; color: #fff; font: 700 11px/1 system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5);   /* the office pins' shadow */ }
   .mp-legend { background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.4; max-width: 230px; overflow: auto; box-shadow: var(--shadow); }
   .mp-legend summary { display: list-item; cursor: pointer; font-weight: 600; margin: 0; color: var(--text); }
   .mp-legend details[open] summary { margin-bottom: 4px; }
@@ -589,17 +606,17 @@
              border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
   .ask-btn svg { width: 16px; height: 16px; } .ask-btn:hover { background: var(--accent-hover); }
   .ask-panel { position: fixed; right: 20px; bottom: 72px; z-index: 41; width: min(420px, calc(100vw - 24px)); height: min(640px, calc(100vh - 100px));
-               display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+               display: flex; flex-direction: column; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
   .ask-panel[hidden] { display: none !important; }
   .ask-head { display: flex; align-items: center; gap: 4px; padding: 12px 8px 12px 16px; border-bottom: 1px solid var(--border); }
   .ask-head > div { flex: 1; min-width: 0; }
-  .ask-head h2 { font-size: 15px; line-height: 1.3; }
+  .ask-head h2 { font-size: 16px; line-height: 1.3; }
   .ask-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
   .ask-x { display: inline-flex; align-items: center; gap: 4px; height: 28px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 0 8px; border-radius: 6px; }
   .ask-x:hover { background: var(--hover); color: var(--text); } .ask-x svg { width: 14px; height: 14px; }
   #ask-close { width: 28px; padding: 0; justify-content: center; }
   .ask-log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
-  .ask-msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .ask-msg { max-width: 88%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
   .ask-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); white-space: pre-wrap; border-bottom-right-radius: 4px; }
   .ask-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
   .ask-msg.bot.err { color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); }
@@ -613,19 +630,19 @@
   @media (prefers-reduced-motion: reduce) { .ask-msg.thinking::after { animation: none; content: "…"; } }
   .ask-intro { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
   .ask-intro + .ask-label { margin-top: 4px; }
-  .ask-label { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 -4px; }
+  .ask-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 -4px; }
   .ask-suggest { display: flex; flex-direction: column; gap: 6px; }
   .ask-suggest button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 8px 12px; font: inherit; font-size: 13px; line-height: 1.4;
                         text-align: left; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
-  .ask-suggest button::after { content: "→"; color: var(--faint); flex: none; }
+  .ask-suggest button::after { content: ""; flex: none; width: 12px; height: 12px; background: var(--faint); mask: var(--i-right) center / contain no-repeat; -webkit-mask: var(--i-right) center / contain no-repeat; }
   .ask-suggest button:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); color: var(--accent-ink); }
-  .ask-suggest button:hover::after { color: var(--accent-ink); }
+  .ask-suggest button:hover::after { background: var(--accent-ink); }
   .ask-compose { margin: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: border-color .15s, box-shadow .15s; }
   .ask-compose:focus-within { border-color: var(--accent); box-shadow: var(--ring); }
   .ask-compose textarea, .ask-compose textarea:focus-visible { display: block; width: 100%; min-height: 0; max-height: 140px; height: auto; resize: none; border: 0; box-shadow: none; outline: none;
                         background: transparent; font: inherit; font-size: 13px; line-height: 1.5; padding: 10px 12px 4px; }
   .ask-bar { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px; }
-  .ask-hint { flex: 1; font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ask-hint { flex: 1; font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ask-clip { flex: none; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
   .ask-clip:hover { color: var(--text); background: var(--hover); } .ask-clip svg { width: 16px; height: 16px; }
   #ask-send { height: 28px; padding: 0 10px; gap: 4px; } #ask-send svg { width: 14px; height: 14px; }
@@ -635,12 +652,12 @@
               background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
   .ask-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ask-chip small { color: var(--muted); white-space: nowrap; }
   .ask-chip.busy small { font-style: italic; } .ask-chip.bad { border-color: var(--bad); color: var(--bad); }
-  .ask-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+  .ask-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; line-height: 0; padding: 4px; border-radius: 4px; }
   .ask-chip button:hover { background: var(--hover); color: var(--text); }
   .ask-msg.user .ask-chip { background: color-mix(in srgb, var(--accent-text) 18%, transparent); border-color: transparent; color: var(--accent-text); padding-right: 8px; margin-bottom: 4px; }
   .ask-msg.user .ask-chip small { color: inherit; opacity: .8; }
   .ask-panel.drop .ask-compose { border-style: dashed; border-color: var(--accent); background: var(--accent-soft); }
-  .ask-foot { margin: 0; padding: 6px 16px 10px; font-size: 11px; color: var(--faint); text-align: center; }
+  .ask-foot { margin: 0; padding: 6px 16px 10px; font-size: 12px; color: var(--faint); text-align: center; }
   @media (max-width: 900px) { .ask-btn { right: 12px; bottom: 12px; } .ask-panel { right: 12px; bottom: 60px; } }
   /* Help: a guided dialog. */
   #help { width: min(760px, calc(100vw - 32px)); max-height: min(88vh, 900px); padding: 0; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -704,6 +721,7 @@
     .table-card > .toolbar { align-items: end; } .table-card > .toolbar > label { flex: 1 1 150px; } .table-card > .toolbar input[type=search] { min-width: 0; width: 100%; }
   }
   @media (max-width: 480px) {
+    .wi-answer { padding: 12px; }
     .page-actions .btn { height: 30px; padding: 0 10px; font-size: 13px; }
     .rp-tiles, .fn-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rp-tile .v, .fn-step .v { font-size: 20px; }
@@ -999,13 +1017,43 @@
       </div>
       <p class="msg" id="ns-msg"></p>
     </div>
+    <div class="card" id="lk-card">
+      <h2 class="card-title">5. Looker Studio data</h2>
+      <p class="hint" style="margin-top:0">Two Google Sheets the app keeps filled for building Looker Studio reports: one table per tab, one row per
+        item, office totals only. They're rewritten within about 10 minutes of any change. For each one: create a blank Google Sheet, share it
+        with <code id="lk-email"></code> as <strong>Editor</strong>, and paste its link. Then in Looker Studio: Create › Report › Google Sheets,
+        and pick a tab as a data source. Only on this computer.</p>
+      <div class="lk-row">
+        <h3 class="lk-h">Looker data <span class="hint">Log, Days, ZIPs, Calls, Lenders, Area (Census)</span></h3>
+        <p class="lk-status" id="lk-status-main"></p>
+        <div class="row">
+          <label>Sheet link <input type="url" id="lk-url-main" placeholder="https://docs.google.com/spreadsheets/d/…" style="width:min(420px,75vw)"></label>
+          <button class="btn primary" data-lk="connect" data-kind="main">Connect</button>
+          <button class="btn" data-lk="write" data-kind="main">Write now</button>
+          <button class="btn danger" data-lk="delete" data-kind="main">Disconnect</button>
+        </div>
+      </div>
+      <div class="lk-row">
+        <h3 class="lk-h">Looker data – demographics (restricted) <span class="hint">patient estimates by office and quarter</span></h3>
+        <p class="hint" style="margin:0 0 6px">Estimated ethnicity, ages and families of new patients, groups under 10 left blank. Use it for a separate
+          report shared only with the people who plan marketing.</p>
+        <p class="lk-status" id="lk-status-demo"></p>
+        <div class="row">
+          <label>Sheet link <input type="url" id="lk-url-demo" placeholder="https://docs.google.com/spreadsheets/d/…" style="width:min(420px,75vw)"></label>
+          <button class="btn primary" data-lk="connect" data-kind="demo">Connect</button>
+          <button class="btn" data-lk="write" data-kind="demo">Write now</button>
+          <button class="btn danger" data-lk="delete" data-kind="demo">Disconnect</button>
+        </div>
+      </div>
+      <p class="msg" id="lk-msg"></p>
+    </div>
   </section>
 
   <!-- Charts -->
   <section id="charts">
     <div id="ch-report">
       <div class="page-head">
-        <div><h1>Charts</h1><p class="page-sub">New-patient collections by home ZIP code (the totals, the months, the biggest ZIPs, the map and every ZIP as a table) and financing applications by lender.</p></div>
+        <div><h1>Charts</h1><p class="page-sub">Where new patients come from (collections by home ZIP code, the map with neighborhoods and a time slider) and which lenders they apply to. Arrange the cards with Customize layout.</p></div>
         <div class="page-actions"><button class="btn quiet" id="ch-custom" aria-pressed="false">Customize layout</button><button class="btn quiet" id="rp-copy">Copy ZIP table</button></div>
       </div>
       <div class="row tr-controls toolbar" role="group" aria-label="Report filters (apply to the whole report)">
@@ -1063,7 +1111,7 @@
         </div>
         <div id="mp-map" class="mp-map" role="region" aria-label="Map of new patients by ZIP code"></div>
         <div class="mp-time" role="group" aria-label="Move through time">
-          <button type="button" class="btn" id="mp-play" aria-label="Play through time">▶ Play</button>
+          <button type="button" class="btn" id="mp-play" aria-label="Play through time"><span class="ico" aria-hidden="true" style="--i: var(--i-play); width: 12px; height: 12px"></span>Play</button>
           <input type="range" id="mp-slider" min="0" max="0" value="0" step="1" aria-label="Time" aria-valuetext="Whole range">
           <span class="mp-when" id="mp-when" aria-live="polite">Whole range</span>
           <label>Step <select id="mp-step"><option value="month">Months</option><option value="week">Weeks</option></select></label>
@@ -1144,7 +1192,7 @@
         </div>
         <div class="wi-grid">
           <div class="wi-levers">
-            <h3 class="wi-h">Change these</h3>
+            <h2 class="wi-h">Change these</h2>
             <div class="wi-try" id="wi-try" role="group" aria-label="Try a scenario"></div>
             <div class="wi-sliders">
               <label class="wi-slider"><span>New patients who apply for financing <b id="wi-apply-v"></b></span>
@@ -1158,10 +1206,10 @@
             </div>
           </div>
           <div class="wi-results">
-            <h3 class="wi-h">How an average month adds up</h3>
+            <h2 class="wi-h">How an average month adds up</h2>
             <div class="wi-stack" id="wi-stack" role="img"></div>
             <div class="rp-tiles wi-tiles" id="wi-tiles"></div>
-            <h3 class="wi-h" style="margin-top:20px">How much months vary</h3>
+            <h2 class="wi-h" style="margin-top:20px">How much months vary</h2>
             <div class="wi-chart" id="wi-chart" role="img"></div>
           </div>
         </div>
@@ -1182,12 +1230,12 @@
     </div>
     <div class="card">
       <div class="wi-answer dm-answer"><div><p class="wi-headline" id="dm-headline">Loading…</p><p class="wi-sentence" id="dm-sentence"></p></div></div>
-      <h3 class="wi-h">Families with children</h3>
+      <h2 class="wi-h">Families with children</h2>
       <div class="rp-tiles dm-fam" id="dm-fam"></div>
       <p class="hint" id="dm-fam-note" style="margin:8px 0 20px"></p>
       <div class="wi-grid">
-        <div><h3 class="wi-h">Age at first visit</h3><div class="dm-pairs" id="dm-age" role="img"></div></div>
-        <div><h3 class="wi-h">Ethnicity (estimated)</h3><div class="dm-pairs" id="dm-eth" role="img"></div></div>
+        <div><h2 class="wi-h">Age at first visit</h2><div class="dm-pairs" id="dm-age" role="img"></div></div>
+        <div><h2 class="wi-h">Ethnicity (estimated)</h2><div class="dm-pairs" id="dm-eth" role="img"></div></div>
       </div>
       <div class="dm-keys"><span><i style="background:var(--series)"></i>New patients</span><span><i style="background:var(--series-dim)"></i>People living within <span id="dm-miles">5</span> miles of the office</span></div>
     </div>
@@ -1196,8 +1244,8 @@
       <p class="hint tr-sub">From the Census for the people living within <span id="dm-miles2">5</span> miles. Use it to choose which languages to staff, list on the Google profile and advertise in.</p>
       <p class="wi-take" id="dm-lang-take" style="border-top:0;padding-top:0;margin-top:4px"></p>
       <div class="wi-grid">
-        <div><h3 class="wi-h">Languages spoken at home</h3><div class="dm-list" id="dm-lang"></div></div>
-        <div><h3 class="wi-h">Asian residents by group</h3><div class="dm-list" id="dm-asian"></div></div>
+        <div><h2 class="wi-h">Languages spoken at home</h2><div class="dm-list" id="dm-lang"></div></div>
+        <div><h2 class="wi-h">Asian residents by group</h2><div class="dm-list" id="dm-asian"></div></div>
       </div>
     </div>
     <div class="card">
@@ -1565,19 +1613,53 @@ ORDER BY period_thru DESC, office;</textarea>
       <h3>Step 4 · Benchmarks and data checks</h3>
       <h4 style="margin:10px 0 4px">Benchmark colors</h4>
       <ul>
-        <li><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink)">● green</span> on target,
-          <span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink)">▲ yellow</span> close,
-          <span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink)">▼ red</span> below target.</li>
-        <li>A <strong>◎</strong> in a column header means it has a benchmark; hover it to see the cut-offs.
+        <li><span class="swatch" style="background:var(--bm-green);color:var(--bm-green-ink)"><span class="ico" aria-hidden="true" style="--i: var(--i-dot); width: 8px; height: 8px; margin-right: 4px; vertical-align: 0"></span>green</span> on target,
+          <span class="swatch" style="background:var(--bm-yellow);color:var(--bm-yellow-ink)"><span class="ico" aria-hidden="true" style="--i: var(--i-tri-up); width: 8px; height: 8px; margin-right: 4px; vertical-align: 0"></span>yellow</span> close,
+          <span class="swatch" style="background:var(--bm-red);color:var(--bm-red-ink)"><span class="ico" aria-hidden="true" style="--i: var(--i-tri-down); width: 8px; height: 8px; margin-right: 4px; vertical-align: 0"></span>red</span> below target.</li>
+        <li>A target mark <span class="bm-flag" aria-hidden="true"></span> in a column header means it has a benchmark; hover it to see the cut-offs.
           <span class="help-edit">The <strong>Benchmarks</strong> button shows them all and lets you change them (same for every office).</span></li>
       </ul>
-      <h4 style="margin:10px 0 4px">Data checks <span class="chk-flag" aria-hidden="true">⚠</span></h4>
+      <h4 style="margin:10px 0 4px">Data checks <span class="chk-flag" aria-hidden="true"></span></h4>
       <ul>
-        <li>A ⚠ means a value looks wrong: a rate over 100%, or a patient with more collected than approved. Hover it to see why.
+        <li>A warning mark <span class="chk-flag" aria-hidden="true"></span> means a value looks wrong: a rate over 100%, or a patient with more collected than approved. Hover it to see why.
           The number is still counted as the sheet has it until the office fixes the sheet.</li>
         <li>Click <strong>Checks</strong> to see the list.<span class="help-edit"> For each one you can:
           <strong>Mark OK</strong> with a short note if it's correct, <strong>Email office</strong> to open a ready-made email in your
           email app listing what to fix (you review it and press Send), or <strong>Copy message</strong> for Teams or Chat.</span></li>
+      </ul>
+    </div>
+    <div class="help-step" data-title="5. Charts &amp; map" role="tabpanel">
+      <h3>Step 5 · Charts: ZIP codes, the map and lenders</h3>
+      <ul>
+        <li>The <strong>Office</strong>, <strong>From</strong> and <strong>To</strong> filters at the top apply to every card on the page,
+          the map included. Pick the same month in From and To to see one month.</li>
+        <li><strong>Customize layout</strong> lets you move, resize (half or full width) and hide cards. Your layout is kept in your
+          browser; other people keep theirs. <strong>Reset to default</strong> brings everything back.</li>
+        <li><strong>Financing applications by lender</strong> shows, for Prime, Subprime or both, how many patients applied to each lender,
+          how many were approved, and the dollars approved and collected. <em>Month by month</em> opens the same numbers per month.</li>
+      </ul>
+      <h4 style="margin:10px 0 4px">The map</h4>
+      <ul>
+        <li>ZIP codes are colored by new patients, dollars collected, patients per 10k residents, or the office most of them visit.
+          Over several months the color steps grow with the months, so a long range isn't all dark red; the legend gives the numbers.</li>
+        <li>Hold <strong>Ctrl</strong> (⌘ on a Mac) and scroll to zoom, or use + and −. The house button shows the whole area again,
+          the corners button opens the map full screen (Esc leaves). Type a ZIP or a city in <strong>Find</strong> to jump there.</li>
+        <li>Click a ZIP to see its <strong>neighborhoods</strong> (Census block groups of a few city blocks), shaded by median household
+          income, with how many new patients live in each. Only the neighborhood is kept for a patient, never the address.</li>
+        <li>The <strong>time bar</strong> under the map plays through the months (or weeks) in the range: <em>That period only</em>
+          shows one month or week, <em>Running total</em> adds up from the start. The colors keep one scale while it plays.</li>
+      </ul>
+    </div>
+    <div class="help-step" data-title="6. Ask" role="tabpanel">
+      <h3>Step 6 · Ask a question</h3>
+      <ul>
+        <li>The <strong>Ask</strong> button (bottom right, every page) answers questions about the numbers in plain words: collections,
+          new patients, production, financing, ZIP codes, calls, for any office, month or range of days. It only looks numbers up;
+          it can't change anything.</li>
+        <li>Attach a PDF, Excel or Word file with the paperclip (or drag it onto the chat) to ask about it alongside the app's numbers.
+          Files are sent to Claude to be read and forgotten after 4 hours.</li>
+        <li>It can also read the Google Docs, Sheets and Slides that have been shared with the app, and says which file an answer came from.</li>
+        <li>Answers can be wrong. Check important figures in the Log before you act on them.</li>
       </ul>
     </div>
   </div>
@@ -1614,7 +1696,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); loadAssistant(); }
   if (b.dataset.tab === "whatif") loadWhatIf();
   if (b.dataset.tab === "demo") loadDemographics();
-  if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); }
+  if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); loadLooker(); }
   if (b.dataset.tab === "changes") loadChanges();
   if (b.dataset.tab === "upload") loadInbox();
   if (b.dataset.tab === "calls") { loadFunnel(); loadCalls(); if ($("pl-card").open) loadPromoLines(); }
@@ -2517,7 +2599,7 @@ function applyHiddenCols() {
 }
 function renderColumnsMenu() {
   const cols = orderedCols().filter(c => !c.fixed);
-  $("columns-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Tick to show · drag ⠿ or use ↑ ↓ to reorder</p>
+  $("columns-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Tick to show · drag a row by its handle, or use the arrows, to reorder</p>
     <ul class="collist">${cols.map((c, i) => `<li draggable="true" data-key="${c.key}">
       <span class="grip" aria-hidden="true">⠿</span>
       <label ${hiddenSections.has(sectionOf[c.key]?.id) ? 'class="off" title="This column\'s section is switched off"' : ""}>
@@ -2595,7 +2677,7 @@ function allOffices() {
 }
 function renderOfficesMenu() {
   const offices = allOffices(), custom = logSort.key === "custom";
-  $("offices-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Drag ⠿ or use ↑ ↓ to set the order offices are listed in.</p>
+  $("offices-menu").innerHTML = `<p class="hint" style="margin:0 0 6px">Drag a row by its handle, or use the arrows, to set the order offices are listed in.</p>
     <ul class="collist">${offices.map((o, i) => `<li draggable="true" data-office="${esc(o)}">
       <span class="grip" aria-hidden="true">⠿</span><label style="cursor:grab">${esc(o)}</label>
       <button type="button" class="mv" data-move="-1" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(o)} up">↑</button>
@@ -3135,7 +3217,7 @@ $("rb-pull").onclick = async () => {
   let pending = [];   // [{key, name, what, id?, error?}]
   const drawPending = () => {
     $("ask-files").hidden = !pending.length;
-    $("ask-files").innerHTML = pending.map(f => `<span class="ask-chip ${f.error ? "bad" : f.id ? "" : "busy"}" title="${esc(f.error || f.name)}"><span>${esc(f.name)}</span><small>${esc(f.error ? "couldn't read" : f.id ? f.what : "reading…")}</small><button type="button" data-key="${f.key}" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("");
+    $("ask-files").innerHTML = pending.map(f => `<span class="ask-chip ${f.error ? "bad" : f.id ? "" : "busy"}" title="${esc(f.error || f.name)}"><span>${esc(f.name)}</span><small>${esc(f.error ? "couldn't read" : f.id ? f.what : "reading…")}</small><button type="button" data-key="${f.key}" aria-label="Remove ${esc(f.name)}"><span class="ico" aria-hidden="true" style="--i: var(--i-x); width: 10px; height: 10px"></span></button></span>`).join("");
   };
   const attach = list => {
     for (const file of list) {
@@ -3344,9 +3426,10 @@ function chApply(rerender = true) {
     let bar = c.querySelector(":scope > .ch-bar");
     if (!bar) { bar = document.createElement("div"); bar.className = "ch-bar"; c.prepend(bar); }
     const hid = chLayout.hidden.includes(id), half = chLayout.half.includes(id), name = esc(chName(c));
-    bar.innerHTML = `<button type="button" class="ch-grip" data-ch="grip" title="Drag to move" aria-label="Drag ${name}">⠿</button><span class="ch-name">${name}${hid ? " (hidden)" : ""}</span>
-      <button type="button" data-ch="up" ${i === 0 ? "disabled" : ""} aria-label="Move ${name} up" title="Move up">↑</button>
-      <button type="button" data-ch="down" ${i === order.length - 1 ? "disabled" : ""} aria-label="Move ${name} down" title="Move down">↓</button>
+    const icon = (k, w = 12, h = 12) => `<span class="ico" aria-hidden="true" style="--i: var(--i-${k}); width: ${w}px; height: ${h}px"></span>`;
+    bar.innerHTML = `<button type="button" class="ch-grip" data-ch="grip" title="Drag to move" aria-label="Drag ${name}">${icon("grip", 10, 14)}</button><span class="ch-name">${name}${hid ? " (hidden)" : ""}</span>
+      <button type="button" data-ch="up" ${i === 0 ? "disabled" : ""} aria-label="Move ${name} up" title="Move up">${icon("up")}</button>
+      <button type="button" data-ch="down" ${i === order.length - 1 ? "disabled" : ""} aria-label="Move ${name} down" title="Move down">${icon("down")}</button>
       <button type="button" data-ch="size" ${hid ? "disabled" : ""} title="${half ? "Make full width" : "Make half width (two side by side)"}">${half ? "Full width" : "Half width"}</button>
       <button type="button" data-ch="hide">${hid ? "Show" : "Hide"}</button>`;
   });
@@ -3569,7 +3652,7 @@ function renderDemographics() {
   }
   const pa = dmShares(pat.age, bands), aa = dmShares(area?.age, bands), pe = dmShares(pat.eth, groups), ae = dmShares(area?.eth, groups);
   const pairs = (keys, labels, p, a) => keys.map(k => { const gap = p[k] != null && a[k] != null ? Math.round((p[k] - a[k]) * 100) : null;
-    return `<div class="g"><div class="t"><span>${labels[k]}</span>${gap == null ? "" : `<span class="gap ${gap > 0 ? "up" : gap < 0 ? "down" : ""}">${gap > 0 ? "+" : gap < 0 ? "−" : "±"}${Math.abs(gap)} pts</span>`}</div>
+    return `<div class="g"><div class="t"><span>${labels[k]}</span>${gap == null ? "" : `<span class="gap ${gap > 0 ? "up" : gap < 0 ? "down" : ""}">${gap > 0 ? "+" : gap < 0 ? "−" : "±"}${Math.abs(gap)} ${Math.abs(gap) === 1 ? "pt" : "pts"}</span>`}</div>
       <div class="b p"><span style="width:${(p[k] || 0) * 100}%"></span><em>${pct(p[k])}</em></div><div class="b a"><span style="width:${(a[k] || 0) * 100}%"></span><em>${pct(a[k])}</em></div></div>`; }).join("");
   $("dm-age").innerHTML = pairs(bands, DM_AGE, pa, aa); $("dm-eth").innerHTML = pairs(groups, DM_ETH, pe, ae);
   $("dm-age").setAttribute("aria-label", "New patients vs area by age: " + bands.map(b => `${DM_AGE[b]} ${pct(pa[b])} vs ${pct(aa[b])}`).join(", "));
@@ -3639,6 +3722,7 @@ function renderDemographics() {
 }
 async function loadCharts() {
   if (!ztData) $("rp-tiles").innerHTML = skelTiles(4, "rp-tile");
+  if (!flData) $("fl-tiles").innerHTML = skelTiles(4, "rp-tile");
   api("/api/financing/lenders").then(d => { flData = d; renderLenders(); }).catch(e => { $("fl-note").textContent = e.message; });
   try { ztData = await api("/api/maps/trends"); }
   catch (e) { $("rp-lead").textContent = e.message; return; }
@@ -3656,7 +3740,7 @@ $("rp-search").oninput = () => { rpQuery = $("rp-search").value.trim().toLowerCa
 $("rp-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
   const k = th.dataset.sort; if (rpSort.key === k) rpSort.dir = -rpSort.dir; else rpSort = {key: k, dir: ["zip", "city", "nearest", "rank"].includes(k) ? 1 : -1}; renderReportTable(); };
 const rpMoney = v => "$" + Math.round(v).toLocaleString();
-const rpCompact = v => "$" + new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1}).format(v);
+const rpCompact = v => "$" + new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1, minimumFractionDigits: Math.abs(v) >= 1e6 ? 1 : 0}).format(v);
 const rpTip = (el, html) => { const tip = $("zt-tip"); el.onmouseenter = el.onfocus = () => { tip.innerHTML = html(); const r = el.getBoundingClientRect(); tip.hidden = false;
     tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - tip.offsetWidth - 12)) + "px"; tip.style.top = (r.bottom + 6 + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 6 : r.bottom + 6) + "px"; };
   el.onmouseleave = el.onblur = () => tip.hidden = true; };
@@ -4002,10 +4086,10 @@ function renderFunnel() {
       + unnamed.map(g => `<tr class="fn-sub" hidden><td>${esc(g.name)}</td>${cells(g)}</tr>`).join("") : "")) || `<tr><td colspan="9" class="hint">No calls that month.</td></tr>`;
   const fold = $("fn-rows").querySelector("tr.fn-fold");
   if (fold) fold.onclick = () => { const open = fold.classList.toggle("open"); $("fn-rows").querySelectorAll("tr.fn-sub").forEach(tr => tr.hidden = !open); };
-  const lists = d.lists.map(l => `${l.office} (${l.patients} patients, first visits ${l.lo ? l.lo.slice(5).replace("-", "/") : "?"}–${l.hi ? l.hi.slice(5).replace("-", "/") : "?"})`).join("; ");
-  $("fn-note").textContent = (d.lists.length ? `Patient lists loaded: ${lists}. Conversions can only be seen for those offices and first-visit months; upload each office's New Patients List for the months after these calls to complete the picture. ` : "No New Patients List uploaded yet, so no conversions can be seen. ")
-    + (d.mapped_lines ? `${d.mapped_lines} promo lines are mapped to offices; calls on unmapped lines show as "(not mapped)". ` : "No promo line is mapped to an office yet (see Promo lines → offices at the bottom), so calls can't be split by office. ")
-    + `Calls are counted once even when Invoca records several legs; answered ${d.answered_rule === "signal" ? "is Invoca's Answered by Agent signal, as on its dashboard" : "means any connected time"}. Each patient counts once, credited to their first call's promo line and campaign.`;
+  const lists = d.lists.map(l => `${esc(l.office)} (${l.patients} patients, first visits ${l.lo ? l.lo.slice(5).replace("-", "/") : "?"}–${l.hi ? l.hi.slice(5).replace("-", "/") : "?"})`).join("; ");
+  $("fn-note").innerHTML = (d.lists.length ? `<details class="mp-note-line"><summary>Conversions can only be seen for offices and first-visit months with a New Patients List loaded. <span class="link">show the ${d.lists.length} lists</span></summary><span class="mp-zipnums">${lists}</span></details>` : `<span class="mp-note-line">No New Patients List uploaded yet, so no conversions can be seen.</span>`)
+    + `<span class="mp-note-line">` + esc((d.mapped_lines ? `${d.mapped_lines} promo lines are mapped to offices; calls on unmapped lines show as "(not mapped)". ` : "No promo line is mapped to an office yet (see Promo lines → offices at the bottom), so calls can't be split by office. ")
+    + `Calls are counted once even when Invoca records several legs; answered ${d.answered_rule === "signal" ? "is Invoca's Answered by Agent signal, as on its dashboard" : "means any connected time"}. Each patient counts once, credited to their first call's promo line and campaign.`) + `</span>`;
 }
 // Calls tab: one day's calls from Invoca, kept once pulled; a flat sheet with sort, filter, search and Copy.
 let clData = null, clSort = {key: "start_utc", dir: 1};
@@ -4197,6 +4281,32 @@ $("dx-remove").onclick = async () => {
   await api("/api/denticon/key/delete", "{}", {"Content-Type": "application/json"}); msg($("dx-msg"), "Key removed.", true); loadDenticon();
 };
 
+// Looker Studio data sheets (admin): the app keeps two Google Sheets filled for Looker Studio reports.
+async function loadLooker() {
+  let d; try { d = await api("/api/google/looker"); } catch { return; }
+  $("lk-email").textContent = d.service_account || "the app's Google account (add its key in step 1)";
+  for (const kind of ["main", "demo"]) {
+    const sh = d.sheets[kind], el = $(`lk-status-${kind}`);
+    el.innerHTML = sh ? `Connected: <a href="${esc(sh.url)}" target="_blank" rel="noopener">${esc(sh.title || "the sheet")}</a>`
+      + (sh.last_write_at ? ` · last written ${when(sh.last_write_at)}` : "") + (sh.last_status ? `<br><span class="hint">${esc(sh.last_status)}</span>` : "")
+      : `<span class="hint">Not connected.</span>`;
+    document.querySelector(`[data-lk="write"][data-kind="${kind}"]`).hidden = document.querySelector(`[data-lk="delete"][data-kind="${kind}"]`).hidden = !sh;
+    if (sh) $(`lk-url-${kind}`).value = sh.url;
+  }
+}
+$("lk-card").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-lk]"); if (!b) return;
+  const kind = b.dataset.kind, act = b.dataset.lk, J = {"Content-Type": "application/json"};
+  if (act === "delete" && !confirm("Stop updating this sheet? The sheet itself stays in your Drive.")) return;
+  msg($("lk-msg"), act === "delete" ? "Disconnecting…" : "Writing the sheet… (up to a minute)", true); b.disabled = true;
+  try {
+    const r = act === "connect" ? await api("/api/google/looker", JSON.stringify({kind, url: $(`lk-url-${kind}`).value.trim()}), J)
+            : act === "write" ? await api("/api/google/looker/write", JSON.stringify({kind}), J)
+            : await api("/api/google/looker/delete", JSON.stringify({kind}), J);
+    msg($("lk-msg"), r.status ? (r.status.startsWith("error") ? r.status : `Done. ${r.status.replace(/^ok: /, "")}.`) : "Disconnected.", !(r.status || "").startsWith("error"));
+  } catch (err) { msg($("lk-msg"), err.message, false); }
+  b.disabled = false; loadLooker();
+});
 // Notes sheet (admin): the app keeps a Google Sheet copy of the Log; people type notes in its Notes column.
 async function loadNotesSheet() {
   let ns; try { ns = await api("/api/google/notes-sheet"); } catch { $("ns-card").hidden = true; return; }
@@ -4312,7 +4422,7 @@ function setTimeUi() {
   const label = on ? timeLabel(mapTime.keys[mapTime.idx], mapTime.step) + (mapTime.mode === "running" ? ` (since ${timeLabel(mapTime.keys[0], mapTime.step).replace("Week of ", "")})` : "") : "Whole range";
   $("mp-when").textContent = label; $("mp-slider").setAttribute("aria-valuetext", label);
   $("mp-whole").hidden = !on;
-  $("mp-play").textContent = mapTimer ? "❚❚ Pause" : "▶ Play"; $("mp-play").setAttribute("aria-label", mapTimer ? "Pause" : "Play through time");
+  $("mp-play").innerHTML = `<span class="ico" aria-hidden="true" style="--i: var(--i-${mapTimer ? "pause" : "play"}); width: 12px; height: 12px"></span>${mapTimer ? "Pause" : "Play"}`; $("mp-play").setAttribute("aria-label", mapTimer ? "Pause" : "Play through time");
   let note = "";
   if ($("mp-step").value === "week" && mapData) {
     const missing = {}; mapData.zips.forEach(z => z.patients.forEach(p => { if (!p.fv) missing[p.office] = (missing[p.office] || 0) + 1; }));
@@ -4849,7 +4959,13 @@ function updateOutNote() {
   const outPts = mapShown.filter(z => !z.outside && !b.contains([z.lat, z.lon])).reduce((a, z) => a + z.n, 0);
   const out = outPins.length || outPts ? `Outside this view: ${outPins.length ? outPins.map(p => shortName(p.office)).join(", ") + (outPts ? " and " : "") : ""}`
     + `${outPts ? `${outPts} patient(s)` : ""} — see the small map at the bottom right (click it to go there).` : "";
-  $("mp-note").textContent = [...mapNotes, out].filter(Boolean).join(" ");
+  // Each note is one line; a long list of ZIP codes after it folds away behind "show", so a long range doesn't print a wall of ZIPs.
+  $("mp-note").innerHTML = [...mapNotes, out].filter(Boolean).map(t => {
+    const m = t.match(/^(.*?):\s*((?:\d{5}(?:,\s*)?){6,})(\.?.*)$/);
+    if (!m) return `<span class="mp-note-line">${esc(t)}</span>`;
+    const zips = m[2].replace(/,\s*$/, "");
+    return `<details class="mp-note-line"><summary>${esc(m[1])} <span class="link">show the ${zips.split(",").length} ZIP codes</span></summary><span class="mp-zipnums">${esc(zips)}</span>${esc(m[3].replace(/^\./, "").trim() ? " " + m[3].replace(/^\.\s*/, "") : "")}</details>`;
+  }).join("");
 }
 // Inset: the whole picture (every office and ZIP) with a box showing where the main map is looking.
 function drawInset(zips, pins) {
