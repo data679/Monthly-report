@@ -282,8 +282,7 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   sheet row's contribution to every count, plus the date line above it); rows without a date line are dated from
   `patient_phones.first_visit` (the uploaded New Patients Lists) by Pat ID or key, else stored with day '' and
   reported as `np_undated` ("N NP sheet rows undated" under the Period). Filled by every Google sync / upload; rebuilt
-  for Jul–Oct 2026 on 2026-10-19. Known gaps: Care Dental Center and Gardena Dental Care have no New Patients List
-  uploaded and no date lines; Dentist Of Gardena's October tab has no Insurance Type column so it isn't read.
+  for Jul–Oct 2026 on 2026-10-19. Known gaps: Care Dental Center and Gardena Dental Care have no date lines (their New Patients Lists are loaded since 2026-11-04); Dentist Of Gardena's October tab has no Insurance Type column so it isn't read.
 - **Inbox folder:** `data/inbox/` (git-ignored). `inbox_loop` (thread, every `INBOX_SECONDS`, default 60) imports any
   .pdf/.xlsx/.xlsm/.doc/.docx older than 15 s with `import_report_file` (same parsing and save paths as the Upload
   tab; dates from the PDF, else from the file name: `2026-10-14`, `10-14-2026` or `20261014`), then moves it to
@@ -452,6 +451,13 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   patients (% of answered)". The report has no Pat ID, so the link is phone-only; run it for a wide date range.
   **Preferred source: Denticon's "New Patients List"** (one office per file: Pat ID, Patient Name (Chart No), DOB,
   Phone# (one cell "(H) : … (C) : … (W) : …"), Email, Prdr, Referred By, Created On, First visit, Type, General/Ortho)
+  **Robot pull** (`newpts`, Upload tab "New Patients List", also in "All five"; 2026-11-04): Patient List Reports (`RptName=Patient List
+  Reports`) › `#rbNewPatientList`, by "Created Date / First Visit Date", `#rbPrintFormatExcel`, active + inactive, all offices,
+  `#dtFirstVisitStartDate/EndDate`. One file for the whole range (`Denticon_NewPatientsList FROM to TO.xlsx`, at most 62 days): every
+  office in one sheet with an Office Name column and Home/Work/CellPhone columns, which `parse_new_patients_list` also reads. It has
+  names and phones, so `inbox_scan` keeps only the fingerprints and deletes the file (not moved to done/failed); the result is in
+  `inbox_log`. Backfilled 2026-01-01 to 2026-11-03 for all 15 offices; its first visits per month match the Log's `np_first_visit`
+  within a few patients. Pull it regularly, or the Calls funnel's latest month reads low.
   → `parse_new_patients_list` → `save_patient_phones` → table `patient_phones(fp, pat_id, office, first_visit,
   created_on, phone_kind)`. The same Calls-tab button (`POST /api/calls/upload`, `calls_upload_kind` tells the two
   reports apart) takes either report. `calls_info` match priority: **visited** (patient_phones first_visit ≥ call
@@ -465,6 +471,11 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   patient list; each patient once, credited to their first qualifying call's promo line/campaign), started
   treatment (collected > 0 that first-visit month), $ collected, booked-not-yet-seen (np_appts); breakdown by
   promo line or campaign. The office filter applies from the patient step (calls are group-level in Invoca).
+  Location and Agent filters (`calls_funnel(month, office, location, agent)`, also on the day sheet) use Invoca's
+  own `location` and `agent` custom fields. They only choose which calls show: a patient stays credited to their
+  first qualifying call, so each agent's or location's rows add up to the unfiltered totals. Invoca's agent field
+  starts in June 2026 and covers about 80% of answered calls; a blank shows as "(not set)". Picking a location
+  narrows the agent list. On a transferred call the first leg's agent gets the credit.
   `pull_invoca_range(frm, to)` backfills a date range in one paged fetch (Aug 1–Sep 30 2026 were backfilled).
 - **Promo lines → offices** (table `promo_lines(line PK, office, label)`, `GET/POST /api/calls/lines`, `#pl-card` = a
   collapsed `<details>` at the bottom of the Calls tab (the user doesn't know the line→office mapping yet); the table
@@ -603,8 +614,8 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
     new patients, $ collected and per 10k. The legend explains the scaling.
     **Time slider** (2026-10-23): under the map, ▶ Play / slider / Step (Months | Weeks) / Show (That period only |
     Running total) / Back to whole range, over the Charts From–To months. Each map patient now carries `m` (first listing
-    month in the range) and `fv` (first visit from `patient_phones`, i.e. the uploaded New Patients Lists; Care Dental
-    Center and Gardena Dental Care have none, so they're left out of weeks and a note says so). `mapTime` filters
+    month in the range) and `fv` (first visit from `patient_phones`, i.e. the loaded New Patients Lists; patients with
+    no first visit on a list are left out of weeks and a note says so). `mapTime` filters
     `mapZips()`; `timeScale` fixes one color scale for the whole run (95th-percentile ZIP-period × periods when running);
     the neighborhood box counts the current frame too. Frames redraw in ~0.3–0.4 s; months play at 1.1 s, weeks 0.5 s.
     **Getting around** (2026-10-23): office rings removed (the select and the ring drawing/notes); zoom 8–16 in half

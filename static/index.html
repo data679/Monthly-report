@@ -831,7 +831,7 @@
           <div class="cal dp" id="rb-menu" role="dialog" aria-label="Pick the days to pull" hidden></div>
         </div>
         <input type="hidden" id="rb-from"><input type="hidden" id="rb-to">
-        <label>Report <select id="rb-report"><option value="exec">Executive Summary</option><option value="referral">Referral Production Listing (NP collection)</option><option value="ortho">Ortho Daily Journal (ortho collection)</option><option value="txplan">Treatment Plan Status (# of ortho referrals)</option><option value="both">Executive Summary + Referral</option><option value="all">All four</option></select></label>
+        <label>Report <select id="rb-report"><option value="exec">Executive Summary</option><option value="referral">Referral Production Listing (NP collection)</option><option value="ortho">Ortho Daily Journal (ortho collection)</option><option value="txplan">Treatment Plan Status (# of ortho referrals)</option><option value="newpts">New Patients List (who callers became; one file for the range)</option><option value="both">Executive Summary + Referral</option><option value="all">All five</option></select></label>
         <button class="btn primary" id="rb-pull">Pull from Denticon</button>
         <span class="hint" id="rb-status" style="align-self:center;max-width:60ch"></span>
       </div>
@@ -1353,7 +1353,9 @@
         <div class="row tr-controls" role="group" aria-label="Funnel filters">
           <label>Call month <select id="fn-month"></select></label>
           <label>Office <select id="fn-office"><option value="">All offices</option></select></label>
-          <label>Break down by <select id="fn-by"><option value="channel">marketing channel</option><option value="medium">marketing medium</option><option value="source">marketing source</option><option value="location">location (Invoca)</option><option value="promo_line">promo line</option><option value="office">office</option><option value="campaign">campaign</option></select></label>
+          <label>Location <select id="fn-location"><option value="">All locations</option></select></label>
+          <label>Agent <select id="fn-agent"><option value="">All agents</option></select></label>
+          <label>Break down by <select id="fn-by"><option value="channel">marketing channel</option><option value="medium">marketing medium</option><option value="source">marketing source</option><option value="location">location (Invoca)</option><option value="agent">agent who answered</option><option value="promo_line">promo line</option><option value="office">office</option><option value="campaign">campaign</option></select></label>
         </div>
       </div>
       <p class="hint tr-sub" id="fn-sub"></p>
@@ -1388,6 +1390,8 @@
       <button class="btn primary" id="cl-pull">Pull this day</button>
       <button class="btn" id="cl-pull-month" title="Every day of the selected day's month, up to today">Pull whole month</button>
       <label>Office <select id="cl-office"><option value="">All offices</option></select></label>
+      <label>Location <select id="cl-location"><option value="">All locations</option></select></label>
+      <label>Agent <select id="cl-agent"><option value="">All agents</option></select></label>
       <label>Search <input type="search" id="cl-search" placeholder="campaign, city, outcome, signal…"></label>
       <button class="btn" id="cl-copy">Copy</button>
       <label class="btn btn-file" title="Denticon's New Patients List (Pat ID + phone + first visit) or New Patients Through Appointment Book, as Excel">Upload Denticon patient list…<input type="file" id="cl-apptfile" accept=".xlsx,.xlsm" hidden></label>
@@ -1402,7 +1406,7 @@
       </div>
       <p class="msg" id="cl-msg"></p>
       <div class="table-wrap cl-box"><table id="cl-table" class="cl-sheet"><thead><tr>
-        <th data-sort="start_utc">Time</th><th data-sort="advertiser">Office</th><th data-sort="campaign">Campaign</th><th data-sort="promo_line">Promo line</th><th data-sort="channel">Channel</th>
+        <th data-sort="start_utc">Time</th><th data-sort="advertiser">Office</th><th data-sort="location">Location</th><th data-sort="agent">Agent</th><th data-sort="campaign">Campaign</th><th data-sort="promo_line">Promo line</th><th data-sort="channel">Channel</th>
         <th data-sort="city">City</th><th data-sort="region">State</th><th data-sort="mobile">Phone</th><th data-sort="repeat_caller">Repeat</th>
         <th class="num" data-sort="duration">Rang + talked</th><th class="num" data-sort="connect_duration">Talked</th><th data-sort="result">Outcome</th><th data-sort="match">New patient?</th><th data-sort="signals">Signals</th></tr></thead>
         <tbody id="cl-rows"></tbody></table></div>
@@ -4016,22 +4020,26 @@ async function loadPromoLines() {
 }
 $("pl-card").addEventListener("toggle", () => { if ($("pl-card").open) loadPromoLines(); });
 // Calls tab, the funnel: calls in a month -> callers who became new patients -> started treatment -> $ collected.
-let fnData = null, fnSel = {month: "", office: "", by: "promo_line"};
+let fnData = null, fnSel = {month: "", office: "", location: "", agent: "", by: "promo_line"};
 try { Object.assign(fnSel, JSON.parse(localStorage.getItem("callFunnelSel")) || {}); } catch {}
 async function loadFunnel() {
   if (!fnData) $("fn-steps").innerHTML = skelTiles(5, "fn-step");
-  try { fnData = await api(`/api/calls/funnel?month=${encodeURIComponent(fnSel.month)}&office=${encodeURIComponent(fnSel.office)}`); }
+  try { fnData = await api(`/api/calls/funnel?month=${encodeURIComponent(fnSel.month)}&office=${encodeURIComponent(fnSel.office)}&location=${encodeURIComponent(fnSel.location)}&agent=${encodeURIComponent(fnSel.agent)}`); }
   catch (e) { $("fn-note").textContent = e.message; return; }
   const d = fnData;
   $("fn-month").innerHTML = d.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No calls pulled yet</option>`;
   $("fn-office").innerHTML = `<option value="">All offices</option>` + d.offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  $("fn-location").innerHTML = `<option value="">All locations</option>` + (d.locations || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  $("fn-agent").innerHTML = `<option value="">All agents</option>` + (d.agents || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   fnSel.month = d.month || ""; if (!d.offices.includes(fnSel.office)) fnSel.office = "";
-  $("fn-month").value = fnSel.month; $("fn-office").value = fnSel.office; $("fn-by").value = fnSel.by;
+  fnSel.location = d.location || ""; fnSel.agent = d.agent || "";
+  $("fn-month").value = fnSel.month; $("fn-office").value = fnSel.office; $("fn-location").value = fnSel.location; $("fn-agent").value = fnSel.agent; $("fn-by").value = fnSel.by;
   try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {}
   renderFunnel();
 }
-["fn-month", "fn-office"].forEach(id => $(id).onchange = () => { fnSel[id.slice(3)] = $(id).value; loadFunnel(); });
+["fn-month", "fn-office", "fn-location", "fn-agent"].forEach(id => $(id).onchange = () => { fnSel[id.slice(3)] = $(id).value; loadFunnel(); });
 $("fn-by").onchange = () => { fnSel.by = $("fn-by").value; try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {} renderFunnel(); };
+const fnScope = d => [d.office, d.location, d.agent].filter(Boolean).map(s => " · " + s).join("");
 let mkBy = "channel";
 try { mkBy = localStorage.getItem("mkBy") || "channel"; } catch {}
 document.querySelectorAll("[data-mk]").forEach(b => b.onclick = () => { mkBy = b.dataset.mk; try { localStorage.setItem("mkBy", mkBy); } catch {} renderMarketing(); });
@@ -4042,8 +4050,8 @@ function renderMarketing() {
   const rows = (d.by[mkBy] || []).slice().sort((a, b) => b.calls - a.calls), t = d.total;
   const label = {channel: "Marketing channel", medium: "Marketing medium", source: "Marketing source"}[mkBy];
   $("mk-th").textContent = label;
-  $("mk-title").textContent = `Marketing performance · ${monthName(d.month)}${d.office ? " · " + d.office : ""}`;
-  $("mk-sub").textContent = `Every call that month by Invoca's ${label.toLowerCase()}, followed through to new patients, treatment started and dollars collected (same rules as the funnel above). The best rate in each column is green, among rows with at least 50 calls.`;
+  $("mk-title").textContent = `Marketing performance · ${monthName(d.month)}${fnScope(d)}`;
+  $("mk-sub").textContent = `${d.location || d.agent ? "The calls picked above" : "Every call that month"} by Invoca's ${label.toLowerCase()}, followed through to new patients, treatment started and dollars collected (same rules as the funnel above). The best rate in each column is green, among rows with at least 50 calls.`;
   const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "—", per = (a, b) => b ? "$" + money(a / b) : "—";
   const big = rows.filter(r => r.calls >= 50);
   const best = f => big.length ? Math.max(...big.map(f)) : null;
@@ -4071,9 +4079,12 @@ function renderFunnel() {
   renderMarketing();
   if (!d.month) { $("fn-sub").textContent = "Pull some days of calls first."; $("fn-steps").innerHTML = ""; $("fn-rows").innerHTML = ""; $("fn-note").textContent = ""; return; }
   const t = d.total, pct = (a, b) => b ? `${(a / b * 100).toFixed(a / b * 100 < 10 ? 1 : 0)}%` : "—";
-  $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}${d.office ? " · " + d.office : ""}`;
+  $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}${fnScope(d)}`;
   $("fn-sub").textContent = (d.office ? (d.office_calls ? `Calls on ${d.office}'s promo lines, ` : `Every call that month (no promo line is mapped to ${d.office} yet, so calls can't be narrowed), `) : "Every call that month, ")
-    + `then the callers whose number is on a Denticon new-patient list${d.office ? ` for ${d.office}` : ""} with a first visit on or after the call. Started treatment = paid anything in the first-visit month, from the Referral Production Listing.`;
+    + `then the callers whose number is on a Denticon new-patient list${d.office ? ` for ${d.office}` : ""} with a first visit on or after the call. Started treatment = paid anything in the first-visit month, from the Referral Production Listing.`
+    + (d.location || d.agent ? ` Showing only the calls for ${[d.location, d.agent].filter(Boolean).join(", ")}; a patient is credited to their first call.` : "")
+    + (d.agent_known || d.agent ? "" : ` Invoca sent no agent names for these calls; it started in June 2026.`)
+    + (!d.agent && d.agent_known && d.agent_known < t.answered ? ` Invoca named the agent on ${d.agent_known.toLocaleString()} of ${t.answered.toLocaleString()} answered calls.` : "");
   // Each tile's bar is the share its caption states (of the step before it), so 63% looks like 63%.
   const frac = (a, b) => b ? a / b : 0;
   const steps = [["Calls", t.calls, `${t.callers.toLocaleString()} different numbers`, 1], ["Answered", t.answered, pct(t.answered, t.calls) + " of calls", frac(t.answered, t.calls)],
@@ -4081,7 +4092,7 @@ function renderFunnel() {
     ["Started treatment", t.started, pct(t.started, t.patients) + " of new patients", frac(t.started, t.patients)], ["$ collected", `$${money(t.collected)}`, t.patients ? `$${money(t.collected / t.patients)} per new patient` : "", 0]];
   $("fn-steps").innerHTML = steps.map(([k, v, s_, f]) => `<div class="fn-step"><div class="bar" style="width:${f ? Math.max(1.5, f * 100).toFixed(1) : 0}%"></div><div class="k">${esc(k)}</div><div class="v">${typeof v === "number" ? v.toLocaleString() : esc(v)}</div><div class="s">${esc(s_)}</div></div>`).join("");
   const all = d.by[fnSel.by] || [];
-  $("fn-th").textContent = {campaign: "Campaign", office: "Office (from the promo lines)", channel: "Marketing channel", medium: "Marketing medium", source: "Marketing source", location: "Location (Invoca)"}[fnSel.by] || "Promo line";
+  $("fn-th").textContent = {campaign: "Campaign", office: "Office (from the promo lines)", channel: "Marketing channel", medium: "Marketing medium", source: "Marketing source", location: "Location (Invoca)", agent: "Agent who answered"}[fnSel.by] || "Promo line";
   // Lines that are just a phone number (no description in Invoca) fold into one row; click it to see them.
   const bare = g => /^\+?\d{10,}$/.test(g.name), named = all.filter(g => !bare(g)), unnamed = all.filter(bare);
   const sum = unnamed.reduce((a, g) => { Object.keys(a).forEach(k => a[k] += g[k] || 0); return a; }, {calls: 0, answered: 0, patients: 0, started: 0, collected: 0, booked: 0});
@@ -4111,6 +4122,7 @@ async function loadCalls(day) {
   const offices = [...new Set(clData.rows.map(r => r.office || (clData.mapped_lines ? "(not mapped)" : r.advertiser || "")))].filter(Boolean).sort();
   $("cl-office").innerHTML = `<option value="">All offices</option>` + offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   if (offices.includes(cur)) $("cl-office").value = cur;
+  fillCallWho();
   renderCalls();
 }
 $("cl-date").onchange = () => loadCalls($("cl-date").value);
@@ -4127,6 +4139,7 @@ $("cl-apptfile").onchange = async e => {
   e.target.value = "";
 };
 $("cl-office").onchange = renderCalls; $("cl-search").oninput = renderCalls;
+$("cl-location").onchange = () => { fillCallWho(); renderCalls(); }; $("cl-agent").onchange = renderCalls;
 $("cl-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
   const k = th.dataset.sort; if (clSort.key === k) clSort.dir = -clSort.dir; else clSort = {key: k, dir: ["duration", "connect_duration", "repeat_caller"].includes(k) ? -1 : 1}; renderCalls(); };
 $("cl-pull").onclick = async () => {
@@ -4152,14 +4165,24 @@ function clMatchCell(m) {
   if (m.status === "existing") return `<span class="hint" title="Pat ${esc(m.pat_id)}">existing patient${m.first_visit ? ` (first visit ${clMD(m.first_visit)})` : ""}</span>`;
   return `<span class="hint">booked earlier${m.appt_date ? ` (${clMD(m.appt_date)})` : ""}</span>`;
 }
+// Invoca's own location and agent on each call; blank shows as "(not set)" in the filters. Agents narrow to the location picked.
+const clWho = (r, k) => (r.custom && r.custom[k]) || "(not set)";
+function fillCallWho() {
+  const fill = (id, all, vals) => { const el = $(id), cur = el.value, opts = [...new Set(vals)].sort((a, b) => (a === "(not set)") - (b === "(not set)") || a.localeCompare(b));
+    el.innerHTML = `<option value="">${all}</option>` + opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join(""); if (opts.includes(cur)) el.value = cur; };
+  fill("cl-location", "All locations", clData.rows.map(r => clWho(r, "location")));
+  const loc = $("cl-location").value;
+  fill("cl-agent", "All agents", clData.rows.filter(r => !loc || clWho(r, "location") === loc).map(r => clWho(r, "agent")));
+}
 function renderCalls() {
   if (!clData) return;
+  const location = $("cl-location").value, agent = $("cl-agent").value;
   const day = clData.date, office = $("cl-office").value, q = $("cl-search").value.trim().toLowerCase();
   const pulled = clData.days.find(d => d.day === day);
   $("cl-title").textContent = `Calls · ${monthDay(day)}`;
   const officeOf = r => r.office || (clData.mapped_lines ? "(not mapped)" : r.advertiser || "");
-  clData.rows.forEach(r => { r.channel = (r.custom && r.custom.marketing_channel) || ""; r.medium = (r.custom && r.custom.utm_medium) || ""; });
-  let rows = clData.rows.filter(r => (!office || officeOf(r) === office)
+  clData.rows.forEach(r => { r.channel = (r.custom && r.custom.marketing_channel) || ""; r.medium = (r.custom && r.custom.utm_medium) || ""; r.location = (r.custom && r.custom.location) || ""; r.agent = (r.custom && r.custom.agent) || ""; });
+  let rows = clData.rows.filter(r => (!office || officeOf(r) === office) && (!location || clWho(r, "location") === location) && (!agent || clWho(r, "agent") === agent)
     && (!q || `${officeOf(r)} ${r.campaign} ${r.promo_line} ${r.promo_label} ${r.city} ${r.region} ${r.result} ${r.signals.join(" ")} ${Object.values(r.custom).join(" ")}`.toLowerCase().includes(q)));
   const k = clSort.key, val = r => k === "signals" ? r.signals.join(",") : k === "match" ? (r.match ? (r.match.status === "converted" ? "2" : "1") + (r.match.appt_date || "") : "0") : (r[k] ?? (typeof r[k] === "number" ? -Infinity : ""));
   rows.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * clSort.dir);
@@ -4168,7 +4191,7 @@ function renderCalls() {
   const converted = visited.length + booked, visitedAmt = visited.reduce((a, r) => a + (r.match.collected || 0), 0);
   const sigCounts = {}; rows.forEach(r => r.signals.forEach(sg => sigCounts[sg] = (sigCounts[sg] || 0) + 1));
   $("cl-sub").textContent = !clData.connected ? "Invoca isn't connected yet: on the computer running the app, open the Audit tab and fill in the Invoca API card."
-    : pulled ? `Pulled ${when(pulled.pulled_at)} · ${pulled.n.toLocaleString()} calls that day${office ? ` · showing ${rows.length} for ${office}` : q ? ` · ${rows.length} match` : ""}. Click a heading to sort.`
+    : pulled ? `Pulled ${when(pulled.pulled_at)} · ${pulled.n.toLocaleString()} calls that day${office || location || agent ? ` · showing ${rows.length} for ${[office, location, agent].filter(Boolean).join(", ")}` : q ? ` · ${rows.length} match` : ""}. Click a heading to sort.`
     : `Not pulled yet. Click Pull from Invoca.${clData.days.length ? ` Days already pulled: ${clData.days.slice(0, 8).map(d => monthDay(d.day).replace(/, \d{4}$/, "")).join(", ")}${clData.days.length > 8 ? "…" : ""}.` : ""}`;
   $("cl-tiles").innerHTML = rows.length ? `<span><b>${rows.length.toLocaleString()}</b>calls</span><span><b>${answered.toLocaleString()}</b>answered (${Math.round(answered / rows.length * 100)}%)</span>
     <span><b>${clMMSS(answered ? Math.round(talk / answered) : 0)}</b>avg talk time</span><span><b>${rows.filter(r => r.repeat_caller).length}</b>repeat callers</span>
@@ -4187,16 +4210,16 @@ function renderCalls() {
       <text x="${C}" y="${C + 5}" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text)">${totalN}</text></svg>
     <ul>${slices.map(([name, n], i) => `<li><i style="background:${OFFICE_COLORS[i % OFFICE_COLORS.length]}"></i>${esc(name)} <span>${n} · ${Math.round(n / totalN * 100)}%</span></li>`).join("")}</ul>` : "";
   drawCallsMap(rows);
-  $("cl-rows").innerHTML = rows.map(r => `<tr><td title="${r.legs > 1 ? `${r.legs} legs (overflow or transfer), counted once` : ""}">${esc((r.start_local || "").replace(/^\d{4}-\d{2}-\d{2}[T ]?/, "").replace(/[-+]\d{2}:?\d{2}$|Z$/, "").slice(0, 8))}</td><td>${esc(officeOf(r))}</td><td>${esc(r.campaign || "")}</td><td title="${esc(r.promo_line || "")}">${esc(r.promo_label || r.promo_line || "")}</td><td title="${esc(r.medium)}">${esc(r.channel)}</td>
+  $("cl-rows").innerHTML = rows.map(r => `<tr><td title="${r.legs > 1 ? `${r.legs} legs (overflow or transfer), counted once` : ""}">${esc((r.start_local || "").replace(/^\d{4}-\d{2}-\d{2}[T ]?/, "").replace(/[-+]\d{2}:?\d{2}$|Z$/, "").slice(0, 8))}</td><td>${esc(officeOf(r))}</td><td>${esc(r.location)}</td><td>${esc(r.agent)}</td><td>${esc(r.campaign || "")}</td><td title="${esc(r.promo_line || "")}">${esc(r.promo_label || r.promo_line || "")}</td><td title="${esc(r.medium)}">${esc(r.channel)}</td>
     <td>${esc(r.city || "")}</td><td>${esc(r.region || "")}</td><td>${esc(r.mobile || "")}</td><td>${r.repeat_caller ? "yes" : ""}</td><td class="num">${clMMSS(r.duration)}</td>
     <td class="num${r.answered ? "" : " miss"}">${r.answered ? clMMSS(r.connect_duration) : "not answered"}</td><td>${esc(r.result || "")}</td>
     <td>${clMatchCell(r.match)}</td>
     <td>${r.signals.map(sg => `<span class="sig">${esc(sg)}</span>`).join("")}${Object.entries(r.custom).map(([n, v]) => `<span class="sig" title="${esc(n)}">${esc(n)}: ${esc(v)}</span>`).join("")}</td></tr>`).join("")
-    || `<tr><td colspan="14" class="hint">${clData.rows.length ? "No calls match." : pulled ? "No calls that day." : ""}</td></tr>`;
+    || `<tr><td colspan="16" class="hint">${clData.rows.length ? "No calls match." : pulled ? "No calls that day." : ""}</td></tr>`;
   $("cl-table").querySelectorAll("th[data-sort]").forEach(th => th.setAttribute("aria-sort", th.dataset.sort === k ? (clSort.dir === 1 ? "ascending" : "descending") : "none"));
   $("cl-note").textContent = rows.length ? `Each call is counted once even when Invoca records several legs (an overflow or transfer)${clData.legs > clData.rows.length ? `: ${clData.legs - clData.rows.length} extra legs merged today` : ""}. "Answered" ${clData.answered_rule === "signal" ? "is Invoca's own Answered by Agent signal, the same count as its dashboard" : "means any time connected to the office"}. Rang + talked is the whole call; Talked is the time connected to the office. Signals are Invoca's call outcomes. "New patient?" matches the caller's number against the Denticon patient lists uploaded (${(clData.appts_known || 0).toLocaleString()} numbers known): "came in" = a first visit on or after the call, with that month's $ collected; "booked" = a first appointment on or after the call; "existing patient" = seen before the call. Numbers are kept only as fingerprints, never as digits.` : "";
-  $("cl-copy").onclick = e => copyGrid([["Time", "Office", "Campaign", "Promo line", "Marketing channel", "City", "State", "Phone", "Repeat caller", "Rang + talked (s)", "Talked (s)", "Outcome", "New patient?", "Signals", "Marketing data"],
-    ...rows.map(r => [r.start_local || "", officeOf(r), r.campaign || "", r.promo_label || r.promo_line || "", r.channel || "", r.city || "", r.region || "", r.mobile || "", r.repeat_caller ? "yes" : "", r.duration ?? "", r.connect_duration ?? "", r.result || "",
+  $("cl-copy").onclick = e => copyGrid([["Time", "Office", "Location", "Agent", "Campaign", "Promo line", "Marketing channel", "City", "State", "Phone", "Repeat caller", "Rang + talked (s)", "Talked (s)", "Outcome", "New patient?", "Signals", "Marketing data"],
+    ...rows.map(r => [r.start_local || "", officeOf(r), r.location, r.agent, r.campaign || "", r.promo_label || r.promo_line || "", r.channel || "", r.city || "", r.region || "", r.mobile || "", r.repeat_caller ? "yes" : "", r.duration ?? "", r.connect_duration ?? "", r.result || "",
       r.match ? ({visited: `came in ${r.match.first_visit} ${r.match.office}${r.match.collected != null ? " $" + r.match.collected.toFixed(2) : ""}`, converted: `booked ${r.match.appt_date} ${r.match.office}`, existing: `existing patient ${r.match.first_visit || ""}`, before: `booked earlier ${r.match.appt_date || ""}`})[r.match.status] : "", r.signals.join("; "), Object.entries(r.custom).map(([n, v]) => `${n}: ${v}`).join("; ")])], "Calls", e.currentTarget);
 }
 // The callers' map: one circle per city (sized and shaded by calls) on the ZIP-outline background; cities the

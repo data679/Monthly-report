@@ -470,9 +470,10 @@ def excel_date(raw):
 
 
 def parse_new_patients_list(path):
-    """Denticon's "New Patients List" (one office per file): Pat ID, phone digits (home/cell/work from the one
-    "(H) : … (C) : … (W) : …" cell), first visit, created-on and General/Ortho for each new patient. Names, dates of
-    birth and emails are never read into the result; the caller keeps only phone fingerprints."""
+    """Denticon's "New Patients List": Pat ID, phone digits, first visit, created-on and General/Ortho for each new
+    patient. Two layouts: one office per file (a "Phone#" cell "(H) : … (C) : … (W) : …", the office in the title), or
+    the Excel the robot pulls (every office in one sheet, an Office Name column, Home/Work/CellPhone columns). Names,
+    dates of birth and emails are never read into the result; the caller keeps only phone fingerprints."""
     if not str(path).lower().endswith((".xlsx", ".xlsm")):
         raise ParseError("Upload the New Patients List as an Excel file (.xlsx)")
     wb = np_analysis.Workbook(path)
@@ -485,10 +486,12 @@ def parse_new_patients_list(path):
     if not office or head_r is None:
         raise ParseError("Couldn't find the office name or the header row (Pat ID) in this New Patients List")
     head = {re.sub(r"\s+", " ", v).strip().lower(): c for c, v in rows[head_r].items()}
+    office_c = head.get("office name")
+    phone_cols = {k: head[h] for k, h in (("home", "homephone"), ("work", "workphone"), ("cell", "cellphone")) if h in head}
     pid_c, phone_c = head.get("pat id"), next((c for h, c in head.items() if h.startswith("phone")), None)
     fv_c, cr_c = head.get("first visit"), head.get("created on")
-    type_c = next((c for h, c in head.items() if "general" in h or "ortho" in h), None)
-    if not phone_c:
+    type_c = next((c for h, c in head.items() if "general" in h or "ortho" in h or h == "pat type"), None)
+    if not phone_c and not phone_cols:
         raise ParseError("This New Patients List has no Phone column")
     patients = []
     for r in keys:
@@ -496,15 +499,16 @@ def parse_new_patients_list(path):
             continue
         row = rows[r]
         pid = row.get(pid_c, "").split(".")[0]
-        if not pid.isdigit():
+        if not pid.isdigit() or (office_c and row.get(office_c, "").strip().endswith(":")):   # the footer's "Printed :" lines
             continue
-        cell = row.get(phone_c, "")
+        cell = row.get(phone_c, "") if phone_c else ""
         phones = {k.lower().replace("h", "home").replace("c", "cell").replace("w", "work"): _phone_digits(v) for k, v in PHONE_KIND_RE.findall(cell)}
         if not phones and _phone_digits(cell):
             phones = {"cell": _phone_digits(cell)}
+        phones.update({k: _phone_digits(row.get(c, "")) for k, c in phone_cols.items()})
         phones = {k: v for k, v in phones.items() if v}
         t = row.get(type_c, "").strip().lower() if type_c else ""
-        patients.append({"pat_id": pid, "phones": phones, "first_visit": excel_date(row.get(fv_c)) if fv_c else None,
+        patients.append({"pat_id": pid, "office": row.get(office_c, "").strip() if office_c else office, "phones": phones, "first_visit": excel_date(row.get(fv_c)) if fv_c else None,
                          "created_on": excel_date(row.get(cr_c)) if cr_c else None, "type": "Ortho" if t.startswith("ortho") else "General" if t.startswith("gen") else ""})
     if not patients:
         raise ParseError("No patients found in this New Patients List")

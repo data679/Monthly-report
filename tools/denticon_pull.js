@@ -14,6 +14,7 @@ const REPORT_MARK = path.join(ROOT, "data", "denticon-robot.report");     // pre
 const REFERRAL_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Referral Reports";
 const DAILY_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Daily Reports";
 const TXPLAN_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Treatment Plan Reports";
+const PATIENT_LIST_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Patient List Reports";
 const ORTHO_REFERRAL_CODE = "ZREFORTH";   // the "Ortho Referral" procedure code under Other
 
 // Open the report viewer the "Print / Preview" popup points at in a plain tab, wait for the report to draw, click an
@@ -150,6 +151,46 @@ async function pullOrthoJournal(context, page, frm, thru) {
   return exportFromPopup(context, page, fr, "button.btn-primary:has-text('Print / Preview')", "WordIconImg", file, "ortho journal");
 }
 
+// The New Patients List (Calls tab: which callers became patients): Patient List Reports › Patient List - New Patient,
+// by first visit date, active and inactive patients, every office, straight to Excel.
+async function pullNewPatients(context, page, frm, thru) {
+  await page.goto(PATIENT_LIST_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  if (await needsLogin(page)) throw new Error("not logged in");
+  let fr = null;
+  for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /PatientListReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
+  if (!fr) throw new Error("the Patient List Reports screen did not load");
+  await fr.waitForSelector("#rbNewPatientList", { timeout: 60000 });
+  await clickIn(fr, "#rbNewPatientList");
+  await fr.waitForTimeout(1500);
+  await fr.selectOption("select.custom-dropdown-field >> visible=true", { label: "Created Date / First Visit Date" });
+  await fr.waitForSelector("#dtFirstVisitStartDate", { timeout: 30000 });
+  await clickIn(fr, "#rbPrintFormatExcel");
+  await clickIn(fr, "#rbPatStatusBoth");
+  await clickIn(fr, "#rbOffice");
+  const offices = await pickAllOffices(fr);
+  for (const [sel, val] of [["#dtFirstVisitStartDate", us(frm)], ["#dtFirstVisitEndDate", us(thru)]]) {
+    await fr.fill(sel, ""); await fr.fill(sel, val); await fr.$eval(sel, el => { el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); });
+  }
+  log(`new patients list ${frm}..${thru}: offices "${offices.slice(0, 60)}"`);
+  fs.mkdirSync(INBOX, { recursive: true });
+  const file = path.join(INBOX, `Denticon_NewPatientsList ${frm} to ${thru}.xlsx`);
+  for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
+  const got = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("new patients list: no Excel download within 3 minutes")), 180000);
+    const take = d => { clearTimeout(timer); resolve(d); };
+    page.once("download", take);
+    context.once("page", p => p.once("download", take));
+    clickIn(fr, "button.btn-primary:has-text('Print / Preview') >> visible=true").catch(reject);
+  });
+  await got.saveAs(file + ".part");
+  for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
+  const size = fs.statSync(file + ".part").size;
+  log(`new patients list: ${size} bytes`);
+  if (size < 2000) { fs.unlinkSync(file + ".part"); throw new Error(`new patients list: the export is too small (${size} bytes)`); }
+  fs.renameSync(file + ".part", file);
+  return file;
+}
+
 // Click something that may sit inside a frame and may be scrolled out of its box (a script click still runs the handler).
 async function clickIn(fr, sel) {
   try { await fr.click(sel, { timeout: 4000 }); } catch { await fr.$eval(sel, el => el.click()); }
@@ -223,6 +264,7 @@ async function pullReferral(context, page, frm, thru) {
 async function explore(context, page, spec) {
   await page.goto(spec.url, { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
+  await page.waitForTimeout((spec.wait || 0) * 1000);   // a screen drawn inside a frame can take a while
   for (const sel of spec.clicks || []) {   // the control may live inside a frame
     let hit = false;
     for (const fr of page.frames()) {
@@ -234,6 +276,10 @@ async function explore(context, page, spec) {
     if (!hit) log("explore: nothing matches", sel);
     await page.waitForTimeout(3000);
   }
+  for (const [sel, label] of spec.selects || []) {   // choose a dropdown value by its text
+    for (const fr of page.frames()) if (await fr.$(sel).catch(() => null)) { await fr.selectOption(sel, { label }); break; }
+    await page.waitForTimeout(3000);
+  }
   const dump = () => [...document.querySelectorAll("input,select,button,label,a,textarea")]
     .filter(e => e.offsetParent && e.tagName !== "LABEL" && !/^chkUser|^MenuBar_|^PoWMenu_|partialOfficeSearch|txtSessionTimer/.test(e.id || e.name || "") && !(e.tagName === "A" && !e.textContent.trim()))
     .map(e => [e.tagName, e.type || "", e.id || e.name || e.className.split(" ")[0] || "", e.tagName === "SELECT" ? [...e.options].slice(0, 14).map(o => o.text.trim().slice(0, 30)).join("|") : (e.value || e.textContent || e.title || "").trim().slice(0, 50), e.checked === true ? "checked" : "",
@@ -243,6 +289,13 @@ async function explore(context, page, spec) {
         return ((e.closest("tr") || e.parentElement || {}).innerText || "").trim().replace(/\s+/g, " ").slice(0, 60); })() : ""])
     .slice(0, 260);
   log(`explore ${page.url().slice(0, 100)}: ${page.frames().length} frames`);
+  if (spec.find) for (const fr of page.frames()) {   // anything with these words, shown or hidden (menus): its text and link
+    const hits = await fr.evaluate(re => [...document.querySelectorAll("a,button,input,label,option,li,span,td")]
+      .filter(e => new RegExp(re, "i").test(e.textContent + " " + (e.value || "")) && e.children.length < 3)
+      .map(e => [e.tagName, e.id || "", (e.textContent || e.value || "").trim().replace(/\s+/g, " ").slice(0, 60), e.getAttribute("href") || e.getAttribute("onclick") || ""].join(" | ").slice(0, 220))
+      .slice(0, 150), spec.find).catch(() => []);
+    for (const h of hits) log("  find " + h);
+  }
   for (const fr of page.frames()) {
     const controls = await fr.evaluate(dump).catch(() => null);
     log(` frame ${fr.name() || "-"} ${fr.url().slice(0, 110)}: ${controls ? controls.length + " controls" : "no access"}`);
@@ -375,8 +428,8 @@ async function pullDays(context, page, days, headed) {
   }
   let which = "exec";
   if (fs.existsSync(REPORT_MARK)) { which = fs.readFileSync(REPORT_MARK, "utf8").trim(); fs.unlinkSync(REPORT_MARK); }
-  const all = { exec: ["Executive Summary", pullReport], referral: ["Referral Production", pullReferral], ortho: ["Ortho Daily Journal", pullOrthoJournal], txplan: ["Treatment Plan Status", pullTxPlanStatus] };
-  const runners = (which === "both" ? ["exec", "referral"] : which === "all" ? ["exec", "referral", "ortho", "txplan"] : [which in all ? which : "exec"]).map(k => all[k]);
+  const all = { newpts: ["New Patients List", pullNewPatients], exec: ["Executive Summary", pullReport], referral: ["Referral Production", pullReferral], ortho: ["Ortho Daily Journal", pullOrthoJournal], txplan: ["Treatment Plan Status", pullTxPlanStatus] };
+  const runners = (which === "both" ? ["exec", "referral"] : which === "all" ? ["exec", "referral", "ortho", "txplan", "newpts"] : [which in all ? which : "exec"]).map(k => all[k]);
   jobs = jobs.flatMap(j => runners.map(r => [...j, r]));
   const names = runners.map(r => r[0]).join(" + ");
   writeStatus({ state: "running", message: `Pulling ${jobs.length} report${jobs.length === 1 ? "" : "s"} (${names}).`, days: [], failed: [], started_at: new Date().toISOString() });

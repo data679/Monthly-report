@@ -1531,6 +1531,22 @@ def inbox_scan():
         if time.time() - path.stat().st_mtime < 15:   # may still be downloading
             continue
         rtype = frm = thru = None
+        if path.name.startswith("Denticon_NewPatientsList"):   # names and phones: read the fingerprints, keep no copy
+            rtype, found = "new_patients_list", dates_in_name(path.name)
+            frm, thru = (found + [None, None])[:2]
+            try:
+                saved = save_patient_phones(path)
+                status, note = "imported", f"{saved['patients']} patients, {saved['with_phone']} with a phone, {len(saved['offices'])} offices"
+            except Exception as e:
+                status, note = "failed", (str(e) or type(e).__name__) + " (pull it again; the file was not kept)"
+            path.unlink(missing_ok=True)
+            conn = db()
+            with conn:
+                conn.execute("INSERT INTO inbox_log (seen_at, file, status, report_type, period_from, period_thru, note) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (datetime.now().isoformat(timespec="seconds"), path.name, status, rtype, frm, thru, note))
+            conn.close()
+            continue
         try:
             rtype, frm, thru, saved = import_report_file(path, path.name)
             if saved.get("needs_review"):
@@ -1996,7 +2012,7 @@ def robot_pull(frm, to, report="exec"):
     Production Listing) or both. It opens its own Chrome window on this computer; when Denticon asks for a login,
     the user logs in there and the robot carries on. Files land in data/inbox."""
     frm, to = to_iso(frm), to_iso(to)
-    if report not in ("exec", "referral", "ortho", "txplan", "both", "all"):
+    if report not in ("exec", "referral", "ortho", "txplan", "newpts", "both", "all"):
         raise ValueError("Pick which report to pull")
     if frm > to:
         raise ValueError("'From' is after 'To'")
@@ -2009,6 +2025,8 @@ def robot_pull(frm, to, report="exec"):
     st = _load_json_file(ROBOT_STATUS) or {}
     if st.get("state") in ("running", "waiting_login") and _robot_serving():
         raise ValueError("The robot is already running; wait for it to finish")
+    if report == "newpts":   # one list for the whole range, not one per day
+        (DATA_DIR / "denticon-robot.range").write_text("range\n")
     if _robot_serving():   # the standing robot window takes the job (one login serves many pulls)
         (DATA_DIR / "denticon-robot.report").write_text(report + "\n")
         (DATA_DIR / "denticon-robot.cmd").write_text(f"pull {frm} {to}\n")
@@ -2975,11 +2993,13 @@ def pull_invoca_month(month):
     return {**r, "month": month, "calls": sum(r["days"].values()), "day_count": len(r["days"])}
 
 
-def calls_funnel(month=None, office=""):
+def calls_funnel(month=None, office="", location="", agent=""):
     """Calls in a month -> callers who became new patients (a loaded patient list says their first visit was on or
     after the call) -> who started treatment (paid anything in their first-visit month) -> $ collected. Each
     patient counts once, on their first qualifying call, which also decides the promo line / campaign credited.
-    Calls can't be split by office (Invoca reports the group), so the office filter applies from the patient step."""
+    Calls can't be split by office (Invoca reports the group), so the office filter applies from the patient step.
+    location and agent are Invoca's own fields on the call. They only choose which calls are shown: a patient is still
+    credited to their first qualifying call, so the rows for each agent or location add up to the unfiltered totals."""
     conn = db()
     months = [r[0] for r in conn.execute("SELECT DISTINCT substr(call_date, 1, 7) FROM invoca_calls ORDER BY 1 DESC")]
     month = month if month in months else (months[0] if months else None)
@@ -3007,9 +3027,17 @@ def calls_funnel(month=None, office=""):
         c["medium"] = tidy(cus.get("utm_medium"))             # Google PPC, Organic Search, paid search, direct, ...
         c["source"] = tidy(cus.get("utm_source"))             # Google Ad Call Extension, Google My Business, Yelp, ...
         c["location"] = tidy(cus.get("location"))             # the office location Invoca routed the call to
+        c["agent"] = tidy(cus.get("agent"))                   # who answered; Invoca has sent this since June 2026
     office_calls = office and any(v["office"] == office for v in pmap.values())   # lines are mapped to this office: filter calls too
     if office_calls:
         calls = [c for c in calls if c["office"] == office]
+    by_name = lambda vals: sorted(vals, key=lambda v: (v == "(not set)", v.lower()))
+    locations = by_name({c["location"] for c in calls})
+    location = location if location in locations else ""
+    agents = by_name({c["agent"] for c in calls if not location or c["location"] == location})   # who answered at that location
+    agent = agent if agent in agents else ""
+    def shown(c):
+        return (not location or c["location"] == location) and (not agent or c["agent"] == agent)
     # Patients reached: for every caller fingerprint, the patient records (first visit on/after the call) and appointments.
     fps = sorted({c["caller_fp"] for c in calls if c["caller_fp"]})
     pats, appts = {}, {}
@@ -3024,18 +3052,22 @@ def calls_funnel(month=None, office=""):
             appts.setdefault(r["fp"], []).append(dict(r))
     conn.close()
     seen_pat, seen_booked = set(), set()
-    GROUPS = ("promo_line", "campaign", "office", "channel", "medium", "source", "location")
+    GROUPS = ("promo_line", "campaign", "office", "channel", "medium", "source", "location", "agent")
     groups = {g: {} for g in GROUPS}
     def bump(c, key, **inc):
         for g in GROUPS:
             d = groups[g].setdefault(c[g] or "(none)", {"calls": 0, "answered": 0, "patients": 0, "started": 0, "collected": 0.0, "booked": 0})
             for k, v in inc.items():
                 d[k] += v
-    total = {"calls": 0, "answered": 0, "callers": len(fps), "patients": 0, "started": 0, "collected": 0.0, "booked": 0}
+    total = {"calls": 0, "answered": 0, "callers": len({c["caller_fp"] for c in calls if c["caller_fp"] and shown(c)}), "patients": 0, "started": 0, "collected": 0.0, "booked": 0}
+    agent_known = 0
     for c in calls:
+        keep = shown(c)
         answered = 1 if c["answered"] else 0
-        total["calls"] += 1; total["answered"] += answered
-        bump(c, None, calls=1, answered=answered)
+        if keep:
+            total["calls"] += 1; total["answered"] += answered
+            agent_known += 1 if answered and c["agent"] != "(not set)" else 0
+            bump(c, None, calls=1, answered=answered)
         fp = c["caller_fp"]
         if not fp:
             continue
@@ -3045,16 +3077,20 @@ def calls_funnel(month=None, office=""):
                 continue
             seen_pat.add(key)
             started = 1 if (p["collected"] or 0) > 0 else 0
-            total["patients"] += 1; total["started"] += started; total["collected"] += p["collected"] or 0
-            bump(c, None, patients=1, started=started, collected=p["collected"] or 0)
+            if keep:
+                total["patients"] += 1; total["started"] += started; total["collected"] += p["collected"] or 0
+                bump(c, None, patients=1, started=started, collected=p["collected"] or 0)
         if fp not in {k for k, _ in seen_pat} and fp not in seen_booked:
             if any(a["appt_date"] and a["appt_date"] >= c["call_date"] for a in appts.get(fp, [])) and not any(p["first_visit"] and p["first_visit"] >= c["call_date"] for p in pats.get(fp, [])):
-                seen_booked.add(fp); total["booked"] += 1; bump(c, None, booked=1)
+                seen_booked.add(fp)
+                if keep:
+                    total["booked"] += 1; bump(c, None, booked=1)
     total["collected"] = round(total["collected"], 2)
     out_groups = {g: sorted(({"name": k, **{kk: (round(vv, 2) if kk == "collected" else vv) for kk, vv in v.items()}} for k, v in d.items()),
                             key=lambda x: (-x["patients"], -x["calls"])) for g, d in groups.items()}
     mapped_offices = sorted({v["office"] for v in pmap.values() if v["office"]})
     return {"month": month, "months": months, "office": office, "office_calls": bool(office_calls), "lists": lists,
+            "location": location, "locations": locations, "agent": agent, "agents": agents, "agent_known": agent_known,
             "offices": sorted({l["office"] for l in lists} | set(mapped_offices)), "mapped_lines": sum(1 for v in pmap.values() if v["office"]), "total": total, "by": out_groups,
             "answered_rule": answered_rule}
 
@@ -4149,7 +4185,7 @@ def save_patient_phones(path):
     """Keep each new patient's phone fingerprints with their Pat ID, office and first-visit date; nothing else."""
     parsed = parse_new_patients_list(path)
     conn = db()
-    office = map_office_name(conn, parsed["office"])
+    names = {}   # the robot's file has every office in one sheet
     now = datetime.now().isoformat(timespec="seconds")
     rows, usable, placeholders = [], 0, 0
     for pt in parsed["patients"]:
@@ -4159,13 +4195,15 @@ def save_patient_phones(path):
         fps = {k: v for k, v in fps.items() if v}
         if fps:
             usable += 1
+        office = names.setdefault(pt["office"], map_office_name(conn, pt["office"]))
         rows += [(fp, pt["pat_id"], office, pt["first_visit"], pt["created_on"], kind, now) for kind, fp in fps.items()]
     with conn:
         conn.executemany("INSERT OR REPLACE INTO patient_phones VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
         total = conn.execute("SELECT COUNT(DISTINCT fp) FROM patient_phones").fetchone()[0]
     conn.close()
     visits = sorted(p["first_visit"] for p in parsed["patients"] if p["first_visit"])
-    return {"kind": "patients", "office": office, "patients": len(parsed["patients"]), "with_phone": usable, "placeholders": placeholders,
+    offices = sorted(set(names.values()))
+    return {"kind": "patients", "office": offices[0] if len(offices) == 1 else f"{len(offices)} offices", "offices": offices, "patients": len(parsed["patients"]), "with_phone": usable, "placeholders": placeholders,
             "first_visits": [visits[0], visits[-1]] if visits else None, "total_numbers_known": total}
 
 
@@ -4627,7 +4665,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, promo_lines_info())
         elif self.path.startswith("/api/calls/funnel"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            self._send(200, calls_funnel((q.get("month") or [None])[0], (q.get("office") or [""])[0]))
+            self._send(200, calls_funnel((q.get("month") or [None])[0], (q.get("office") or [""])[0], (q.get("location") or [""])[0], (q.get("agent") or [""])[0]))
         elif self.path.startswith("/api/calls"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, calls_info((q.get("date") or [None])[0]))
