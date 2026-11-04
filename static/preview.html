@@ -1058,6 +1058,7 @@
       </div>
       <div class="row tr-controls toolbar" role="group" aria-label="Report filters (apply to the whole report)">
         <label>Office <select id="rp-office"></select></label>
+        <label>Source <select id="rp-source"><option value="">All sources</option><option value="google+adwords">Google + AdWords</option><option value="google">Google</option><option value="adwords">AdWords</option></select></label>
         <label>From <select id="rp-from"></select></label>
         <label>To <select id="rp-to"></select></label>
       </div>
@@ -3732,10 +3733,14 @@ async function loadCharts() {
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // Charts tab, view 1: the collections report (the same report as the shared ZIP Collections Report page), from the
 // same per-ZIP data as the trends, with its own Office and month-range filters.
-let rpSel = {office: "", from: "", to: ""}, rpSort = {key: "rank", dir: 1}, rpQuery = "", rpRows = [];
+let rpSel = {office: "", source: "", from: "", to: ""}, rpSort = {key: "rank", dir: 1}, rpQuery = "", rpRows = [];
 try { Object.assign(rpSel, JSON.parse(localStorage.getItem("zipReportSel")) || {}); } catch {}
 const saveRpSel = () => { try { localStorage.setItem("zipReportSel", JSON.stringify(rpSel)); } catch {} };
-["rp-office", "rp-from", "rp-to"].forEach(id => $(id).onchange = () => { rpSel[id.slice(3)] = $(id).value; saveRpSel(); renderReport(); renderLenders(); });
+// The Source filter: Denticon's referral source as google, adwords or other (the server's trends rows carry the same).
+const RP_SOURCES = {"google+adwords": "Google + AdWords", google: "Google", adwords: "AdWords"};
+const refSource = r => { const u = (r || "").trim().toUpperCase(); return u === "GOOGLE" ? "google" : u === "ADWORDS" ? "adwords" : "other"; };
+const sourceOk = s => !rpSel.source || rpSel.source.split("+").includes(s);
+["rp-office", "rp-source", "rp-from", "rp-to"].forEach(id => $(id).onchange = () => { rpSel[id.slice(3)] = $(id).value; saveRpSel(); renderReport(); renderLenders(); });
 $("rp-search").oninput = () => { rpQuery = $("rp-search").value.trim().toLowerCase(); renderReportTable(); };
 $("rp-table").querySelector("thead").onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
   const k = th.dataset.sort; if (rpSort.key === k) rpSort.dir = -rpSort.dir; else rpSort = {key: k, dir: ["zip", "city", "nearest", "rank"].includes(k) ? 1 : -1}; renderReportTable(); };
@@ -3764,7 +3769,7 @@ function renderLenders() {
   const range = from === to ? monthName(from) : `${monthName(from)} – ${monthName(to)}`;
   const who = rpSel.office ? (flData.short[rpSel.office] || rpSel.office) : "all offices";
   const kindName = {prime: "prime", subprime: "subprime", all: "prime and subprime"}[flKind];
-  $("fl-sub").textContent = `${range} · ${who}. Which lenders patients applied to, and how many were approved (from the offices' New Patient Analysis sheets).`;
+  $("fl-sub").textContent = `${range} · ${who}. Which lenders patients applied to, and how many were approved (from the offices' New Patient Analysis sheets).${rpSel.source ? " These sheets have no referral source, so the Source filter doesn't apply to this card." : ""}`;
   const top = list[0];
   $("fl-tiles").innerHTML = [
     [`${kindName[0].toUpperCase() + kindName.slice(1)} applications`, tot.apps.toLocaleString(), ""],
@@ -3798,6 +3803,8 @@ function renderReport() {
   $("rp-office").innerHTML = opt("", "All offices") + ztData.offices.map(o => opt(o, zShort(o))).join("");
   $("rp-from").innerHTML = all.map(m => opt(m, monthName(m))).join(""); $("rp-to").innerHTML = all.slice().reverse().map(m => opt(m, monthName(m))).join("");
   if (!ztData.offices.includes(rpSel.office)) rpSel.office = "";
+  if (!RP_SOURCES[rpSel.source]) rpSel.source = "";
+  $("rp-source").value = rpSel.source;
   if (!all.includes(rpSel.from)) rpSel.from = all[0] || ""; if (!all.includes(rpSel.to) || rpSel.to < rpSel.from) rpSel.to = all[all.length - 1] || "";
   $("rp-office").value = rpSel.office; $("rp-from").value = rpSel.from; $("rp-to").value = rpSel.to;
   const months = all.filter(m => m >= rpSel.from && m <= rpSel.to), office = rpSel.office;
@@ -3806,7 +3813,7 @@ function renderReport() {
   const thruTxt = m => ztData.thru[m].slice(5).replace("-", "/");
   // Aggregate the filtered rows per ZIP, per month and per office.
   const zipA = {}, monA = {}, offA = {};
-  ztData.rows.filter(r => months.includes(r.month) && (!office || r.office === office)).forEach(r => {
+  ztData.rows.filter(r => months.includes(r.month) && (!office || r.office === office) && sourceOk(r.source)).forEach(r => {
     const z = zipA[r.zip] ||= {zip: r.zip, n: 0, n_paid: 0, total: 0, byMonth: {}, byOffice: {}};
     z.n += r.n; z.n_paid += r.n_paid; z.total += r.total;
     const bm = z.byMonth[r.month] ||= {n: 0, total: 0}; bm.n += r.n; bm.total += r.total;
@@ -3829,10 +3836,10 @@ function renderReport() {
     const nr = nearest(z.zip); z.nearest = nr ? nr.office : ""; z.miles = nr ? nr.miles : null; });
   const pct = v => (v * 100).toFixed(1) + "%";
   const range = months.length ? (months.length === 1 ? monthName(months[0]) : `${monthName(months[0])} to ${monthName(months[months.length - 1])}`) : "no months";
-  const who = office ? `patients of ${zShort(office)}` : "all offices";
+  const who = (office ? `patients of ${zShort(office)}` : "all offices") + (rpSel.source ? `, ${RP_SOURCES[rpSel.source]} referrals only` : "");
   // Lead and tiles
   $("rp-lead").textContent = grand || patients ? `${range}, ${who}: ${rpMoney(grand)} collected from ${patients.toLocaleString()} new patients living in ${ranked.length.toLocaleString()} ZIP codes. The ten biggest ZIPs account for ${grand ? pct(top10 / grand) : "0%"} of that, and ${half} ZIPs account for half.`
-    : "No ZIP data for this range: upload the months' Referral Production Listings (grouped by Zip Code) on the Upload tab.";
+    : rpSel.source ? `No ${RP_SOURCES[rpSel.source]} referrals in this range${office ? " for this office" : ""}.` : "No ZIP data for this range: upload the months' Referral Production Listings (grouped by Zip Code) on the Upload tab.";
   $("rp-tiles").innerHTML = [["Collected from new patients", rpMoney(grand), range], ["New patients", patients.toLocaleString(), `${paid.toLocaleString()} paid something (${patients ? pct(paid / patients) : "0%"})`],
     ["ZIP codes", ranked.length.toLocaleString(), "home ZIPs of those patients"], ["ZIPs that bring half the dollars", String(half), `the top 10 ZIPs bring ${grand ? pct(top10 / grand) : "0%"}`]]
     .map(([k, v, s]) => `<div class="rp-tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join("");
@@ -4396,7 +4403,7 @@ function timeScale(metric) {   // one scale for the whole run: a busy ZIP-period
   if (mapTime.scale?.metric === metric && mapTime.scale.sig === timeSig()) return mapTime.scale;
   const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked, per = {};
   mapData.zips.forEach(z => z.patients.forEach(p => {
-    if ((office && p.office !== office) || (type && p.type !== type) || (paidOnly && !(p.collection > 0))) return;
+    if ((office && p.office !== office) || (type && p.type !== type) || (paidOnly && !(p.collection > 0)) || !sourceOk(refSource(p.referral))) return;
     const k = timeKey(p, mapTime.step); if (!k) return;
     const c = per[`${z.zip}|${k}`] = per[`${z.zip}|${k}`] || {pop: z.pop, n: 0, total: 0}; c.n++; c.total += p.collection;
   }));
@@ -4414,7 +4421,7 @@ function timeScale(metric) {   // one scale for the whole run: a busy ZIP-period
       + (mapTime.mode === "running" ? ` (a busy ${unit}, ${fmtMeasure(busy, metric)}, × ${n} ${unit}s)` : ` (a busy ${unit})`) + "; each lighter shade is half the one above."};
   return mapTime.scale;
 }
-const timeSig = () => [mapTime?.step, mapTime?.mode, rpSel.office, $("mp-type").value, $("mp-paid").checked, mapData?.from, mapData?.to].join("|");
+const timeSig = () => [mapTime?.step, mapTime?.mode, rpSel.office, rpSel.source, $("mp-type").value, $("mp-paid").checked, mapData?.from, mapData?.to].join("|");
 function setTimeUi() {
   const keys = timeKeys($("mp-step").value), on = !!mapTime;
   $("mp-slider").max = Math.max(0, keys.length - 1);
@@ -4474,7 +4481,7 @@ function mapScale(metric) {
   const office = rpSel.office, type = $("mp-type").value, paidOnly = $("mp-paid").checked, inRange = new Set(months);
   const per = {};   // "zip|month" -> that ZIP's patients and dollars that month
   ztData.rows.forEach(r => {
-    if (!inRange.has(r.month) || (office && r.office !== office) || (type && r.type !== type)) return;
+    if (!inRange.has(r.month) || (office && r.office !== office) || (type && r.type !== type) || !sourceOk(r.source)) return;
     const c = per[`${r.zip}|${r.month}`] = per[`${r.zip}|${r.month}`] || {zip: r.zip, n: 0, total: 0};
     c.n += paidOnly ? r.n_paid : r.n; c.total += r.total;
   });
@@ -4667,7 +4674,7 @@ function mapZips() {   // the ZIPs after the filters, each with its matching pat
   const pins = mapData.pins.filter(p => !office || p.office === office);   // the same offices the rings are drawn for
   return mapData.zips.map(z => {
     const ps = z.patients.filter(p => (!office || p.office === office) && (!type || p.type === type) && (!paidOnly || p.collection > 0)
-                                      && (!mapTime || inTimeWindow(p)));
+                                      && sourceOk(refSource(p.referral)) && (!mapTime || inTimeWindow(p)));
     const per = {}; ps.forEach(p => per[p.office] = (per[p.office] || 0) + 1);
     const top = Object.entries(per).sort((a, b) => b[1] - a[1])[0];
     let nearest = null;

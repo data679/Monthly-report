@@ -3497,14 +3497,15 @@ def maps_trends():
 
 
 def _maps_trends():
-    """New patients and $ collected per ZIP, month, office and General/Ortho type, for every month loaded: the
+    """New patients and $ collected per ZIP, month, office, General/Ortho type and referral source (google, adwords or other), for every month loaded: the
     Charts tab's "ZIP trends". ZIP-level counts only, nothing per patient."""
     conn = db()
     rows = [dict(r) for r in conn.execute(
-        "SELECT m.zip, substr(m.period_from, 1, 7) AS month, m.office, COALESCE(t.type, 'Unknown') AS type, COUNT(*) AS n, "
+        "SELECT m.zip, substr(m.period_from, 1, 7) AS month, m.office, COALESCE(t.type, 'Unknown') AS type, "
+        "CASE UPPER(TRIM(m.referral_type)) WHEN 'GOOGLE' THEN 'google' WHEN 'ADWORDS' THEN 'adwords' ELSE 'other' END AS source, COUNT(*) AS n, "
         "SUM(CASE WHEN m.collection > 0 THEN 1 ELSE 0 END) AS n_paid, ROUND(SUM(m.collection), 2) AS total "
         "FROM map_patients m LEFT JOIN patient_types t ON t.office = m.office AND t.pat_id = m.pat_id "
-        "GROUP BY m.zip, month, m.office, type")]
+        "GROUP BY m.zip, month, m.office, type, source")]
     months = sorted({r["month"] for r in rows})
     # The latest "Thru" date loaded for each month: a month whose listings stop before its last day is partial.
     thru = {r[0]: r[1] for r in conn.execute("SELECT substr(period_from, 1, 7), MAX(as_of) FROM map_patients GROUP BY 1")}

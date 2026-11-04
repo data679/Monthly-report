@@ -389,7 +389,9 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   only). Per ZIP × month × office × General/Ortho: patients, paid patients, $ collected, plus each month's latest
   Thru date (`thru`; a month whose Thru is before its last day is **partial**: shown dashed/italic, left out of
   counts and totals), office `pins` and ZIP `centers` (nearest office, computed on the page). Filters: Office
-  (patients who visit it) + From/To month (`zipReportSel`). Sections: lead sentence + 4 tiles (collected, patients,
+  (patients who visit it) + Source (Denticon referral source: All / Google + AdWords / Google / AdWords; trends rows carry
+  `source` = google, adwords or other, the map uses each patient's `referral`; the lender card has no source, so it says the
+  filter doesn't apply) + From/To month (`zipReportSel`). Sections: lead sentence + 4 tiles (collected, patients,
   ZIPs, ZIPs for half the $ / top-10 share); collected per month (bars, partial dashed); top 25 ZIPs by $ (bars);
   **the map** (see Maps below; its Office comes from the report's Office filter, its Month select stays inside the
   report's range); top 10 ZIPs month by month (small multiples, one scale); every ZIP as a sortable/searchable table
