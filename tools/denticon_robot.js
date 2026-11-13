@@ -19,7 +19,6 @@ const ROOT = path.resolve(__dirname, "..");
 const PROFILE = path.join(ROOT, "data", "denticon-browser");
 const INBOX = path.join(ROOT, "data", "inbox");
 const STATUS = path.join(ROOT, "data", "denticon-robot.json");
-const REPORT_PAGE = "https://a1.denticon.com/ASPX/Reports/GroupRptsDlyRpts.aspx";
 const LOGIN_PAGE = "https://www.denticon.com/login";
 const REPORT_NAME = "GrpExecSumm2";   // the group Executive Summary; its Excel export is what the app parses
 
@@ -92,7 +91,7 @@ function pullModule() {
     const CMD = path.join(ROOT, "data", "denticon-robot.cmd");
     const context = await launch(true);
     let page = context.pages()[0] || await context.newPage();
-    await page.goto(REPORT_PAGE, { waitUntil: "domcontentloaded" }).catch(() => {});
+    await page.goto(pullModule().REPORT_PAGE(), { waitUntil: "domcontentloaded" }).catch(() => {});
     let login = await pullModule().needsLogin(page);
     writeStatus({ serving: true, state: login ? "waiting_login" : "idle", needs_login: login, message: login ? "Log into Denticon in the robot window." : "Robot window open, logged in. Waiting for a pull." });
     let lastTouch = Date.now();
@@ -114,15 +113,16 @@ function pullModule() {
       if (login && Date.now() - lastTouch > 10 * 1000) {
         // Waiting for a login: look at the open tabs every 10 s (without moving them), so the status flips as soon as someone logs in.
         lastTouch = Date.now();
-        const p = context.pages().find(x => /a1\.denticon\.com/i.test(x.url())) || page;
+        const pm = pullModule();
+        const p = context.pages().find(x => pm.APP_HOST.test(x.url())) || page;
         const title = await p.title().catch(() => "");
-        if (/a1\.denticon\.com/i.test(p.url()) && /Welcome,\s*\S/.test(title) && !(await pullModule().needsLogin(p))) {
+        if (pm.onApp(p.url()) && /Welcome,\s*\S/.test(title) && !(await pm.needsLogin(p))) {
           login = false; page = p;
           writeStatus({ serving: true, state: "idle", needs_login: false, logged_in_at: new Date().toISOString(), message: "Robot window open, logged in. Waiting for a pull." });
         }
       } else if (Date.now() - lastTouch > 15 * 60 * 1000) {
         lastTouch = Date.now();
-        await page.goto(REPORT_PAGE, { waitUntil: "domcontentloaded" }).catch(() => {});
+        await page.goto(pullModule().REPORT_PAGE(), { waitUntil: "domcontentloaded" }).catch(() => {});
         login = await pullModule().needsLogin(page);
         writeStatus({ serving: true, state: login ? "waiting_login" : "idle", needs_login: login, message: login ? "Log into Denticon in the robot window." : "Robot window open, logged in. Waiting for a pull." });
       }

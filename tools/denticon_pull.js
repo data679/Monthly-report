@@ -11,10 +11,24 @@ const PULLS = path.join(ROOT, "data", "pulls");        // month-to-date (range) 
 const RANGE_MARK = path.join(ROOT, "data", "denticon-robot.range");   // present = the next pull is one range report (From..Thru)
 const EXPLORE_MARK = path.join(ROOT, "data", "denticon-robot.explore");   // present = look at a page instead of pulling (mapping new reports)
 const REPORT_MARK = path.join(ROOT, "data", "denticon-robot.report");     // present = which report to pull ("referral"); default = Executive Summary
-const REFERRAL_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Referral Reports";
-const DAILY_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Daily Reports";
-const TXPLAN_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Treatment Plan Reports";
-const PATIENT_LIST_PAGE = "https://a1.denticon.com/ASPX/NewReports.aspx?RptName=Patient List Reports";
+// Denticon puts an account on one of its app servers (a1, a2, ...) at login; the robot follows whichever one the last
+// login landed on, remembered in data/denticon-robot.host.
+const HOST_FILE = path.join(ROOT, "data", "denticon-robot.host");
+const APP_HOST = /^https:\/\/(a\d+)\.denticon\.com\//i;
+function appHost() {
+  try { const h = fs.readFileSync(HOST_FILE, "utf8").trim(); if (/^a\d+$/.test(h)) return h; } catch (e) {}
+  return "a1";
+}
+function onApp(url) {
+  const m = APP_HOST.exec(url || "");
+  if (m && m[1].toLowerCase() !== appHost()) fs.writeFileSync(HOST_FILE, m[1].toLowerCase());
+  return !!m;
+}
+const appUrl = p => `https://${appHost()}.denticon.com${p}`;
+const REFERRAL_PAGE = () => appUrl("/ASPX/NewReports.aspx?RptName=Referral Reports");
+const DAILY_PAGE = () => appUrl("/ASPX/NewReports.aspx?RptName=Daily Reports");
+const TXPLAN_PAGE = () => appUrl("/ASPX/NewReports.aspx?RptName=Treatment Plan Reports");
+const PATIENT_LIST_PAGE = () => appUrl("/ASPX/NewReports.aspx?RptName=Patient List Reports");
 const ORTHO_REFERRAL_CODE = "ZREFORTH";   // the "Ortho Referral" procedure code under Other
 
 // Open the report viewer the "Print / Preview" popup points at in a plain tab, wait for the report to draw, click an
@@ -23,7 +37,7 @@ async function exportFromPopup(context, page, fr, printSelector, iconId, file, l
   for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
   const [popup] = await Promise.all([context.waitForEvent("page", { timeout: 120000 }), clickIn(fr, printSelector)]);
   await popup.waitForLoadState("domcontentloaded").catch(() => {});
-  for (let i = 0; i < 15 && !/r2\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
+  for (let i = 0; i < 15 && !/r\d+\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
   const viewerUrl = popup.url();
   log(`${label}: viewer ${viewerUrl.slice(0, 140)}`);
   await popup.close().catch(() => {});
@@ -40,7 +54,14 @@ async function exportFromPopup(context, page, fr, printSelector, iconId, file, l
   await viewer.waitForTimeout(2000);
   const header = viewer.frames().find(f => /ReportHeader/i.test(f.url()));
   if (!header) throw new Error("the viewer's header (with the Export icons) was not found");
-  const [download] = await Promise.all([viewer.waitForEvent("download", { timeout: 180000 }), header.click("#" + iconId)]);
+  let download;
+  try { [download] = await Promise.all([viewer.waitForEvent("download", { timeout: 180000 }), header.click("#" + iconId, { timeout: 30000 })]); }
+  catch (e) {   // say what the header does offer, so a report with other export icons can be mapped
+    const ids = await header.$$eval("[id]", els => els.filter(e => e.offsetParent).map(e => `${e.tagName}#${e.id}${e.title ? "(" + e.title + ")" : ""}`).slice(0, 40)).catch(() => []);
+    log(`${label}: export icon #${iconId} failed; header has ${ids.join(" ")}`);
+    await viewer.screenshot({ path: path.join(ROOT, "data", "denticon-robot-viewer-fail.png") }).catch(() => {});
+    throw e;
+  }
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await download.saveAs(file + ".part");
   await viewer.close().catch(() => {});
@@ -70,7 +91,7 @@ async function pickAllOffices(fr) {
 // The Treatment Plan Status (# of ortho referrals): Treatment Plan Reports › Treatment Plan Status, all offices, the
 // day, every status, procedure code Other › Ortho Referral (ZREFORTH) only, exported as Excel from the viewer.
 async function pullTxPlanStatus(context, page, frm, thru) {
-  await page.goto(TXPLAN_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.goto(TXPLAN_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
   let fr = null;
   for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /TreatmentPlanReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
@@ -113,7 +134,7 @@ async function pullTxPlanStatus(context, page, frm, thru) {
 // The ortho Daily Journal (ortho collection): Daily Reports › Daily Journal, Detail, all offices, the day, Patient
 // Type Ortho, Payments and Adjustments only (no Services), exported as Word, which the app's parser reads.
 async function pullOrthoJournal(context, page, frm, thru) {
-  await page.goto(DAILY_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.goto(DAILY_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
   let fr = null;
   for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /DailyReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
@@ -151,10 +172,62 @@ async function pullOrthoJournal(context, page, frm, thru) {
   return exportFromPopup(context, page, fr, "button.btn-primary:has-text('Print / Preview')", "WordIconImg", file, "ortho journal");
 }
 
+// The Production Analysis (production by procedure category): Daily Reports › Production Analysis Report, by
+// Category, all offices, every provider and category, the day, exported as Excel from the viewer.
+async function pullProdAnalysis(context, page, frm, thru) {
+  await page.goto(DAILY_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
+  if (await needsLogin(page)) throw new Error("not logged in");
+  let fr = null;
+  for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /DailyReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
+  if (!fr) throw new Error("the Daily Reports screen did not load");
+  await fr.waitForSelector("#rbDlyProdAnalysis", { timeout: 60000 });
+  await clickIn(fr, "#rbDlyProdAnalysis");
+  await fr.waitForSelector("#prodAnalysisByCategory", { timeout: 30000 });
+  await clickIn(fr, "#prodAnalysisByCategory");
+  await clickIn(fr, "#rptPrntExcel");   // straight to Excel (the viewer offers Word only for this report)
+  await clickIn(fr, "#test2");          // by Office
+  await clickIn(fr, "button.office-btns >> visible=true");
+  await fr.waitForSelector("#chkAllOfc", { timeout: 30000 });
+  if (!(await fr.isChecked("#chkAllOfc"))) await clickIn(fr, "#chkAllOfc");
+  await fr.waitForTimeout(600);
+  const left = await fr.$$eval("#availabelist option", o => o.length).catch(() => 0);
+  const already = await fr.$$eval("#selectedlist option", o => o.length).catch(() => 0);
+  if (left > 0 && already < 10) { await clickIn(fr, "#btnRight"); await fr.waitForTimeout(600); }
+  await clickIn(fr, "button.btn-primary:has-text('apply') >> visible=true");
+  await fr.waitForTimeout(800);
+  for (const [sel, val] of [["#dtStartDate", us(frm)], ["#dtEndDate", us(thru)]]) {
+    await fr.fill(sel, ""); await fr.fill(sel, val); await fr.$eval(sel, el => { el.dispatchEvent(new Event("change", { bubbles: true })); el.blur(); });
+  }
+  const offices = await fr.$eval("#txtselOffices", el => el.value).catch(() => "");
+  const cats = await fr.$eval("#selCategory", el => el.value).catch(() => "");
+  log(`production analysis ${frm}..${thru}: offices "${offices.slice(0, 40)}", categories "${cats.slice(0, 20)}"`);
+  if (!offices || offices.split(",").length < 2 && !/all/i.test(offices)) throw new Error(`only one office selected (${offices})`);
+  if (!/^all$/i.test(cats.trim())) throw new Error(`the category filter is "${cats}", not ALL`);
+  const dir = frm === thru ? INBOX : PULLS;
+  const file = path.join(dir, frm === thru ? `Denticon_ProdAnalysis ${frm}.xlsx` : `Denticon_ProdAnalysis ${frm} to ${thru} pulled ${new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "")}.xlsx`);
+  for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
+  // Excel comes back as a download, either from this page or from a popup it opens.
+  const got = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("production analysis: no Excel download within 3 minutes")), 180000);
+    const take = d => { clearTimeout(timer); resolve(d); };
+    page.once("download", take);
+    context.once("page", p => p.once("download", take));
+    clickIn(fr, "button.btn-primary:has-text('Print / Preview')").catch(reject);
+  });
+  fs.mkdirSync(dir, { recursive: true });
+  await got.saveAs(file + ".part");
+  for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
+  const size = fs.statSync(file + ".part").size;
+  log(`production analysis: ${size} bytes (${got.suggestedFilename()})`);
+  if (size < 2000) { fs.unlinkSync(file + ".part"); throw new Error(`production analysis: the export is too small (${size} bytes)`); }
+  fs.renameSync(file + ".part", file);
+  return file;
+}
+
 // The New Patients List (Calls tab: which callers became patients): Patient List Reports › Patient List - New Patient,
 // by first visit date, active and inactive patients, every office, straight to Excel.
 async function pullNewPatients(context, page, frm, thru) {
-  await page.goto(PATIENT_LIST_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.goto(PATIENT_LIST_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
   let fr = null;
   for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /PatientListReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
@@ -199,7 +272,7 @@ async function clickIn(fr, sel) {
 // The Referral Production Listing (NP collection; grouped by ZIP code for the map), all offices, From..Thru, as Excel.
 // Reports › Referral Reports › Referral Production List, in the newer report screen (an app inside a frame).
 async function pullReferral(context, page, frm, thru) {
-  await page.goto(REFERRAL_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.goto(REFERRAL_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
   let fr = null;
   for (let i = 0; i < 30 && !fr; i++) { fr = page.frames().find(f => /ReferralReports/i.test(f.url())); if (!fr) await page.waitForTimeout(1000); }
@@ -229,7 +302,7 @@ async function pullReferral(context, page, frm, thru) {
   for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
   const [popup] = await Promise.all([context.waitForEvent("page", { timeout: 120000 }), clickIn(fr, "button.btn-primary:has-text('Print / Preview')")]);
   await popup.waitForLoadState("domcontentloaded").catch(() => {});
-  for (let i = 0; i < 15 && !/r2\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
+  for (let i = 0; i < 15 && !/r\d+\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
   const viewerUrl = popup.url();
   log("referral: viewer", viewerUrl.slice(0, 140));
   await popup.close().catch(() => {});
@@ -304,7 +377,7 @@ async function explore(context, page, spec) {
   await page.screenshot({ path: path.join(ROOT, "data", "denticon-explore.png"), fullPage: true }).catch(() => {});
 }
 const STATUS = path.join(ROOT, "data", "denticon-robot.json");
-const REPORT_PAGE = "https://a1.denticon.com/ASPX/Reports/GroupRptsDlyRpts.aspx";
+const REPORT_PAGE = () => appUrl("/ASPX/Reports/GroupRptsDlyRpts.aspx");
 const LOGIN_PAGE = "https://www.denticon.com/login";
 const REPORT_NAME = "GrpExecSumm2";
 const PDF_VIEWER = "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai";   // Chrome's own PDF viewer: the report is drawn as a PDF
@@ -338,9 +411,9 @@ async function waitForLogin(context, page, minutes = 15) {
   const until = Date.now() + minutes * 60 * 1000;
   while (Date.now() < until) {
     await new Promise(r => setTimeout(r, 4000));
-    const p = context.pages().find(x => /a1\.denticon\.com/i.test(x.url())) || page;
+    const p = context.pages().find(x => APP_HOST.test(x.url())) || page;
     const title = await p.title().catch(() => "");
-    if (/a1\.denticon\.com/i.test(p.url()) && /Welcome,\s*\S/.test(title)) {
+    if (onApp(p.url()) && /Welcome,\s*\S/.test(title)) {
       writeStatus({ state: "running", needs_login: false, logged_in_at: new Date().toISOString(), message: "Logged in. Pulling the reports." });
       return p;
     }
@@ -366,7 +439,7 @@ async function reportDrawn(viewer) {
 // data/pulls (a month-to-date snapshot to compare against the day-by-day history).
 async function pullReport(context, page, frm, thru) {
   const day = frm;
-  await page.goto(REPORT_PAGE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.goto(REPORT_PAGE(), { waitUntil: "domcontentloaded", timeout: 90000 });
   if (await needsLogin(page)) throw new Error("not logged in");
   await page.click("#rbExecSumm");
   await page.waitForSelector("#chkOfficeOfficeCheckList_OfficeCheckList0", { timeout: 60000 });
@@ -377,7 +450,7 @@ async function pullReport(context, page, frm, thru) {
   for (const extra of context.pages()) if (extra !== page) await extra.close().catch(() => {});
   const [popup] = await Promise.all([context.waitForEvent("page", { timeout: 60000 }), page.click("#btnPrint")]);
   await popup.waitForLoadState("domcontentloaded").catch(() => {});
-  for (let i = 0; i < 12 && !/r2\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
+  for (let i = 0; i < 12 && !/r\d+\.denticon\.com/i.test(popup.url()); i++) await popup.waitForTimeout(1000);
   const viewerUrl = popup.url();
   await popup.close().catch(() => {});
   const frameUrl = new URL(viewerUrl);
@@ -428,8 +501,8 @@ async function pullDays(context, page, days, headed) {
   }
   let which = "exec";
   if (fs.existsSync(REPORT_MARK)) { which = fs.readFileSync(REPORT_MARK, "utf8").trim(); fs.unlinkSync(REPORT_MARK); }
-  const all = { newpts: ["New Patients List", pullNewPatients], exec: ["Executive Summary", pullReport], referral: ["Referral Production", pullReferral], ortho: ["Ortho Daily Journal", pullOrthoJournal], txplan: ["Treatment Plan Status", pullTxPlanStatus] };
-  const runners = (which === "both" ? ["exec", "referral"] : which === "all" ? ["exec", "referral", "ortho", "txplan", "newpts"] : [which in all ? which : "exec"]).map(k => all[k]);
+  const all = { newpts: ["New Patients List", pullNewPatients], exec: ["Executive Summary", pullReport], referral: ["Referral Production", pullReferral], ortho: ["Ortho Daily Journal", pullOrthoJournal], txplan: ["Treatment Plan Status", pullTxPlanStatus], proc: ["Production Analysis", pullProdAnalysis] };
+  const runners = (which === "both" ? ["exec", "referral"] : which === "all" ? ["exec", "referral", "ortho", "txplan", "proc", "newpts"] : [which in all ? which : "exec"]).map(k => all[k]);
   jobs = jobs.flatMap(j => runners.map(r => [...j, r]));
   const names = runners.map(r => r[0]).join(" + ");
   writeStatus({ state: "running", message: `Pulling ${jobs.length} report${jobs.length === 1 ? "" : "s"} (${names}).`, days: [], failed: [], started_at: new Date().toISOString() });
@@ -464,4 +537,4 @@ async function pullDays(context, page, days, headed) {
   return failed.length === 0;
 }
 
-module.exports = { pullDays, needsLogin, waitForLogin, REPORT_PAGE, LOGIN_PAGE };
+module.exports = { pullDays, needsLogin, waitForLogin, REPORT_PAGE, LOGIN_PAGE, APP_HOST, onApp };

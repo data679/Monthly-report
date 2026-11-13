@@ -60,6 +60,7 @@ logs them in one table (the **Log**) with history, a change list, SQL access and
 | `summary_parser.py` | Detects report type and parses Denticon reports (PDF via pdftotext, XLSX via zipfile/XML). Routes NP workbooks to `np_analysis` |
 | `np_analysis.py` | Reads an office's **New Patient Analysis** workbook (downloaded `.xlsm/.xlsx` or Google Sheet) and computes all per-office counts + row-level detail lists |
 | `google_sheets.py` | Service-account sign-in (JWT signed with `openssl`), Sheets API v4 read-only; `SheetsWorkbook` mimics `np_analysis.Workbook` |
+| `report_xlsx.py` | Report builder output (§9e): a report as a preview table, CSV, or .xlsx with formulas (written as flat ODF, converted by LibreOffice) |
 | `sheet_paste.py` | Parses rows pasted from a spreadsheet (tab-separated); currently only the `refunds` column; office-name matching/aliases |
 | `static/index.html` | Whole UI (vanilla JS/CSS, light+dark) |
 | `run.sh` | Auto-restart loop |
@@ -169,7 +170,7 @@ Metrics (all have hover detail lists: sheet row + reason; never names/Pat IDs):
 | net_collections | total_collection − refunds |
 | refund_rate | refunds ÷ total_collection |
 | existing_pt_collection | total_collection − np_collection |
-| irrelevant_rate | (medi_cal + hmo + no_ssn_itin) ÷ new_patients (Exec Summary) |
+| irrelevant_rate | irrelevant_new ÷ np_new_on_sheet: Medi-Cal, HMO or no SSN/ITIN patients ÷ patients on the NP sheet, each patient once, existing-patient referrals out of both (changed 2026-11-05; it used to be the three counts added ÷ Exec Summary new_patients, which could pass 100%). `np_sheet_flags` holds each sheet patient by keyed hash; `refresh_irrelevant` works out the two counts after a sheet or Referral Production Listing is saved, by month and by day; `backfill_np_flags(since)` re-reads old tabs for the flags only. A patient with no referral type stays counted as new. The sheet-vs-Denticon warning (`sheet:np_gap`, over 15% apart, finished months only) is in `checksFor` on /preview only; when it's swapped live, add it to `sheet_checks` in app.py too |
 | ortho_rate | ortho_referrals ÷ new_patients |
 | financing_rate | financing_applicants ÷ new_patients |
 | prime_approval_rate | prime_approved ÷ prime_applicants |
@@ -282,7 +283,7 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   sheet row's contribution to every count, plus the date line above it); rows without a date line are dated from
   `patient_phones.first_visit` (the uploaded New Patients Lists) by Pat ID or key, else stored with day '' and
   reported as `np_undated` ("N NP sheet rows undated" under the Period). Filled by every Google sync / upload; rebuilt
-  for Jul–Oct 2026 on 2026-10-19. Known gaps: Care Dental Center and Gardena Dental Care have no date lines (their New Patients Lists are loaded since 2026-11-04); Dentist Of Gardena's October tab has no Insurance Type column so it isn't read.
+  for Jul–Oct 2026 on 2026-10-19. Known gaps: Care Dental Center and Gardena Dental Care have no date lines (their New Patients Lists are loaded since 2026-11-04). Tab names may start with emoji ("🎃OCTOBER 2026🎃"): `sheet_month` skips what comes before the month.
 - **Inbox folder:** `data/inbox/` (git-ignored). `inbox_loop` (thread, every `INBOX_SECONDS`, default 60) imports any
   .pdf/.xlsx/.xlsm/.doc/.docx older than 15 s with `import_report_file` (same parsing and save paths as the Upload
   tab; dates from the PDF, else from the file name: `2026-10-14`, `10-14-2026` or `20261014`), then moves it to
@@ -350,6 +351,64 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
 - **Attached files** (paperclip, drag-and-drop or paste in the chat): `POST /api/chat/file` (raw body, `X-Filename`; viewers allowed) reads the file at once into a document block held **in memory only** by `assistant.ChatFiles` (random id, forgotten 4 h after last use or on restart; 25 MB max). PDF: `pdftotext -layout` text, or sent as pages when it has no text (scanned, ≤100 pages); .xlsx/.xlsm: tab-separated rows per sheet; .doc/.docx: text (Word tables come one cell per line); .csv/.txt as is; text cut at 300k characters. The browser keeps `{id, name}` per turn and resends the ids; `assistant.run` puts every file of the chat before the first kept message with a cache breakpoint, so follow-ups reuse it cheaply. Questions with files skip saved answers and Haiku (off-topic words still block); the log's route lists the file names, never their contents. The system prompt says to report totals from files, not patient names/IDs/phones.
 - **Google Drive** (`google_drive.py`): tools `drive_search` (name/full-text search, folder contents, or most recent) and `drive_read` (Google Docs/Slides exported as text, Sheets exported as .xlsx and turned into tab-separated text per tab; 40k-character parts with `offset`; exports cached in memory until the file's modifiedTime changes). Signs in with the existing Sheets service account using scope `drive.readonly`, so it sees only what is shared with that email (Viewer); other file types are listed but not opened. Needs the Google Drive API enabled in the service account's Cloud project. Available to every chat user including the view-only link (user's choice). Answers that used Drive are never saved in `assistant_cache`. Audit card: "Check Drive" (`POST /api/assistant/drive`, local-only) lists the latest 20 shared items.
 - **Log:** every question goes to the `assistant_log` table (asked_at, who, question, answer, tools, tokens, error); the Audit card shows the last 15 and 30-day token totals. No usage limits for now (user's choice).
+- **View-only links and agent names** (2026-11-12): `get_calls` can group by agent for password users, but `ai_get_calls`
+  refuses that grouping when the app runs in view-only mode (the Calls page is hidden there too), and `ai_chat` keeps saved
+  answers for view-only links under their own cache key so an answer given to a password user is never replayed to a viewer.
+
+## 9d. Alphaeon Credit sandbox pull (2026-11-09)
+- `tools/alphaeon_pull.py` (stdlib only, standalone, not wired into app.py yet): client-credentials token from
+  `ALPHAEON_CLIENT_ID` / `ALPHAEON_CLIENT_SECRET` (env vars or git-ignored `data/alphaeon.env`), cached in
+  `data/alphaeon_token.json`; calls only POST `reports/applications` and `reports/sales` for `--from/--to` and
+  `--locations` (default `ALPHAEON_LOCATIONS`). Saves to `data/alphaeon.db` (no names, emails, phones or account
+  numbers) and writes a funnel CSV to `data/alphaeon/`. Net = approved + declined; funded = sale + settled.
+  A refused request (403 token, 422 location) prints one line and exits 2 without saving.
+- Demo runbook and production plan: `data/alphaeon-demo.md`.
+- As of 2026-11-09 the sandbox token endpoint returns 403 "needs a client-grant" for the Gardena client; Alphaeon has
+  to fix that. `--demo` runs the same flow against `tools/alphaeon_demo.py` (local stand-in, sample rows, its own
+  `data/alphaeon_demo.db` and "DEMO" CSV names).
+
+## 9e. Report builder (2026-11-11; on /preview until the user approves the swap)
+
+A page (`#reports`, nav "Report builder") where anyone with the app password picks the data, offices, months, rows,
+columns and numbers, sees the table, and downloads a formatted Excel file or CSV. Totals only: nothing per patient.
+View-only links don't get it (none of its routes are in `VIEWER_PATHS`; the nav button is hidden).
+
+- **Sources** (`REPORT_SOURCES`, `REPORT_MEASURES` in app.py): `log` (any Log column, rows = office or month), `zip`
+  (map_patients by ZIP code or city), `referral` (map_patients by Denticon referral type), `calls` (`calls_funnel` groups:
+  channel, medium, source, campaign, promo line, location, agent; group-wide, months as columns), `lenders` (lender_apps).
+- **Spec** (what the page posts and what a saved report keeps): `{source, group, columns: "office"|"month"|"", from, to
+  (YYYY-MM, 24 months at most), offices: [full names; empty = all], measures: [keys, in the order picked; 8 at most],
+  hide_small, name}`. `report_data(spec)` returns the report dict documented at the top of `report_xlsx.py`.
+- **The first measure picked** fills the per-office or per-month columns and sets the row order (biggest first).
+- **Rates and averages** (`ratio` in the measure) are never averaged: each Data row keeps the top and bottom numbers
+  (`<key>__n`, `<key>__d`, only for rows where both exist, as the Log's Total row does) and every cell divides the sums.
+- **Small groups**: for `zip` and `referral`, a row with fewer than `REPORT_SMALL` (11) new patients over the report is
+  marked "small" in the preview; `hide_small` adds them together as one "Other" row (totals unchanged). **This does not
+  make a file safe to send outside the group:** the Data tab and the office tabs still list every office x month x row
+  count, and most of those are under 11 (for a January-October ZIP report with small rows folded, 92% of Data lines; about
+  half are a single patient). The page says so under the preview. A share-safe copy (Data rolled up to what the Summary
+  shows, values only, no office tabs) is not built yet.
+- **Workbook** (`report_xlsx.to_xlsx`): Summary, one tab per office by month (zip, referral, lenders with 2+ offices),
+  Data (one row per office, month and row label) and Notes. Every number outside Data is a SUMIFS formula over Data.
+  Python has no Excel writer here, so the file is written as flat ODF and converted with `soffice --headless`
+  (own profile in `data/libreoffice-profile`, one conversion at a time, about 8-20 s). The formulas carry their answers
+  (computed by `_value`), otherwise LibreOffice recalculates for minutes; `to_xlsx(..., cached=False)` leaves them out to
+  check that formulas and answers agree. Row labels go through `safe_label` (no wildcards or leading = < >) and the file
+  sets Excel-style matching, because LibreOffice otherwise reads "(…)" in a label as a pattern.
+- **Routes**: `GET /api/report/options`, `POST /api/report` (preview, first 50 rows), `POST /api/report/xlsx`,
+  `POST /api/report/csv`, `GET`/`POST /api/reports/saved` (table `saved_reports`: name + spec, never data).
+- **Calls are slow**: `calls_funnel` takes about 3 s a month, so `_report_calls` keeps each month's groups until the
+  calls, patient lists, promo lines or collections change.
+- ZIP and referral reports use the monthly Referral Production Listing (`map_patients`). The Log's NP collection can
+  differ slightly for months it adds up from daily reports.
+- Not built: Procedures as a source (waits for that tab's approval), charts in the file, scheduled or emailed reports,
+  the Ask assistant running reports.
+
+## 9e. Denticon app server (2026-11-13)
+- Denticon now puts the login on an app server other than a1 (it was a2 on 2026-11-13). The robot no longer
+  hard-codes a1: `denticon_pull.js` remembers the server the last login landed on in `data/denticon-robot.host` and
+  builds every report URL from it (`appUrl`, `REPORT_PAGE()` etc.); the "logged in?" check accepts any `aN.denticon.com`.
+  Symptom before the fix: status stuck on "Log into Denticon in the robot window" while the window showed "Welcome, …".
 
 ## 10. Google Sheets sync
 
@@ -451,7 +510,7 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   patients (% of answered)". The report has no Pat ID, so the link is phone-only; run it for a wide date range.
   **Preferred source: Denticon's "New Patients List"** (one office per file: Pat ID, Patient Name (Chart No), DOB,
   Phone# (one cell "(H) : … (C) : … (W) : …"), Email, Prdr, Referred By, Created On, First visit, Type, General/Ortho)
-  **Robot pull** (`newpts`, Upload tab "New Patients List", also in "All five"; 2026-11-04): Patient List Reports (`RptName=Patient List
+  **Robot pull** (`newpts`, Upload tab "New Patients List", also in "All six"; 2026-11-04): Patient List Reports (`RptName=Patient List
   Reports`) › `#rbNewPatientList`, by "Created Date / First Visit Date", `#rbPrintFormatExcel`, active + inactive, all offices,
   `#dtFirstVisitStartDate/EndDate`. One file for the whole range (`Denticon_NewPatientsList FROM to TO.xlsx`, at most 62 days): every
   office in one sheet with an Office Name column and Home/Work/CellPhone columns, which `parse_new_patients_list` also reads. It has
@@ -476,6 +535,13 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   first qualifying call, so each agent's or location's rows add up to the unfiltered totals. Invoca's agent field
   starts in June 2026 and covers about 80% of answered calls; a blank shows as "(not set)". Picking a location
   narrows the agent list. On a transferred call the first leg's agent gets the credit.
+  **Sub-tabs** (`#calls`; live since 2026-11-05): Overview (funnel), Agents, Locations, Marketing, Daily calls (`showCallsTab`, `.cl-tabs`,
+  panels `#clp-*`, last tab in localStorage `callsTab`). One filter bar `#fn-filters` drives all but Daily calls, which picks a day and loads only
+  when opened (its map needs a visible box). Agents ignores the Agent filter and Locations ignores the Location filter, keeping the selection for the
+  other tabs. `calls_funnel` totals and rows also count `CALL_COUNTS`: Invoca's signals `CALL_SIGNALS` (opps = New Opportunity, greeting, helpful,
+  closing, review, biz) plus talk seconds, opp_booked, opp_asked, biz_missed. `renderWhoTable` draws both tables (sortable, rates from counts, best in
+  green unless more than three tie). "Good Call" and "Needs Improvement" aren't used: Invoca sets both on the same calls. Agents under 30 answered calls
+  fold into one row. A location name opens its agents; an agent name opens their funnel on Overview.
   `pull_invoca_range(frm, to)` backfills a date range in one paged fetch (Aug 1–Sep 30 2026 were backfilled).
 - **Promo lines → offices** (table `promo_lines(line PK, office, label)`, `GET/POST /api/calls/lines`, `#pl-card` = a
   collapsed `<details>` at the bottom of the Calls tab (the user doesn't know the line→office mapping yet); the table
@@ -517,6 +583,34 @@ Tabs: **Upload · Log · Google Sheets · Changes · SQL**.
   (`CH_DEFAULT`); new cards added later go last. After a change the charts re-render to their new width and the map
   re-measures. The Map setup card stays outside the grid.
 
+- **Procedures (production by procedure category)** (2026-10-30; tab in /preview only until approved). A fifth robot
+  report, `proc`: Daily Reports › Production Analysis Report, by Category, all offices, every provider and category, one
+  day, with the screen's own Excel option (`#rptPrntExcel`: a direct download; the viewer offers Word only for this
+  report). `pullProdAnalysis` in tools/denticon_pull.js saves `Denticon_ProdAnalysis YYYY-MM-DD.xlsx`; "all" now pulls
+  five reports. `summary_parser.parse_prod_analysis` reads the raw cells (new `_xlsx_workbook` / `_xlsx_cells`, which
+  `xlsx_rows` now uses too), adds provider $ up per office and category and checks them against the report's Total;
+  provider and patient names are not kept. `save_procedures()` replaces the day in `procedure_daily` (office, day,
+  category, production) and marks `daily_report_imports` 'procedures'. One-day files only; a range is refused.
+  `GET /api/procedures?from=&to=` (`procedures_info`, `PROC_CATEGORIES` = Denticon's 13 CDT-range categories with plain
+  names) gives per-office $ and share by category, group shares, by month, and the Executive Summary production for
+  the same days. Its total runs ~1-5% above the Executive Summary at most offices (procedure fees as charted vs net
+  production), more at a few; the page says to read it for the mix. Tab `<section id="proc">`: headline (biggest
+  category, or the biggest gap to the group for one office), tiles (production, biggest category, big-ticket share =
+  implants + bridges + root canals + ortho, treatment $ per $1 of exams and cleanings), office-vs-group paired bars,
+  every-office share table with point gaps, month-by-month $ per category. Hidden on view-only links.
+- **Sub-tabs on other pages** (live 2026-11-05; Procedures stays on /preview with its tab). `wireSubTabs(list, storageKey, onShow)` wires any `.cl-tabs` tablist: buttons
+  with `data-sub`, panels named by `aria-controls` (`.cl-panel`), arrow keys, the last tab per browser. Used by Demographics (Patients vs. area, Languages,
+  Every office; Languages hides From/To, Every office hides Office), Procedures (Mix, Every office, Month by month), Upload (Upload a file, Paste, Robot and
+  inbox; the last goes away where `/api/inbox` is refused) and Audit (Denticon check, Connections). Charts (Summary, Map, ZIP codes, Offices, Financing;
+  `CH_TABS` maps tabs to `data-card`s) is a view over the customizable cards, not separate panels: `chTabApply` puts `.ch-off` on the others, keeps the
+  customized order, shows every card while customizing, drops a tab whose cards are all hidden, and hides Map on view-only links. Charts redraw on showing.
+  `loadMaps` returns early with `mapStale` while the Map tab is closed, because Leaflet can't fit to a hidden box; opening the tab loads it. A ZIP link opens
+  the Map tab. Left without tabs on purpose: Log, Changes, SQL, What if (one job each), Google Sheets (numbered setup steps).
+- **Demographics print report** (2026-10-30): the tab's "Print report" button (`#dm-print`) opens
+  `GET /api/demographics/report?office=&from=&to=` in a new tab: `demographics_report()` builds a standalone page (tiles, what
+  stands out, age and ethnicity bars, families, languages, Asian groups, a "where new patients live" ZIP table for one office
+  with low-reach large ZIPs highlighted, suggestions drawn from the biggest gaps, data notes) with a Print or save as PDF
+  button. Totals only. Blocked on view-only links (not in VIEWER_PATHS).
 - **Demographics tab** (`<section id="demo">`, 2026-10-26; Reports group, for every password user on any
   computer since 2026-10-29, `GET /api/demographics?from=&to=`; hidden on view-only links). New patients (map listings)
   by age at first visit (bands 0-12, 13-17, 18-34, 35-54, 55-64, 65+) and estimated ethnicity (Hispanic, White, Asian /

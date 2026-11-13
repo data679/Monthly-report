@@ -137,12 +137,12 @@ class Workbook:
 
 
 def sheet_month(name):
-    """(year or None, month) from a sheet name like 'September 2026📚' or 'Feburary 💟'."""
+    """(year or None, month) from a sheet name like 'September 2026📚', '🎃OCTOBER 2026🎃' or 'Feburary 💟'."""
     if SKIP_SHEETS.search(name):
         return None
     # Also allows a day between month and year: "August 1 2026" (but "November 25" is still Nov 2025).
     # and an apostrophe year: "APR'26".
-    m = re.match(r"\s*([a-z]{3})[a-z]*\.?\s*['’]?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s+(?=\d{4}))?(\d{4}|\d{2})?\b", name.lower())
+    m = re.match(r"[^a-z0-9]*([a-z]{3})[a-z]*\.?\s*['’]?\s*(?:\d{1,2}(?:st|nd|rd|th)?,?\s+(?=\d{4}))?(\d{4}|\d{2})?\b", name.lower())
     if not m or m.group(1) not in MONTHS:
         return None
     year = m.group(2)
@@ -427,6 +427,7 @@ def parse_month(wb, chosen, default_office=None):
             if hit:
                 counts["no_ssn_itin_patients"] += 1
                 details["no_ssn_itin_patients"].append({"row": r, **hit})
+            irrelevant = bool(hit) or any(ins & keys for keys in INSURANCE_METRICS.values())
             # Applied for financing: "Yes" with any prime lender, or a subprime lender named.
             prime = [header_labels[c].split(" Ran")[0].strip() for c in cols["prime_ran"]
                      if cells.get(c, "").lower().startswith("y")]
@@ -502,6 +503,7 @@ def parse_month(wb, chosen, default_office=None):
                 over.append({"kind": "Subprime", "lender": ran_with, "approved": f"${s_appr_amt:,.2f}",
                              "collected": f"${s_coll_amt:,.2f}"})
             details["_patients"].append({"row": r, "pat_id": cells.get(cols["pat_id"], ""),
+                                         "day": cur_day.isoformat() if cur_day else "", "irrelevant": irrelevant,
                                          "prime": {name: round(v, 2) for name, v in coll_amts},
                                          "subprime": round(s_coll_amt, 2), "other": round(extra, 2)})
             if over:

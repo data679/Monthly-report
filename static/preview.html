@@ -568,13 +568,62 @@
   #pl-table select { padding-right: 26px; }
   #pl-table input { width: min(240px, 40vw); } #pl-table tr.unmapped td:first-child { color: var(--muted); }
   .fn-box { max-height: 380px; overflow: auto; margin-top: 12px; } #fn-table th { white-space: normal; vertical-align: bottom; line-height: 1.25; } .fn-box thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; box-shadow: inset 0 -1px 0 var(--border); }
-  #fn-table tr.fn-fold td { cursor: pointer; color: var(--muted); } #fn-table tr.fn-fold td:first-child::before { content: ""; --i: var(--i-right); width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; } #fn-table tr.fn-fold.open td:first-child::before { --i: var(--i-down); }
-  #fn-table tr.fn-sub td { color: var(--muted); } #fn-table tr.fn-sub td:first-child { padding-left: 26px; }
+  :is(#fn-table, #ag-table) tr.fn-fold td { cursor: pointer; color: var(--muted); } :is(#fn-table, #ag-table) tr.fn-fold td:first-child::before { content: ""; --i: var(--i-right); width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; } #fn-table tr.fn-fold.open td:first-child::before { --i: var(--i-down); }
+  :is(#fn-table, #ag-table) tr.fn-sub td { color: var(--muted); } :is(#fn-table, #ag-table) tr.fn-sub td:first-child { padding-left: 26px; }
   #mk-table td.share i { display: inline-block; height: 8px; border-radius: 3px; background: var(--series); vertical-align: middle; margin-right: 6px; }
   #mk-table td.share span { color: var(--muted); font-size: 12px; }
-  #mk-table td.best { font-weight: 600; color: var(--good); }
+  :is(#mk-table, #ag-table, #lc-table) td.best { font-weight: 600; color: var(--good); }
+  .cl-tabs { display: flex; gap: 2px; margin: 0 0 14px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .cl-tabs button { font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); background: none; border: 0; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
+  .cl-tabs button:hover { color: var(--text); }
+  .cl-tabs button[aria-selected="true"] { color: var(--accent-ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+  .cl-tabs button:focus-visible { outline-offset: -2px; }
+  .cl-panel[hidden], #fn-filters[hidden], .cl-tabs[hidden], .cl-tabs button[hidden] { display: none; }
+  .ch-cards > .card.ch-off, #mp-admin.ch-off { display: none; }
+  body.viewer #chtab-map { display: none; }
+  :is(#ag-table, #lc-table) th { white-space: normal; vertical-align: bottom; min-width: 76px; }
+  :is(#ag-table, #lc-table) :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 150px; }
+  :is(#ag-table, #lc-table) th[data-sort] { cursor: pointer; } :is(#ag-table, #lc-table) th[data-sort]:hover { color: var(--text); }
   .fn-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
   .fn-head .tr-controls { margin: 0; }
+  .rpt-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  .rpt-layout > .card { margin-bottom: 16px; }
+  .rpt-set { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+  .rpt-set legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .rpt-set legend button { font: inherit; font-size: 12px; border: 0; background: none; color: var(--accent-ink); padding: 0; cursor: pointer; }
+  .rpt-set legend button:hover { text-decoration: underline; }
+  .rpt-picks { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
+  #rpt-measures { max-height: 148px; overflow-y: auto; }
+  .rpt-picks label { flex-direction: row; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 999px;
+    background: var(--surface); color: var(--text); font-size: 13px; font-weight: 400; cursor: pointer; white-space: nowrap; }
+  .rpt-picks label:hover { background: var(--hover); }
+  .rpt-picks label:has(input:checked) { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent-ink); font-weight: 500; }
+  .rpt-picks label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .rpt-picks label[hidden] { display: none; }
+  .rpt-picks input { position: absolute; opacity: 0; pointer-events: none; }
+  .rpt-picks label[data-n]::after { content: attr(data-n); font-size: 11px; font-weight: 600; min-width: 16px; height: 16px; line-height: 16px; text-align: center;
+    border-radius: 999px; background: var(--accent); color: var(--accent-text); }
+  #rpt-find { width: 200px; height: 28px; margin-bottom: 6px; }
+  .rpt-small { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text); margin: 0 0 14px; cursor: pointer; }
+  .rpt-actions { align-items: end; }
+  .rpt-actions label { flex: 1 1 220px; max-width: 360px; } .rpt-actions label input { width: 100%; }
+  .rpt-saved { list-style: none; margin: 0; padding: 0; }
+  .rpt-saved li { padding: 10px 0; border-top: 1px solid var(--border); }
+  .rpt-saved li:first-child { border-top: 0; padding-top: 2px; }
+  .rpt-open { font: inherit; font-size: 14px; font-weight: 600; color: var(--accent-ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  .rpt-open:hover { text-decoration: underline; }
+  .rpt-saved .hint { display: block; margin: 2px 0 4px; }
+  .rpt-saved .row { gap: 2px 12px; } .rpt-saved .row button { font: inherit; font-size: 12px; border: 0; background: none; color: var(--muted); padding: 0; cursor: pointer; }
+  .rpt-saved .row button:hover { color: var(--text); text-decoration: underline; }
+  .rpt-box { max-height: 560px; overflow: auto; }
+  .rpt-box thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 -1px 0 var(--border); white-space: normal; vertical-align: bottom; }
+  .rpt-box :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); font-weight: 500; }
+  .rpt-box thead th:first-child { z-index: 3; }
+  .rpt-box tbody tr:hover > td:first-child { background: var(--hover); }
+  .rpt-box tfoot td { position: sticky; bottom: 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--border-strong); z-index: 2; }
+  .rpt-box td.rpt-zero { color: var(--faint); }
+  .rpt-box.rpt-busy { opacity: .45; transition: opacity .2s .3s; }
+  @media (max-width: 1000px) { .rpt-layout { grid-template-columns: minmax(0, 1fr); } .rpt-layout > .rpt-side:not(.rpt-none) { order: -1; } }
   .cl-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; margin: 4px 0 12px; }
   .cl-pie svg { width: 170px; height: 170px; flex: none; }
   .cl-pie .pt { font-size: 13px; font-weight: 600; width: 100%; margin: 0; }
@@ -742,9 +791,11 @@
     <button data-tab="upload"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10V3M5 6l3-3 3 3M3 10.5V12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1.5"/></svg>Upload</button>
     <span class="nav-group">Reports</span>
     <button data-tab="charts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13V8M8 13V3M13 13V6"/></svg>Charts</button>
+    <button data-tab="reports"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M6.5 6.5v7"/></svg>Report builder</button>
     <button data-tab="calls"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 2.5h2.1l1.1 2.7-1.4 1a7.6 7.6 0 0 0 4.4 4.4l1-1.4 2.7 1.1v2.1a1.2 1.2 0 0 1-1.3 1.2A10.8 10.8 0 0 1 2.4 3.8a1.2 1.2 0 0 1 1.2-1.3z"/></svg>Calls</button>
     <button data-tab="whatif"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h4M9.5 4.5h4M2.5 8h7M12.5 8h1M2.5 11.5h2M7.5 11.5h6"/><circle cx="8" cy="4.5" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>What if</button>
     <button data-tab="demo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.2"/><path d="M2 13.5c0-2.4 1.8-4.2 4-4.2s4 1.8 4 4.2"/><circle cx="11.5" cy="6.5" r="1.7"/><path d="M10.8 9.6c1.9-.3 3.6 1.2 3.6 3.9"/></svg>Demographics</button>
+    <button data-tab="proc"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 2.5c-1.7 0-2.7 1.3-2.5 3 .2 1.5.9 2.6 1.2 4 .3 1.6.5 4 1.6 4 1 0 1-2.2 1.7-3.4.4-.6.6-.6 1 0 .7 1.2.7 3.4 1.7 3.4 1.1 0 1.3-2.4 1.6-4 .3-1.4 1-2.5 1.2-4 .2-1.7-.8-3-2.5-3-1.2 0-1.8.6-3 .6s-1.8-.6-3-.6Z"/></svg>Procedures</button>
     <span class="nav-group nav-admin">Admin · this computer</span>
     <button data-tab="google" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M2.5 9.5h11M6.5 2.5v11"/></svg>Google Sheets</button>
     <button data-tab="sql" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6.5 8 3 11.5M8 12h5"/></svg>SQL</button>
@@ -761,6 +812,10 @@
     <div class="page-head">
       <div><h1>Upload</h1><p class="page-sub">Executive Summary: total collection, insurance collection, new patients, total production. Referral Production Listing: NP collection. Daily Journal (Ortho): ortho collection. Treatment Plan Status: ortho referrals. New Patient Analysis: Medi-Cal, HMO, no SSN/ITIN, financing. Refunds come from your sheet.</p></div>
     </div>
+    <div class="cl-tabs" id="up-tabs" role="tablist" aria-label="Ways to add reports">
+      <button type="button" role="tab" id="uptab-file" aria-controls="upp-file" data-sub="file">Upload a file</button><button type="button" role="tab" id="uptab-paste" aria-controls="upp-paste" data-sub="paste">Paste</button><button type="button" role="tab" id="uptab-inbox" aria-controls="upp-inbox" data-sub="inbox">Robot and inbox</button>
+    </div>
+    <div class="cl-panel" id="upp-file" role="tabpanel" aria-labelledby="uptab-file">
     <div class="card">
       <div class="drop" id="drop">
         <strong>Drop a report here</strong>Executive Summary, Referral Production Listing, Daily Journal (Ortho), Treatment Plan Status or an office's New Patient Analysis · .pdf, .xlsx, .xlsm, or Word (.doc, .docx)
@@ -791,7 +846,8 @@
       <p class="msg" id="save-msg"></p>
     </div>
 
-    <p class="or">or</p>
+    </div>
+    <div class="cl-panel" id="upp-paste" role="tabpanel" aria-labelledby="uptab-paste" hidden>
     <div class="card">
       <h2 class="card-title"><label for="paste-text" style="color:var(--text);font-size:16px;font-weight:600">Paste from a spreadsheet</label></h2>
       <p class="hint" style="margin:0 0 10px">Copy the rows from your sheet, including the header row with
@@ -819,6 +875,8 @@
       </div>
       <p class="msg" id="paste-save-msg"></p>
     </div>
+    </div>
+    <div class="cl-panel" id="upp-inbox" role="tabpanel" aria-labelledby="uptab-inbox" hidden>
     <div class="card" id="inbox-card" hidden>
       <h2 class="card-title">Inbox folder <span class="hint" id="inbox-state"></span></h2>
       <p class="hint" style="margin-top:0">Save a Denticon report into <code id="inbox-path"></code> and the app imports it within a minute, the same way as
@@ -831,7 +889,7 @@
           <div class="cal dp" id="rb-menu" role="dialog" aria-label="Pick the days to pull" hidden></div>
         </div>
         <input type="hidden" id="rb-from"><input type="hidden" id="rb-to">
-        <label>Report <select id="rb-report"><option value="exec">Executive Summary</option><option value="referral">Referral Production Listing (NP collection)</option><option value="ortho">Ortho Daily Journal (ortho collection)</option><option value="txplan">Treatment Plan Status (# of ortho referrals)</option><option value="newpts">New Patients List (who callers became; one file for the range)</option><option value="both">Executive Summary + Referral</option><option value="all">All five</option></select></label>
+        <label>Report <select id="rb-report"><option value="exec">Executive Summary</option><option value="referral">Referral Production Listing (NP collection)</option><option value="ortho">Ortho Daily Journal (ortho collection)</option><option value="txplan">Treatment Plan Status (# of ortho referrals)</option><option value="proc">Production Analysis (procedure categories)</option><option value="newpts">New Patients List (who callers became; one file for the range)</option><option value="both">Executive Summary + Referral</option><option value="all">All six</option></select></label>
         <button class="btn primary" id="rb-pull">Pull from Denticon</button>
         <span class="hint" id="rb-status" style="align-self:center;max-width:60ch"></span>
       </div>
@@ -839,6 +897,7 @@
         Denticon logs out after 120 minutes at most, so most pulls start with a login: log in in that window when it appears, and the robot carries on.</p>
       <div class="table-wrap"><table><thead><tr><th>When</th><th>File</th><th>Report</th><th>Dates</th><th style="min-width:26rem">Result</th></tr></thead>
         <tbody id="inbox-rows"></tbody></table></div>
+    </div>
     </div>
   </section>
 
@@ -1056,6 +1115,9 @@
         <div><h1>Charts</h1><p class="page-sub">Where new patients come from (collections by home ZIP code, the map with neighborhoods and a time slider) and which lenders they apply to. Arrange the cards with Customize layout.</p></div>
         <div class="page-actions"><button class="btn quiet" id="ch-custom" aria-pressed="false">Customize layout</button><button class="btn quiet" id="rp-copy">Copy ZIP table</button></div>
       </div>
+      <div class="cl-tabs" id="ch-tabs" role="tablist" aria-label="Charts views">
+        <button type="button" role="tab" id="chtab-summary" aria-controls="ch-cards" data-sub="summary">Summary</button><button type="button" role="tab" id="chtab-map" aria-controls="ch-cards" data-sub="map">Map</button><button type="button" role="tab" id="chtab-zips" aria-controls="ch-cards" data-sub="zips">ZIP codes</button><button type="button" role="tab" id="chtab-offices" aria-controls="ch-cards" data-sub="offices">Offices</button><button type="button" role="tab" id="chtab-financing" aria-controls="ch-cards" data-sub="financing">Financing</button>
+      </div>
       <div class="row tr-controls toolbar" role="group" aria-label="Report filters (apply to the whole report)">
         <label>Office <select id="rp-office"></select></label>
         <label>Source <select id="rp-source"><option value="">All sources</option><option value="google+adwords">Google + AdWords</option><option value="google">Google</option><option value="adwords">AdWords</option></select></label>
@@ -1220,15 +1282,65 @@
   </section>
 
   <!-- Demographics (admin: only on the computer running the app) -->
+  <section id="reports">
+    <div class="page-head">
+      <div><h1>Report builder</h1><p class="page-sub">Pick the data, offices and months, check the table, then download it as an Excel file. Totals only: a report never lists patients.</p></div>
+    </div>
+    <div class="rpt-layout">
+      <div class="card">
+        <div class="row tr-controls" role="group" aria-label="What the report shows">
+          <label>Report on <select id="rpt-source"></select></label>
+          <label>Rows <select id="rpt-group"></select></label>
+          <label>Columns <select id="rpt-columns"></select></label>
+          <label>From <select id="rpt-from"></select></label>
+          <label>To <select id="rpt-to"></select></label>
+        </div>
+        <fieldset class="rpt-set" id="rpt-offices-f">
+          <legend>Offices <button type="button" id="rpt-all">All</button><button type="button" id="rpt-none">Clear</button></legend>
+          <div class="rpt-picks" id="rpt-offices"></div>
+        </fieldset>
+        <fieldset class="rpt-set">
+          <legend>Numbers <span class="hint" style="font-weight:400">The first one you pick fills the columns and sets the order.</span></legend>
+          <input type="search" id="rpt-find" placeholder="Find a number" aria-label="Find a number" hidden>
+          <div class="rpt-picks" id="rpt-measures"></div>
+        </fieldset>
+        <label class="rpt-small" id="rpt-small-f"><input type="checkbox" id="rpt-small"> <span id="rpt-small-text">Add small rows together</span></label>
+        <div class="row rpt-actions">
+          <label>Report name <input type="text" id="rpt-name" maxlength="80" autocomplete="off"></label>
+          <button type="button" class="btn primary" id="rpt-xlsx">Download Excel</button>
+          <button type="button" class="btn" id="rpt-csv">Download CSV</button>
+          <button type="button" class="btn quiet" id="rpt-save">Save report</button>
+        </div>
+        <p class="msg" id="rpt-msg" role="status"></p>
+      </div>
+      <div class="card rpt-side rpt-none">
+        <h2 class="card-title">Saved reports</h2>
+        <ul class="rpt-saved" id="rpt-saved"></ul>
+        <p class="hint" id="rpt-saved-none" style="margin:0">None yet. Set up a report, name it and choose Save report to run it again later.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="tr-title" id="rpt-title">Report</h2>
+      <p class="hint tr-sub" id="rpt-sub"></p>
+      <div class="table-wrap rpt-box"><table id="rpt-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <p class="hint" id="rpt-note" style="margin:10px 0 0"></p>
+    </div>
+  </section>
+
   <section id="demo">
     <div class="page-head">
       <div><h1>Demographics</h1><p class="page-sub">Who your new patients are, by age and estimated ethnicity, next to the people who live around each office. Shows where an office is under-reaching its neighborhood.</p></div>
+      <div class="page-actions"><button class="btn quiet" id="dm-print" title="A one-page report for the office and months picked below, ready to print or save as PDF">Print report</button></div>
+    </div>
+    <div class="cl-tabs" id="dm-tabs" role="tablist" aria-label="Demographics views">
+      <button type="button" role="tab" id="dmtab-who" aria-controls="dmp-who" data-sub="who">Patients vs. area</button><button type="button" role="tab" id="dmtab-lang" aria-controls="dmp-lang" data-sub="lang">Languages</button><button type="button" role="tab" id="dmtab-offices" aria-controls="dmp-offices" data-sub="offices">Every office</button>
     </div>
     <div class="row tr-controls toolbar" role="group" aria-label="Demographics filters">
-      <label>Office <select id="dm-office"></select></label>
-      <label>From <select id="dm-from"></select></label>
-      <label>To <select id="dm-to"></select></label>
+      <label id="dm-office-f">Office <select id="dm-office"></select></label>
+      <label id="dm-from-f">From <select id="dm-from"></select></label>
+      <label id="dm-to-f">To <select id="dm-to"></select></label>
     </div>
+    <div class="cl-panel" id="dmp-who" role="tabpanel" aria-labelledby="dmtab-who">
     <div class="card">
       <div class="wi-answer dm-answer"><div><p class="wi-headline" id="dm-headline">Loading…</p><p class="wi-sentence" id="dm-sentence"></p></div></div>
       <h2 class="wi-h">Families with children</h2>
@@ -1240,6 +1352,8 @@
       </div>
       <div class="dm-keys"><span><i style="background:var(--series)"></i>New patients</span><span><i style="background:var(--series-dim)"></i>People living within <span id="dm-miles">5</span> miles of the office</span></div>
     </div>
+    </div>
+    <div class="cl-panel" id="dmp-lang" role="tabpanel" aria-labelledby="dmtab-lang" hidden>
     <div class="card">
       <h2 class="tr-title" id="dm-lang-title">Languages and Asian communities around the office</h2>
       <p class="hint tr-sub">From the Census for the people living within <span id="dm-miles2">5</span> miles. Use it to choose which languages to staff, list on the Google profile and advertise in.</p>
@@ -1249,13 +1363,54 @@
         <div><h2 class="wi-h">Asian residents by group</h2><div class="dm-list" id="dm-asian"></div></div>
       </div>
     </div>
+    </div>
+    <div class="cl-panel" id="dmp-offices" role="tabpanel" aria-labelledby="dmtab-offices" hidden>
     <div class="card">
       <h2 class="tr-title">Every office</h2>
-      <p class="hint tr-sub">Share of new patients in each group, and the gap to the people living around the office (points). Click an office to see it above.</p>
+      <p class="hint tr-sub">Share of new patients in each group, and the gap to the people living around the office (points). Click an office to see it on Patients vs. area.</p>
       <div class="table-wrap"><table class="dm-table"><thead><tr><th>Office</th><th class="num">New patients</th><th class="num">Hispanic</th><th class="num">White</th>
         <th class="num">Asian / PI</th><th class="num">Black</th><th class="num">Under 18</th><th class="num">Homes with kids</th><th class="num">55+</th><th>Most under-reached</th></tr></thead><tbody id="dm-rows"></tbody></table></div>
     </div>
+    </div>
     <p class="hint" id="dm-note"></p>
+  </section>
+
+  <section id="proc">
+    <div class="page-head">
+      <div><h1>Procedures</h1><p class="page-sub">What kind of work each office does: production by procedure category (exams, cleanings, fillings and crowns, implants, surgery, ortho…), next to the group as a whole.</p></div>
+    </div>
+    <div class="cl-tabs" id="pc-tabs" role="tablist" aria-label="Procedures views">
+      <button type="button" role="tab" id="pctab-mix" aria-controls="pcp-mix" data-sub="mix">Mix</button><button type="button" role="tab" id="pctab-offices" aria-controls="pcp-offices" data-sub="offices">Every office</button><button type="button" role="tab" id="pctab-months" aria-controls="pcp-months" data-sub="months">Month by month</button>
+    </div>
+    <div class="row tr-controls toolbar" role="group" aria-label="Procedures filters">
+      <label id="pc-office-f">Office <select id="pc-office"></select></label>
+      <label>From <select id="pc-from"></select></label>
+      <label>To <select id="pc-to"></select></label>
+    </div>
+    <div class="cl-panel" id="pcp-mix" role="tabpanel" aria-labelledby="pctab-mix">
+    <div class="card">
+      <div class="wi-answer dm-answer"><div><p class="wi-headline" id="pc-headline">Loading…</p><p class="wi-sentence" id="pc-sentence"></p></div></div>
+      <div class="rp-tiles" id="pc-tiles"></div>
+      <h2 class="wi-h" style="margin-top:20px">Share of production by category</h2>
+      <div class="dm-pairs" id="pc-mix" role="img"></div>
+      <div class="dm-keys" id="pc-keys"></div>
+    </div>
+    </div>
+    <div class="cl-panel" id="pcp-offices" role="tabpanel" aria-labelledby="pctab-offices" hidden>
+    <div class="card">
+      <h2 class="tr-title">Every office</h2>
+      <p class="hint tr-sub">Each category's share of the office's production, and the difference from the group (points). Click an office to see it on Mix.</p>
+      <div class="table-wrap"><table class="dm-table"><thead id="pc-head"></thead><tbody id="pc-rows"></tbody></table></div>
+    </div>
+    </div>
+    <div class="cl-panel" id="pcp-months" role="tabpanel" aria-labelledby="pctab-months" hidden>
+    <div class="card">
+      <h2 class="tr-title">Month by month</h2>
+      <p class="hint tr-sub">Production per category for <span id="pc-month-who">all offices</span>, each month pulled so far.</p>
+      <div class="table-wrap"><table class="dm-table"><thead id="pc-mhead"></thead><tbody id="pc-mrows"></tbody></table></div>
+    </div>
+    <p class="hint" id="pc-note"></p>
+    </div>
   </section>
 
   <!-- Audit (admin: only on the computer running the app) -->
@@ -1263,6 +1418,10 @@
     <div class="page-head">
       <div><h1>Audit</h1><p class="page-sub">Denticon checks and the API connections. Only shown on the computer that runs the app.</p></div>
     </div>
+    <div class="cl-tabs" id="au-tabs" role="tablist" aria-label="Audit views">
+      <button type="button" role="tab" id="audtab-check" aria-controls="audp-check" data-sub="check">Denticon check</button><button type="button" role="tab" id="audtab-conn" aria-controls="audp-conn" data-sub="conn">Connections</button>
+    </div>
+    <div class="cl-panel" id="audp-check" role="tabpanel" aria-labelledby="audtab-check">
     <div class="card">
       <h2 class="card-title" style="margin-top:0">Denticon check · NP audit sheets vs Daily Journal</h2>
       <p class="hint" style="margin-top:0">Each new patient's financing on the office's NP sheet ($Amt Coll, before the lender's fee)
@@ -1276,6 +1435,8 @@
       <div id="au-list" style="margin-top:12px"></div>
       <p class="msg" id="au-msg"></p>
     </div>
+    </div>
+    <div class="cl-panel" id="audp-conn" role="tabpanel" aria-labelledby="audtab-conn" hidden>
     <div class="card">
       <h2 class="card-title" style="margin-top:0">Denticon API</h2>
       <p class="hint" style="margin-top:0">Connect the app to Denticon with your API subscription key, so it can read the offices' ledgers
@@ -1340,6 +1501,7 @@
       <h3 class="card-title" style="font-size:14px;margin:16px 0 4px">Recent questions</h3>
       <div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Question</th><th>How</th><th>Answer</th></tr></thead><tbody id="ai-recent"></tbody></table></div>
     </div>
+    </div>
   </section>
 
   <!-- Calls: the funnel, then one day's phone calls from Invoca laid out like a sheet -->
@@ -1347,14 +1509,21 @@
     <div class="page-head">
       <div><h1>Calls</h1><p class="page-sub">Invoca calls joined to Denticon's new-patient lists: who called, who came in, who started treatment and what was collected.</p></div>
     </div>
+    <div class="cl-tabs" role="tablist" aria-label="Calls views">
+      <button type="button" role="tab" id="cltab-overview" aria-controls="clp-overview" data-cl="overview">Overview</button><button type="button" role="tab" id="cltab-agents" aria-controls="clp-agents" data-cl="agents">Agents</button><button type="button" role="tab" id="cltab-locations" aria-controls="clp-locations" data-cl="locations">Locations</button><button type="button" role="tab" id="cltab-marketing" aria-controls="clp-marketing" data-cl="marketing">Marketing</button><button type="button" role="tab" id="cltab-daily" aria-controls="clp-daily" data-cl="daily">Daily calls</button>
+    </div>
+    <div class="row tr-controls toolbar" id="fn-filters" role="group" aria-label="Calls filters for the month">
+      <label>Call month <select id="fn-month"></select></label>
+      <label>Office <select id="fn-office"><option value="">All offices</option></select></label>
+      <label id="fn-location-f">Location <select id="fn-location"><option value="">All locations</option></select></label>
+      <label id="fn-agent-f">Agent <select id="fn-agent"><option value="">All agents</option></select></label>
+    </div>
+
+    <div class="cl-panel" id="clp-overview" role="tabpanel" aria-labelledby="cltab-overview">
     <div class="card" id="fn-card">
       <div class="fn-head">
         <h2 class="tr-title" id="fn-title">Calls to new patients</h2>
-        <div class="row tr-controls" role="group" aria-label="Funnel filters">
-          <label>Call month <select id="fn-month"></select></label>
-          <label>Office <select id="fn-office"><option value="">All offices</option></select></label>
-          <label>Location <select id="fn-location"><option value="">All locations</option></select></label>
-          <label>Agent <select id="fn-agent"><option value="">All agents</option></select></label>
+        <div class="row tr-controls" role="group" aria-label="Funnel breakdown">
           <label>Break down by <select id="fn-by"><option value="channel">marketing channel</option><option value="medium">marketing medium</option><option value="source">marketing source</option><option value="location">location (Invoca)</option><option value="agent">agent who answered</option><option value="promo_line">promo line</option><option value="office">office</option><option value="campaign">campaign</option></select></label>
         </div>
       </div>
@@ -1366,6 +1535,35 @@
       <p class="hint" id="fn-note" style="margin-top:10px"></p>
     </div>
 
+    </div>
+
+    <div class="cl-panel" id="clp-agents" role="tabpanel" aria-labelledby="cltab-agents" hidden>
+    <div class="card">
+      <div class="fn-head">
+        <h2 class="tr-title" id="ag-title">Agent performance</h2>
+        <button class="btn quiet" id="ag-copy">Copy</button>
+      </div>
+      <p class="hint tr-sub" id="ag-sub"></p>
+      <div class="cl-tiles" id="ag-tiles"></div>
+      <div class="table-wrap"><table id="ag-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <p class="hint" id="ag-note" style="margin-top:10px"></p>
+    </div>
+    </div>
+
+    <div class="cl-panel" id="clp-locations" role="tabpanel" aria-labelledby="cltab-locations" hidden>
+    <div class="card">
+      <div class="fn-head">
+        <h2 class="tr-title" id="lc-title">Locations</h2>
+        <button class="btn quiet" id="lc-copy">Copy</button>
+      </div>
+      <p class="hint tr-sub" id="lc-sub"></p>
+      <div class="cl-tiles" id="lc-tiles"></div>
+      <div class="table-wrap"><table id="lc-table"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <p class="hint" id="lc-note" style="margin-top:10px"></p>
+    </div>
+    </div>
+
+    <div class="cl-panel" id="clp-marketing" role="tabpanel" aria-labelledby="cltab-marketing" hidden>
     <div class="card" id="mk-card">
       <div class="fn-head">
         <h2 class="tr-title" id="mk-title">Marketing performance</h2>
@@ -1385,6 +1583,9 @@
       <p class="hint" id="mk-note" style="margin-top:10px"></p>
     </div>
 
+    </div>
+
+    <div class="cl-panel" id="clp-daily" role="tabpanel" aria-labelledby="cltab-daily" hidden>
     <div class="row tr-controls toolbar" role="group" aria-label="Calls filters">
       <label>Day <input type="date" id="cl-date"></label>
       <button class="btn primary" id="cl-pull">Pull this day</button>
@@ -1425,6 +1626,7 @@
       <p class="msg" id="pl-msg"></p>
       </div>
     </details>
+    </div>
   </section>
 
   <!-- Changes -->
@@ -1463,7 +1665,7 @@
         Pasted sheet values (refunds), NP collection (Referral Production Listing) ortho collection (Daily Journal, Ortho) and ortho_referrals (Treatment Plan Status, ZREFORTH), medi_cal_patients, hmo_patients, no_ssn_itin_patients, financing_applicants, existing_finance_patients, prime_applicants, prime_approved, prime_apps_ran, prime_apps_approved, prime_approved_amount, prime_collected_amount, prime_funded, prime_approved_funded, subprime_applicants, subprime_approved, subprime_apps_ran, subprime_apps_approved, subprime_approved_amount, subprime_collected_amount, subprime_funded, fin_approved, fin_funded and fin_approved_funded (New Patient Analysis) are in <code>office_metrics</code> (office, period_from, as_of, metric, value), with history in
         <code>metric_history</code>. <code>monthly_log</code> combines both, the same as the Log tab, plus calculated net_collections (total − refunds),
         refund_rate (refunds ÷ total, a fraction), existing_pt_collection (total − NP collection) and
-        irrelevant_rate ((Medi-Cal + HMO + no SSN/ITIN) ÷ new patients, a fraction) and
+        irrelevant_rate (Medi-Cal, HMO or no SSN/ITIN patients ÷ patients on the NP sheet, each patient once and without existing-patient referrals, a fraction) and
         ortho_rate (ortho referrals ÷ new patients, a fraction) financing_rate (financing applicants ÷ new patients, a fraction) prime_approval_rate (prime approved ÷ prime applicants), prime_collected_rate (prime $ collected ÷ approved), and the
         averages avg_prime_per_approved_np, avg_prime_per_approved_app, avg_prime_per_app_ran and avg_prime_per_applicant. Sheet-name matches are in <code>office_alias</code>.</p>
       </details>
@@ -1700,11 +1902,13 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.tab === "charts") loadCharts();
   if (b.dataset.tab === "audit") { loadAudit(); loadDenticon(); loadInvoca(); loadAssistant(); }
   if (b.dataset.tab === "whatif") loadWhatIf();
+  if (b.dataset.tab === "reports") loadReports();
   if (b.dataset.tab === "demo") loadDemographics();
+  if (b.dataset.tab === "proc") loadProcedures();
   if (b.dataset.tab === "google") { loadGoogle(); loadNotesSheet(); loadLooker(); }
   if (b.dataset.tab === "changes") loadChanges();
   if (b.dataset.tab === "upload") loadInbox();
-  if (b.dataset.tab === "calls") { loadFunnel(); loadCalls(); if ($("pl-card").open) loadPromoLines(); }
+  if (b.dataset.tab === "calls") showCallsTab(clTab, true);
 });
 
 // Upload + parse
@@ -1763,7 +1967,7 @@ const REVIEW_COLUMNS = {
                 ["collected_over_approved", "⚠ # collected > approved"]],
 };
 const REPORT_NAMES = {executive_summary: "Executive Summary", referral: "Referral Production Listing",
-                      ortho_journal: "Daily Journal (Ortho)", ortho_referrals: "Treatment Plan Status (ortho referrals)",
+                      ortho_journal: "Daily Journal (Ortho)", ortho_referrals: "Treatment Plan Status (ortho referrals)", procedures: "Production Analysis (procedures)",
                       np_analysis: "New Patient Analysis",
                       lender_journal: "Daily Journal (all patients): lender payments to check the NP sheets"};
 const reviewCols = () => REVIEW_COLUMNS[parsed.report_type];          // every number saved
@@ -2048,6 +2252,11 @@ function checksFor(r) {
       problem: `${c.label} is ${pctText(r[c.key])}, over 100%${parts ? ` (${parts})` : ""}.` +
         (top.length ? ` Largest amounts: ${top.map(t => `row ${t.row} (${t.t})`).join(", ")}.` : "")});
   }
+  // The sheet and Denticon should list about the same new patients once a month is over.
+  if (r.days == null && r.new_patients && r.np_new_on_sheet != null && r.period_from.slice(0, 7) < today().slice(0, 7)
+      && Math.abs(r.np_new_on_sheet / r.new_patients - 1) > 0.15)
+    out.push({...base, check_key: "sheet:np_gap", value_sig: `${r.np_new_on_sheet}/${r.new_patients}`, col: "irrelevant_rate",
+      problem: `The NP sheet lists ${r.np_new_on_sheet} new patients but Denticon has ${r.new_patients}, not counting existing-patient referrals. Numbers from this sheet may be off until it's checked.`});
   for (const d of JSON_OR(r.collected_over_approved_detail, []))
     for (const i of d.issues || [])
       out.push({...base, check_key: `row:${d.row}:${i.kind}:${i.lender}`, value_sig: `${i.collected}>${i.approved}`,
@@ -2456,6 +2665,10 @@ const LOG_COLS = [
    title: "# NPs approved & funded (prime + sub) ÷ # NPs approved (prime + sub)",
    ratio: {num: ["fin_approved_funded"], den: "fin_approved"}},
   // Not shown (only used to calculate the per-NP rates below), so `internal`.
+  {key: "irrelevant_new", label: "# irrelevant new patients", kind: "count", asOf: true, internal: true,
+   title: "Medi-Cal, HMO or no SSN/ITIN patients on the NP sheet, each once, without existing-patient referrals"},
+  {key: "np_new_on_sheet", label: "# new patients on NP sheet", kind: "count", asOf: true, internal: true,
+   title: "Patients on the NP sheet, each once, without existing-patient referrals"},
   {key: "np_rows", label: "# NPs on NP sheet", kind: "count", asOf: true, internal: true,
    title: "New patient rows in the New Patient Analysis sheet (the \"per NP\" denominator in this section)"},
   {key: "tx_diagnosed_amount", label: "Amt Tx diagnosed", kind: "money", asOf: true,
@@ -2471,8 +2684,8 @@ const LOG_COLS = [
   {key: "start_tx_rate", label: "% of NPs starting Tx", kind: "pct",
    title: "# NPs started Tx ÷ # NPs on NP sheet", ratio: {num: ["started_tx"], den: "np_rows"}},
   {key: "irrelevant_rate", label: "% irrelevant patients", kind: "pct",
-   title: "(# Medi-Cal + # HMO + # no SSN/ITIN) ÷ New patients",
-   ratio: {num: ["medi_cal_patients", "hmo_patients", "no_ssn_itin_patients"], den: "new_patients"}},
+   title: "New patients on the NP sheet who are Medi-Cal, HMO or no SSN/ITIN. Each patient counts once, and existing-patient referrals are left out",
+   ratio: {num: ["irrelevant_new"], den: "np_new_on_sheet"}},
   {key: "ortho_rate", label: "% to ortho", kind: "pct", title: "# of ortho referrals ÷ New patients",
    ratio: {num: ["ortho_referrals"], den: "new_patients"}},
   {key: "financing_rate", label: "% of NPs applying", kind: "pct",
@@ -3139,8 +3352,9 @@ $("g-sync").onclick = async () => {
 
 // Inbox folder (only on the computer running the app): what was imported from data/inbox lately.
 async function loadInbox() {
-  let d; try { d = await api("/api/inbox"); } catch { $("inbox-card").hidden = true; return; }
-  $("inbox-card").hidden = false; $("inbox-path").textContent = d.folder; loadRobot();
+  const hasInbox = on => { $("uptab-inbox").hidden = !on; if (!on && upTabs.current === "inbox") upTabs.show("file"); };
+  let d; try { d = await api("/api/inbox"); } catch { $("inbox-card").hidden = true; hasInbox(false); return; }
+  hasInbox(true); $("inbox-card").hidden = false; $("inbox-path").textContent = d.folder; loadRobot();
   $("inbox-state").textContent = d.pending.length ? `${d.pending.length} file(s) waiting` : d.every_seconds >= 60 ? `checked every ${Math.round(d.every_seconds / 60)} minute${d.every_seconds >= 120 ? "s" : ""}` : `checked every ${d.every_seconds} seconds`;
   const dates = r => r.period_from ? (r.period_from === r.period_thru ? r.period_from : `${r.period_from} → ${r.period_thru}`) : "";
   $("inbox-rows").innerHTML = d.recent.map(r => `<tr><td>${when(r.seen_at)}</td><td title="${esc(r.file)}">${esc(r.file.length > 48 ? r.file.slice(0, 45) + "…" : r.file)}</td>
@@ -3412,12 +3626,54 @@ $("sql-csv").onclick = () => {
 
 // Charts tab: the collections report, from the same per-ZIP data as the Maps tab (/api/maps/trends: per ZIP ×
 // month × office × General/Ortho: patients, paid patients, $ collected). ZIP totals only, nothing per patient.
+// Sub-tabs inside a page: buttons in a role="tablist" (data-sub), panels named by aria-controls, the last one remembered per browser.
+function wireSubTabs(list, key, onShow) {
+  const tabs = [...list.querySelectorAll("[data-sub]")], api = {current: tabs[0].dataset.sub};
+  try { const t = localStorage.getItem(key); if (tabs.some(b => b.dataset.sub === t)) api.current = t; } catch {}
+  api.show = (tab, ...args) => {
+    api.current = tab;
+    try { localStorage.setItem(key, tab); } catch {}
+    tabs.forEach(b => { const on = b.dataset.sub === tab; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1;
+      const p = document.getElementById(b.getAttribute("aria-controls")); if (p?.classList.contains("cl-panel")) p.hidden = !on; });
+    onShow?.(tab, ...args);
+  };
+  tabs.forEach(b => b.onclick = () => api.show(b.dataset.sub));
+  list.onkeydown = e => {
+    const step = {ArrowRight: 1, ArrowLeft: -1}[e.key]; if (!step) return;
+    e.preventDefault();
+    const open = tabs.filter(b => !b.hidden && getComputedStyle(b).display !== "none"), i = open.findIndex(b => b.dataset.sub === api.current);
+    const next = open[(i + step + open.length) % open.length]; api.show(next.dataset.sub); next.focus();
+  };
+  return api;
+}
+const upTabs = wireSubTabs($("up-tabs"), "uploadTab");
+const audTabs = wireSubTabs($("au-tabs"), "auditTab");
+const pcTabs = wireSubTabs($("pc-tabs"), "procTab", tab => { $("pc-office-f").hidden = tab === "offices"; });
+upTabs.show(upTabs.current); audTabs.show(audTabs.current); pcTabs.show(pcTabs.current);
 let ztData = null;
 // Charts page layout, per browser: card order, which are half width, which are hidden. {order, half, hidden} in localStorage.
 const CH_DEFAULT = {order: ["summary", "months", "top25", "lenders", "map", "smalls", "table", "offices"], half: ["months", "top25"], hidden: []};
 let chLayout = (() => { try { const v = JSON.parse(localStorage.getItem("chartLayout")); if (v && Array.isArray(v.order)) return v; } catch {} return structuredClone(CH_DEFAULT); })();
 const chCards = () => [...$("ch-cards").querySelectorAll(":scope > .card[data-card]")];
 const chName = c => c.querySelector(".tr-title")?.textContent.replace(/ ·.*$/, "").trim() || c.dataset.card;
+// The Charts sub-tabs show some of the cards, in the customized order. Customize layout shows them all. Charts draw to their card's
+// width and the map can't size itself while hidden, so they redraw on showing and the map loads when its tab opens.
+const CH_TABS = {summary: ["summary", "months", "top25"], map: ["map"], zips: ["smalls", "table"], offices: ["offices"], financing: ["lenders"]};
+let chTabs = null, mapStale = false;
+function chTabApply() {
+  if (!chTabs) return;
+  const editing = document.getElementById("charts").classList.contains("ch-editing");
+  $("ch-tabs").hidden = editing;
+  // A tab whose cards are all hidden by the layout goes away.
+  Object.entries(CH_TABS).forEach(([t, ids]) => $("chtab-" + t).hidden = ids.every(id => chLayout.hidden.includes(id)));
+  const viewer = document.body.classList.contains("viewer"), usable = t => !$("chtab-" + t).hidden && !(viewer && t === "map");
+  if (!usable(chTabs.current)) { const t = Object.keys(CH_TABS).find(usable); if (t) chTabs.current = t; }
+  document.querySelectorAll("#ch-tabs [data-sub]").forEach(b => { const on = b.dataset.sub === chTabs.current; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; });
+  chCards().forEach(c => c.classList.toggle("ch-off", !editing && !CH_TABS[chTabs.current].includes(c.dataset.card)));
+  $("mp-admin").classList.toggle("ch-off", !editing && chTabs.current !== "map");
+  requestAnimationFrame(() => { if (ztData && $("rp-months").clientWidth) renderReport(); if (flData) renderLenders(); if (mapView) mapView.invalidateSize(); });
+  if (mapStale && !$("mp-section").classList.contains("ch-off")) { mapStale = false; loadMaps(); }
+}
 function chSave() { try { localStorage.setItem("chartLayout", JSON.stringify(chLayout)); } catch {} }
 function chApply(rerender = true) {
   const box = $("ch-cards"), byId = Object.fromEntries(chCards().map(c => [c.dataset.card, c]));
@@ -3441,10 +3697,12 @@ function chApply(rerender = true) {
   if (rerender) {   // charts draw to their card's width; the map needs to know its new size
     requestAnimationFrame(() => { if (ztData && $("rp-months").clientWidth) renderReport(); renderLenders(); if (mapView) mapView.invalidateSize(); });
   }
+  chTabApply();
 }
 function chEdit(on) {
   document.getElementById("charts").classList.toggle("ch-editing", on);
   $("ch-editbar").hidden = !on; $("ch-custom").setAttribute("aria-pressed", on); $("ch-custom").textContent = on ? "Done customizing" : "Customize layout";
+  chTabApply();
 }
 $("ch-custom").onclick = () => chEdit(!document.getElementById("charts").classList.contains("ch-editing"));
 $("ch-done").onclick = () => chEdit(false);
@@ -3630,6 +3888,9 @@ $("wi-reset").onclick = () => wiPick(wiOffice);
 const DM_AGE = {"0-12": "Children 0–12", "13-17": "Teens 13–17", "18-34": "18–34", "35-54": "35–54", "55-64": "55–64", "65+": "65 and over"};
 const DM_ETH = {hispanic: "Hispanic", white: "White", asian: "Asian / Pacific Islander", black: "Black", other: "Other / mixed"};
 let dmData = null, dmSel = {office: "", from: "", to: ""};
+// Demographics sub-tabs. The languages come from the Census, so the months don't apply there; Every office lists them all, so the office doesn't.
+const dmTabs = wireSubTabs($("dm-tabs"), "demoTab", tab => { $("dm-office-f").hidden = tab === "offices"; $("dm-from-f").hidden = $("dm-to-f").hidden = tab === "lang"; });
+dmTabs.show(dmTabs.current);
 async function loadDemographics() {
   try { dmData = await api(`/api/demographics${dmSel.from ? `?from=${dmSel.from}&to=${dmSel.to}` : ""}`); }
   catch (e) { $("dm-headline").textContent = e.message; return; }
@@ -3643,6 +3904,7 @@ async function loadDemographics() {
 }
 ["dm-from", "dm-to"].forEach(id => $(id).onchange = () => { dmSel[id.slice(3)] = $(id).value; if (dmSel.from > dmSel.to) [dmSel.from, dmSel.to] = [dmSel.to, dmSel.from]; loadDemographics(); });
 $("dm-office").onchange = () => { dmSel.office = $("dm-office").value; renderDemographics(); };
+$("dm-print").onclick = () => window.open(`/api/demographics/report?${new URLSearchParams({office: dmSel.office, from: dmSel.from, to: dmSel.to})}`, "_blank");
 function dmShares(obj, keys) { const t = keys.reduce((a, k) => a + (obj?.[k] || 0), 0); return Object.fromEntries(keys.map(k => [k, t ? (obj[k] || 0) / t : null])); }
 function renderDemographics() {
   if (!dmData) return;
@@ -3717,13 +3979,85 @@ function renderDemographics() {
       + `<td>${under && under[1] < -0.03 ? `${esc(DM_ETH[under[0]])} (−${Math.abs(Math.round(under[1] * 100))} pts)` : under ? "none by more than 3 pts" : "no map pin yet"}</td></tr>`; });
   $("dm-rows").innerHTML = rows.join("") || `<tr><td colspan="10" class="hint">No offices yet.</td></tr>`;
   $("dm-rows").querySelectorAll("tr[data-office]").forEach(tr => tr.onclick = tr.onkeydown = e => { if (e.type === "keydown" && e.key !== "Enter") return;
-    dmSel.office = tr.dataset.office; $("dm-office").value = dmSel.office; renderDemographics(); document.querySelector("main").scrollTo({top: 0, behavior: "smooth"}); });
+    dmSel.office = tr.dataset.office; $("dm-office").value = dmSel.office; dmTabs.show("who"); renderDemographics(); document.querySelector("main").scrollTo({top: 0, behavior: "smooth"}); });
   const found = Object.values(offices).reduce((a, o) => a + o.surname_found, 0), tot = Object.values(offices).reduce((a, o) => a + o.n, 0);
   $("dm-note").textContent = `Ethnicity is an estimate, never a fact about a person: each new patient's surname is looked up in the 2010 Census surname table `
     + `(${tot ? Math.round(found / tot * 100) : 0}% were found; the rest use its "all other names" mix) and combined with the make-up of the Census block group or ZIP they live in, `
     + `the method the Census and federal regulators use (BISG). It is good at telling Hispanic and Asian surnames apart from the rest, weaker for Black vs White, and can't tell national origins apart. `
     + `Only totals per office, month and age group are kept; no names, birth dates or per-patient labels. Area = Census ZIP areas whose center is within ${area?.miles || 5} miles of the office `
     + `(American Community Survey 2019–2023); children 0–12 vs teens is split from the Census 10–14 group. Use it to choose where and how to reach people, never to treat any patient differently.`;
+}
+let pcData = null, pcSel = {office: "", from: "", to: ""};
+async function loadProcedures() {
+  try { pcData = await api(`/api/procedures${pcSel.from ? `?from=${pcSel.from}-01&to=${pcSel.to}-31` : ""}`); }
+  catch (e) { $("pc-headline").textContent = e.message; return; }
+  const ms = pcData.months, opt = (v, t) => `<option value="${v}">${esc(t)}</option>`;
+  if (!pcSel.from && ms.length) { pcSel.from = pcSel.to = ms[ms.length - 1]; }
+  $("pc-from").innerHTML = ms.map(m => opt(m, monthName(m))).join(""); $("pc-to").innerHTML = ms.slice().reverse().map(m => opt(m, monthName(m))).join("");
+  $("pc-office").innerHTML = opt("", "All offices") + Object.keys(pcData.offices).sort().map(o => opt(o, o)).join("");
+  $("pc-office").value = pcSel.office; $("pc-from").value = pcSel.from; $("pc-to").value = pcSel.to;
+  renderProcedures();
+}
+["pc-from", "pc-to"].forEach(id => $(id).onchange = () => { pcSel[id.slice(3)] = $(id).value; if (pcSel.from > pcSel.to) [pcSel.from, pcSel.to] = [pcSel.to, pcSel.from]; loadProcedures(); });
+$("pc-office").onchange = () => { pcSel.office = $("pc-office").value; renderProcedures(); };
+function renderProcedures() {
+  const d = pcData;
+  if (!d || !d.months.length) {
+    $("pc-headline").textContent = "No procedure reports yet.";
+    $("pc-sentence").textContent = "Pull the Production Analysis on the Upload tab (Pull from Denticon › Production Analysis), one file per day.";
+    ["pc-tiles", "pc-mix", "pc-keys", "pc-head", "pc-rows", "pc-mhead", "pc-mrows"].forEach(id => $(id).innerHTML = ""); return;
+  }
+  const sel = pcSel.office && d.offices[pcSel.office] ? pcSel.office : "", o = sel ? d.offices[sel] : null, cats = d.categories;
+  const pct = v => v == null ? "—" : `${Math.round(v * 100)}%`, name = k => (cats.find(c => c.key === k) || {}).name || k;
+  const are = k => / and |s$|\)$/.test(name(k)) ? "are" : "is";
+  const share = Object.fromEntries(cats.map(c => [c.key, o ? (o.share[c.key] || 0) : c.share]));
+  const group = Object.fromEntries(cats.map(c => [c.key, c.share]));
+  const total = o ? o.total : d.total, execP = o ? o.exec_production : d.exec_production;
+  const who = sel ? sel.replace(/^Dentists? Of /, "") : "the group";
+  // Headline: the office's biggest category, or what stands out most against the group.
+  const ranked = cats.filter(c => c.key !== "OTHER").map(c => c.key).sort((a, b) => share[b] - share[a]);
+  const top = ranked[0], gaps = sel ? cats.filter(c => c.key !== "OTHER").map(c => [c.key, share[c.key] - group[c.key]]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) : [];
+  if (sel && gaps.length && Math.abs(gaps[0][1]) >= 0.03) {
+    const [k, g] = gaps[0];
+    $("pc-headline").innerHTML = `${esc(name(k))} ${are(k)}${g > 0 ? "" : " only"} <em>${pct(share[k])}</em> of ${esc(who)}'s production; across the group, <em>${pct(group[k])}</em>.`;
+    $("pc-sentence").textContent = g > 0 ? `${who} does more ${name(k).toLowerCase()} than the group as a whole: ${Math.round(g * 100)} points above the group's share. ${monthName(pcSel.from)}${pcSel.to !== pcSel.from ? " – " + monthName(pcSel.to) : ""}.`
+      : `That's ${Math.abs(Math.round(g * 100))} points below the group: the category with the most room to grow here, if the patients need it.`;
+  } else {
+    $("pc-headline").innerHTML = `${esc(name(top))} ${are(top)} the biggest share of ${sel ? esc(who) + "'s" : "the group's"} production: <em>${pct(share[top])}</em>.`;
+    $("pc-sentence").textContent = `Then ${name(ranked[1]).toLowerCase()} (${pct(share[ranked[1]])}) and ${name(ranked[2]).toLowerCase()} (${pct(share[ranked[2]])}). ${monthName(pcSel.from)}${pcSel.to !== pcSel.from ? " – " + monthName(pcSel.to) : ""}.`;
+  }
+  const tile = (k, v, n) => `<div class="rp-tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${esc(n)}</div></div>`;
+  const big = ["IMPLANT SERVICES", "PROSTHODONTICS (FIXED)", "ORTHODONTICS", "ENDODONTICS"].reduce((a, k) => a + (share[k] || 0), 0);
+  const hyg = (share.PREVENTIVE || 0) + (share.DIAGNOSTIC || 0), rest = (share.RESTORATIVE || 0) + (share.ENDODONTICS || 0) + (share.PERIODONTICS || 0);
+  $("pc-tiles").innerHTML = tile("Production (procedure report)", rpCompact(total), execP ? `Executive Summary: ${rpCompact(execP)}` : "Executive Summary not pulled for these days")
+    + tile("Biggest category", esc(name(top)), `${pct(share[top])} of production`)
+    + tile("Big-ticket work", pct(big), "implants, bridges, root canals, ortho")
+    + tile("Treatment per $1 of exams and cleanings", hyg ? "$" + (rest / hyg).toFixed(2) : "—", "fillings, crowns, root canals, gum work");
+  // Mix: office vs group, or the group alone.
+  const keys = cats.map(c => c.key).filter(k => share[k] > 0 || group[k] > 0);
+  $("pc-mix").innerHTML = keys.map(k => { const gap = sel ? Math.round((share[k] - group[k]) * 100) : null;
+    return `<div class="g"><div class="t"><span>${esc(name(k))}</span>${gap == null ? "" : `<span class="gap">${gap > 0 ? "+" : gap < 0 ? "−" : "±"}${Math.abs(gap)} ${Math.abs(gap) === 1 ? "pt" : "pts"}</span>`}</div>
+      <div class="b p"><span style="width:${share[k] * 100}%"></span><em>${pct(share[k])}</em></div>${sel ? `<div class="b a"><span style="width:${group[k] * 100}%"></span><em>${pct(group[k])}</em></div>` : ""}</div>`; }).join("");
+  $("pc-mix").setAttribute("aria-label", "Share of production by category: " + keys.map(k => `${name(k)} ${pct(share[k])}${sel ? ` vs group ${pct(group[k])}` : ""}`).join(", "));
+  $("pc-keys").innerHTML = sel ? `<span><i style="background:var(--series)"></i>${esc(sel)}</span><span><i style="background:var(--series-dim)"></i>All offices</span>` : "";
+  // Every office: the share of each category with the gap to the group.
+  const tcats = cats.filter(c => c.share >= 0.01 || c.key === "ORTHODONTICS");
+  $("pc-head").innerHTML = `<tr><th>Office</th><th class="num">Production</th>${tcats.map(c => `<th class="num" title="${esc(c.key)} (${esc(c.codes)})">${esc(c.name)}</th>`).join("")}</tr>`;
+  $("pc-rows").innerHTML = Object.keys(d.offices).sort().map(n => { const x = d.offices[n];
+    return `<tr data-office="${esc(n)}" tabindex="0" aria-selected="${n === sel}"><td>${esc(n)}</td><td class="num">${rpCompact(x.total)}</td>`
+      + tcats.map(c => { const v = x.share[c.key] || 0, g = Math.round((v - c.share) * 100);
+        return `<td class="num">${pct(v)}${Math.abs(g) >= 1 ? `<span class="gap">${g > 0 ? "+" : "−"}${Math.abs(g)}</span>` : ""}</td>`; }).join("") + "</tr>"; }).join("");
+  $("pc-rows").querySelectorAll("tr[data-office]").forEach(tr => tr.onclick = tr.onkeydown = e => { if (e.type === "keydown" && e.key !== "Enter") return;
+    pcSel.office = tr.dataset.office; $("pc-office").value = pcSel.office; pcTabs.show("mix"); renderProcedures(); document.querySelector("main").scrollTo({top: 0, behavior: "smooth"}); });
+  // Month by month for the office picked (or all).
+  const months = Object.keys(d.by_month).sort();
+  $("pc-month-who").textContent = sel || "all offices";
+  $("pc-mhead").innerHTML = `<tr><th>Category</th>${months.map(m => `<th class="num">${esc(monthName(m))}</th>`).join("")}</tr>`;
+  const cell = (m, k) => Object.entries(d.by_month[m]).filter(([n]) => !sel || n === sel).reduce((a, [, v]) => a + (v[k] || 0), 0);
+  $("pc-mrows").innerHTML = keys.map(k => `<tr><td>${esc(name(k))}</td>${months.map(m => `<td class="num">${rpCompact(cell(m, k))}</td>`).join("")}</tr>`).join("");
+  $("pc-note").textContent = `From Denticon's Production Analysis Report by Category, pulled one day at a time (${d.days} day${d.days === 1 ? "" : "s"} in these months). `
+    + `Categories are the ADA code ranges, so "Fillings and crowns" is every restorative code (D2000–D2999) and "Office codes (Z)" are the office's own codes. `
+    + `It counts procedure fees as charted, so its total runs a little above the Executive Summary's production, which nets some adjustments; read it for the mix of work, and the Log for production itself. Only totals per office, day and category are kept.`;
 }
 async function loadCharts() {
   if (!ztData) $("rp-tiles").innerHTML = skelTiles(4, "rp-tile");
@@ -3921,7 +4255,7 @@ function bindZipLinks() {
   document.querySelectorAll("#charts .zt-zip").forEach(a => a.onclick = e => {
     e.preventDefault();
     const z = a.dataset.zip;
-    mapFocusZip = z; $("mp-section").scrollIntoView({block: "start", behavior: "smooth"}); loadMaps();
+    mapFocusZip = z; mapStale = false; chTabs.show("map"); $("mp-section").scrollIntoView({block: "start", behavior: "smooth"}); loadMaps();
   });
 }
 
@@ -4022,17 +4356,46 @@ $("pl-card").addEventListener("toggle", () => { if ($("pl-card").open) loadPromo
 // Calls tab, the funnel: calls in a month -> callers who became new patients -> started treatment -> $ collected.
 let fnData = null, fnSel = {month: "", office: "", location: "", agent: "", by: "promo_line"};
 try { Object.assign(fnSel, JSON.parse(localStorage.getItem("callFunnelSel")) || {}); } catch {}
-async function loadFunnel() {
+// Calls sub-tabs. One filter bar drives every tab but Daily calls, which picks a day. The Agents tab lists every agent, so it
+// ignores the Agent filter (kept for the other tabs), and the Locations tab ignores the Location filter the same way.
+const CL_TABS = ["overview", "agents", "locations", "marketing", "daily"];
+let clTab = "overview", fnKey = "", fnSeq = 0;
+try { const t = localStorage.getItem("callsTab"); if (CL_TABS.includes(t)) clTab = t; } catch {}
+function showCallsTab(tab, fresh) {
+  clTab = tab;
+  try { localStorage.setItem("callsTab", tab); } catch {}
+  document.querySelectorAll("[data-cl]").forEach(b => { const on = b.dataset.cl === tab; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; });
+  CL_TABS.forEach(t => $("clp-" + t).hidden = t !== tab);
+  $("fn-filters").hidden = tab === "daily";
+  $("fn-location-f").hidden = tab === "locations"; $("fn-agent-f").hidden = tab === "agents";
+  if (tab === "daily") { loadCalls(); if ($("pl-card").open) loadPromoLines(); if (!fnData) loadFunnel(); }
+  else loadFunnel(!fresh);
+}
+document.querySelectorAll("[data-cl]").forEach(b => b.onclick = () => showCallsTab(b.dataset.cl));
+document.querySelector("#calls .cl-tabs").onkeydown = e => {
+  const step = {ArrowRight: 1, ArrowLeft: -1}[e.key]; if (!step) return;
+  e.preventDefault();
+  const next = CL_TABS[(CL_TABS.indexOf(clTab) + step + CL_TABS.length) % CL_TABS.length];
+  showCallsTab(next); $("cltab-" + next).focus();
+};
+async function loadFunnel(reuse) {
   if (!fnData) $("fn-steps").innerHTML = skelTiles(5, "fn-step");
-  try { fnData = await api(`/api/calls/funnel?month=${encodeURIComponent(fnSel.month)}&office=${encodeURIComponent(fnSel.office)}&location=${encodeURIComponent(fnSel.location)}&agent=${encodeURIComponent(fnSel.agent)}`); }
-  catch (e) { $("fn-note").textContent = e.message; return; }
+  const qs = new URLSearchParams({month: fnSel.month, office: fnSel.office, location: clTab === "locations" ? "" : fnSel.location, agent: clTab === "agents" ? "" : fnSel.agent}).toString();
+  if (reuse && fnData && qs === fnKey) return;
+  const seq = ++fnSeq;
+  let got;
+  try { got = await api(`/api/calls/funnel?${qs}`); }
+  catch (e) { if (seq === fnSeq) $("fn-note").textContent = e.message; return; }
+  if (seq !== fnSeq) return;   // a newer filter or tab asked since
+  fnData = got; fnKey = qs;
   const d = fnData;
   $("fn-month").innerHTML = d.months.map(m => `<option value="${m}">${monthName(m)}</option>`).join("") || `<option value="">No calls pulled yet</option>`;
   $("fn-office").innerHTML = `<option value="">All offices</option>` + d.offices.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   $("fn-location").innerHTML = `<option value="">All locations</option>` + (d.locations || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   $("fn-agent").innerHTML = `<option value="">All agents</option>` + (d.agents || []).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
   fnSel.month = d.month || ""; if (!d.offices.includes(fnSel.office)) fnSel.office = "";
-  fnSel.location = d.location || ""; fnSel.agent = d.agent || "";
+  if (clTab !== "locations") fnSel.location = d.location || "";
+  if (clTab !== "agents") fnSel.agent = d.agent || "";
   $("fn-month").value = fnSel.month; $("fn-office").value = fnSel.office; $("fn-location").value = fnSel.location; $("fn-agent").value = fnSel.agent; $("fn-by").value = fnSel.by;
   try { localStorage.setItem("callFunnelSel", JSON.stringify(fnSel)); } catch {}
   renderFunnel();
@@ -4074,9 +4437,102 @@ function renderMarketing() {
     ...rows.map(r => [r.name, r.calls, pct(r.calls, t.calls), pct(r.answered, r.calls), r.patients, r.answered ? (r.patients / r.answered * 100).toFixed(1) : "", r.started, r.collected.toFixed(2),
       r.calls ? (r.collected / r.calls).toFixed(2) : "", r.patients ? (r.collected / r.patients).toFixed(2) : ""])], "Marketing", e.currentTarget);
 }
+// The Agents and Locations tables: sortable by heading, rates worked out from counts, the best rate in a column in green.
+const clCount = v => v.toLocaleString(), clRate = v => (v * 100).toFixed(0) + "%", clPer100 = v => (v * 100).toFixed(1), clDollars = v => "$" + money(v);
+const clCell = (c, r) => { if (!c.d) return c.n(r); const b = c.d(r); return b ? c.n(r) / b : null; };
+const clShow = (c, r) => { const v = clCell(c, r); return v === null ? "—" : v === 0 && c.fmt === clDollars ? "—" : (c.fmt || clCount)(v); };
+function renderWhoTable(table, cfg) {
+  const {cols, main, low, none, total, sort, firstLabel, cell, rerender} = cfg, t = $(table);
+  const sorted = rows => rows.slice().sort((a, b) => {
+    if (sort.k === "name") return a.name.localeCompare(b.name) * sort.dir;
+    const c = cols.find(x => x.k === sort.k), va = clCell(c, a), vb = clCell(c, b);
+    return va === vb ? 0 : va === null ? 1 : vb === null ? -1 : (va - vb) * sort.dir; });
+  const best = {};
+  cols.filter(c => c.best).forEach(c => { const vals = main.filter(r => (c.d ? c.d(r) : 1) >= (c.min || 20)).map(r => clCell(c, r)).filter(v => v !== null);
+    const top = c.best === "low" ? Math.min(...vals) : Math.max(...vals);
+    if (vals.length > 1 && vals.filter(v => v === top).length <= 3) best[c.k] = top; });   // a crowd tied at 100% isn't a best
+  const cells = (r, mark) => cols.map(c => { const v = clCell(c, r), ok = mark && best[c.k] !== undefined && v === best[c.k] && (c.d ? c.d(r) : 1) >= (c.min || 20);
+    return `<td class="num${ok ? " best" : ""}">${clShow(c, r)}</td>`; }).join("");
+  t.tHead.innerHTML = `<tr><th data-sort="name" aria-sort="${sort.k === "name" ? (sort.dir === 1 ? "ascending" : "descending") : "none"}">${esc(firstLabel)}</th>`
+    + cols.map(c => `<th class="num" data-sort="${c.k}" aria-sort="${sort.k === c.k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}" title="${esc(c.tip || "")}">${esc(c.label)}</th>`).join("") + `</tr>`;
+  t.tHead.onclick = e => { const th = e.target.closest("th[data-sort]"); if (!th) return;
+    const k = th.dataset.sort; if (sort.k === k) sort.dir = -sort.dir; else { sort.k = k; sort.dir = k === "name" ? 1 : -1; } rerender(); };
+  const fold = low && low.length ? low.reduce((a, r) => { Object.keys(a).forEach(k => a[k] += r[k] || 0); return a; }, Object.fromEntries(Object.keys(low[0]).filter(k => k !== "name").map(k => [k, 0]))) : null;
+  t.tBodies[0].innerHTML = sorted(main).map(r => `<tr><td>${cell(r)}</td>${cells(r, true)}</tr>`).join("")
+    + (fold ? `<tr class="fn-fold${cfg.foldOpen.v ? " open" : ""}"><td>${esc(cfg.foldLabel)}</td>${cells(fold)}</tr>` + sorted(low).map(r => `<tr class="fn-sub"${cfg.foldOpen.v ? "" : " hidden"}><td>${cell(r)}</td>${cells(r)}</tr>`).join("") : "")
+    + (none ? `<tr><td class="hint">${esc(cfg.noneLabel)}</td>${cells(none)}</tr>` : "");
+  const f = t.tBodies[0].querySelector("tr.fn-fold");
+  if (f) f.onclick = () => { cfg.foldOpen.v = f.classList.toggle("open"); t.tBodies[0].querySelectorAll("tr.fn-sub").forEach(tr => tr.hidden = !cfg.foldOpen.v); };
+  t.tFoot.innerHTML = main.length || none ? `<tr><td>Total</td>${cells(total)}</tr>` : "";
+  return [[firstLabel, ...cols.map(c => c.label)], ...[...sorted(main), ...(low ? sorted(low) : []), ...(none ? [none] : [])].map(r => [r.name, ...cols.map(c => clShow(c, r))]), ["Total", ...cols.map(c => clShow(c, total))]];
+}
+const clWhoLink = (kind, name) => `<button type="button" class="link-btn" data-go-${kind}="${esc(name)}">${esc(name)}</button>`;
+let agSort = {k: "answered", dir: -1}, lcSort = {k: "calls", dir: -1};
+const agFold = {v: false}, AG_MIN = 30;
+function renderAgents() {
+  const d = fnData;
+  $("ag-title").textContent = `Agent performance · ${d.month ? monthName(d.month) : ""}${fnScope(d)}`;
+  const all = d.month ? d.by.agent : [], named = all.filter(r => r.name !== "(not set)"), none = all.find(r => r.name === "(not set)");
+  if (!named.length) {
+    $("ag-sub").textContent = d.month ? `Invoca sent no agent names for ${monthName(d.month)}${d.location ? ` at ${d.location}` : ""}. It started in June 2026, so pick June or later.` : "Pull some days of calls first.";
+    $("ag-tiles").innerHTML = ""; ["tHead", "tFoot"].forEach(k => $("ag-table")[k].innerHTML = ""); $("ag-table").tBodies[0].innerHTML = ""; $("ag-note").textContent = ""; $("ag-copy").hidden = true;
+    return;
+  }
+  $("ag-copy").hidden = false;
+  const t = d.total, main = named.filter(r => r.answered >= AG_MIN), low = named.filter(r => r.answered < AG_MIN);
+  const a = r => r.answered, o = r => r.opps;
+  const cols = [
+    {k: "answered", label: "Answered", n: a},
+    {k: "talk", label: "Avg talk", n: r => r.talk, d: a, fmt: v => clMMSS(Math.round(v))},
+    {k: "opps", label: "New-patient opportunities", n: o, tip: "Invoca's New Opportunity signal: calls it judged could become a new patient"},
+    {k: "opp_booked", label: "Booked", n: r => r.opp_booked, d: o, fmt: clRate, best: "high", tip: "Of those opportunities, the share with Invoca's Appointment Booked signal"},
+    {k: "opp_asked", label: "Asked for appt", n: r => r.opp_asked, d: o, fmt: clRate, best: "high", tip: "Of those opportunities, the share where the agent asked for the appointment"},
+    {k: "patients", label: "Became new patients", n: r => r.patients},
+    {k: "per100", label: "Per 100 answered", n: r => r.patients, d: a, fmt: clPer100, best: "high"},
+    {k: "collected", label: "$ collected", n: r => r.collected, fmt: clDollars},
+    {k: "greeting", label: "Greeting", n: r => r.greeting, d: a, fmt: clRate, best: "high", tip: "Share of answered calls scored Proper Greeting"},
+    {k: "helpful", label: "Helpful", n: r => r.helpful, d: a, fmt: clRate, best: "high", tip: "Share of answered calls scored Helpful Agent"},
+    {k: "closing", label: "Closing", n: r => r.closing, d: a, fmt: clRate, best: "high", tip: "Share of answered calls scored Closing the Call"},
+    {k: "review", label: "Manager review", n: r => r.review, d: a, fmt: clRate, tip: "Share of answered calls Invoca flagged Manager Review Required"}];
+  $("ag-sub").textContent = `Who answered, whether new-patient callers got booked, and who came in. Invoca named the agent on ${d.agent_known.toLocaleString()} of ${t.answered.toLocaleString()} answered calls${d.location ? ` at ${d.location}` : ""}. Click a heading to sort; click a name to see that agent's funnel.`;
+  $("ag-tiles").innerHTML = `<span><b>${named.length}</b>agents named</span><span><b>${clMMSS(t.answered ? Math.round(t.talk / t.answered) : 0)}</b>avg talk time</span>
+    <span><b>${t.opps ? clRate(t.opp_booked / t.opps) : "—"}</b>of ${t.opps.toLocaleString()} opportunities booked</span><span><b>${t.opps ? clRate(t.opp_asked / t.opps) : "—"}</b>asked for the appointment</span><span><b>${t.patients.toLocaleString()}</b>became new patients</span>`;
+  const grid = renderWhoTable("ag-table", {cols, main, low, none, total: t, sort: agSort, firstLabel: "Agent", cell: r => clWhoLink("agent", r.name), rerender: renderAgents, foldOpen: agFold,
+    foldLabel: `${low.length} agent${low.length === 1 ? "" : "s"} with under ${AG_MIN} answered calls`, noneLabel: "No agent named"});
+  $("ag-note").textContent = `Green is the best rate in a column, among agents with at least ${AG_MIN} answered calls and 20 calls behind the rate; no green when more than three tie. Booked, Asked, Greeting, Helpful, Closing and Manager review are Invoca's automatic scoring of the call, so treat them as a starting point for coaching and listen to some calls before drawing a conclusion. Became new patients and $ collected depend on which calls an agent gets, not only on how they handled them. A patient is credited to their first call; on a transferred call, to the first agent named.`;
+  $("ag-copy").onclick = e => copyGrid(grid, "Agents", e.currentTarget);
+}
+function renderLocations() {
+  const d = fnData;
+  $("lc-title").textContent = `Locations · ${d.month ? monthName(d.month) : ""}${fnScope(d)}`;
+  const all = d.month ? d.by.location : [], main = all.filter(r => r.name !== "(not set)"), none = all.find(r => r.name === "(not set)"), t = d.total || {};
+  $("lc-copy").hidden = !all.length;
+  if (!all.length) { $("lc-sub").textContent = d.month ? "No calls match these filters." : "Pull some days of calls first."; $("lc-tiles").innerHTML = ""; ["tHead", "tFoot"].forEach(k => $("lc-table")[k].innerHTML = ""); $("lc-table").tBodies[0].innerHTML = ""; $("lc-note").textContent = ""; return; }
+  const cols = [
+    {k: "calls", label: "Calls", n: r => r.calls},
+    {k: "answer", label: "Answer rate", n: r => r.answered, d: r => r.calls, fmt: clRate, best: "high", min: 50},
+    {k: "biz", label: "Business-hours calls", n: r => r.biz},
+    {k: "biz_missed", label: "Missed in business hours", n: r => r.biz_missed},
+    {k: "miss_rate", label: "Missed rate", n: r => r.biz_missed, d: r => r.biz, fmt: clRate, best: "low", min: 50},
+    {k: "opps", label: "New-patient opportunities", n: r => r.opps},
+    {k: "opp_booked", label: "Booked", n: r => r.opp_booked, d: r => r.opps, fmt: clRate, best: "high"},
+    {k: "patients", label: "Became new patients", n: r => r.patients},
+    {k: "per100", label: "Per 100 answered", n: r => r.patients, d: r => r.answered, fmt: clPer100, best: "high", min: 50},
+    {k: "started", label: "Started treatment", n: r => r.started},
+    {k: "collected", label: "$ collected", n: r => r.collected, fmt: clDollars},
+    {k: "per_call", label: "$ per call", n: r => r.collected, d: r => r.calls, fmt: clDollars, best: "high", min: 50}];
+  $("lc-sub").textContent = `Each location's calls from ringing through to dollars collected${d.agent ? `, for ${d.agent}` : ""}. Click a heading to sort; click a location to see its agents.`;
+  $("lc-tiles").innerHTML = `<span><b>${t.calls.toLocaleString()}</b>calls</span><span><b>${t.calls ? clRate(t.answered / t.calls) : "—"}</b>answered</span>
+    <span><b>${t.biz_missed.toLocaleString()}</b>missed in business hours (${t.biz ? clRate(t.biz_missed / t.biz) : "—"})</span><span><b>${t.patients.toLocaleString()}</b>became new patients</span><span><b>$${money(t.collected)}</b>collected</span>`;
+  const grid = renderWhoTable("lc-table", {cols, main, none, total: t, sort: lcSort, firstLabel: "Location", cell: r => clWhoLink("location", r.name), rerender: renderLocations, foldOpen: {v: false}, noneLabel: "No location set"});
+  $("lc-note").textContent = `Location is where Invoca routed the call; the patient may be seen at another office. Business hours is Invoca's During Business Hours signal. Green is the best rate in a column, among locations with enough calls for it to mean something. A patient is credited to their first call.`;
+  $("lc-copy").onclick = e => copyGrid(grid, "Locations", e.currentTarget);
+}
+$("ag-table").tBodies[0].addEventListener("click", e => { const b = e.target.closest("[data-go-agent]"); if (!b) return; fnSel.agent = b.dataset.goAgent; showCallsTab("overview"); });
+$("lc-table").tBodies[0].addEventListener("click", e => { const b = e.target.closest("[data-go-location]"); if (!b) return; fnSel.location = b.dataset.goLocation; fnSel.agent = ""; showCallsTab("agents"); });
 function renderFunnel() {
   const d = fnData; if (!d) return;
-  renderMarketing();
+  renderMarketing(); renderAgents(); renderLocations();
   if (!d.month) { $("fn-sub").textContent = "Pull some days of calls first."; $("fn-steps").innerHTML = ""; $("fn-rows").innerHTML = ""; $("fn-note").textContent = ""; return; }
   const t = d.total, pct = (a, b) => b ? `${(a / b * 100).toFixed(a / b * 100 < 10 ? 1 : 0)}%` : "—";
   $("fn-title").textContent = `Calls to new patients · ${monthName(d.month)}${fnScope(d)}`;
@@ -4379,6 +4835,7 @@ const RAMP = ["#fed976", "#feb24c", "#fd8d3c", "#f03b20", "#bd0026"];   // light
 const NO_PATIENTS = "#f3f4f6", NO_FIGURE = "#9ca3af";   // ZIP with no new patients this month; ZIP with no population figure
 const OFFICE_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#dc2626", "#0891b2",
                        "#7c3aed", "#a16207", "#0d9488", "#be185d", "#64748b", "#166534"];
+chTabs = wireSubTabs($("ch-tabs"), "chartsTab", () => chTabApply()); chTabs.show(chTabs.current);
 let officeColorOf = {};
 // Every office keeps its color across months, and offices within 10 miles of each other get the most different hues
 // available, so neighbors (Torrance and Gardena, the two Gardena offices) never look alike on the map.
@@ -4631,6 +5088,7 @@ function mapRangeChanged() {
   loadMaps().then(() => { if (z) setTimeout(() => openNeighborhoods(z), 400); });   // after the map's own fit
 }
 async function loadMaps() {
+  if ($("mp-section").classList.contains("ch-off")) { mapStale = true; return; }   // its tab isn't open; chTabApply loads it when it is
   try {
     await loadLeaflet();
     const range = rpSel.from && rpSel.to ? `?from=${rpSel.from}&to=${rpSel.to}` : "";
@@ -5088,6 +5546,174 @@ $("mp-typefile").onchange = async e => {   // one or many offices' patient lists
     + (failed.length ? `Couldn't read: ${failed.join("; ")}` : ""), !failed.length);
   loadNeighborhoodState(); loadMaps();
 };
+
+// Report builder
+let rptOpts = null, rptSeq = 0, rptTimer = 0, rptNamed = false;
+// Asked for once, when the page opens: a view-only link is refused, and then the page isn't offered at all.
+const rptReady = api("/api/report/options").catch(() => { document.querySelector('nav button[data-tab="reports"]').hidden = true; return null; });
+// The choices on screen: what /api/report takes. measures keep the order they were picked in.
+const rptSpec = {source: "zip", group: "zip", columns: "office", from: "", to: "", offices: [], measures: [], hide_small: false};
+const rptSource = () => rptOpts.sources.find(s => s.key === rptSpec.source);
+const rptMonth = m => new Date(m + "-15").toLocaleDateString(undefined, {month: "short", year: "numeric"});
+const rptLastFull = () => { const d = new Date(); d.setDate(0); return d.toLocaleDateString("en-CA").slice(0, 7); };
+const rptAddMonths = (m, n) => { const d = new Date(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 15); return d.toLocaleDateString("en-CA").slice(0, 7); };
+const rptSpan = (a, b) => (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7));
+async function loadReports() {
+  if (rptOpts) return rptRun();
+  rptOpts = await rptReady;
+  if (!rptOpts) return msg($("rpt-msg"), "The report builder isn't available on this link.", false);
+  $("rpt-source").innerHTML = rptOpts.sources.map(s => `<option value="${s.key}">${esc(s.label)}</option>`).join("");
+  $("rpt-offices").innerHTML = rptOpts.offices.map(o => `<label title="${esc(o.office)}"><input type="checkbox" value="${esc(o.office)}">${esc(o.short)}</label>`).join("");
+  $("rpt-small-text").textContent = `Add rows with fewer than ${rptOpts.small} patients together as one "Other" row`;
+  try { Object.assign(rptSpec, JSON.parse(localStorage.getItem("rptSpec")) || {}); } catch {}
+  rptApply();
+  loadSavedReports();
+}
+// Put rptSpec on the controls, fixing anything the chosen data doesn't offer.
+function rptApply() {
+  if (!rptOpts.sources.some(s => s.key === rptSpec.source)) rptSpec.source = rptOpts.sources[0].key;
+  const s = rptSource();
+  $("rpt-source").value = s.key;
+  if (!s.groups.some(g => g.key === rptSpec.group)) rptSpec.group = s.groups[0].key;
+  $("rpt-group").innerHTML = s.groups.map(g => `<option value="${g.key}">${esc(g.label)}</option>`).join("");
+  $("rpt-group").value = rptSpec.group; $("rpt-group").disabled = s.groups.length < 2;
+  const cols = s.groups.find(g => g.key === rptSpec.group).columns;
+  if (rptSpec.columns && !cols.includes(rptSpec.columns)) rptSpec.columns = cols[0];
+  $("rpt-columns").innerHTML = cols.map(c => `<option value="${c}">${c === "office" ? "Offices" : "Months"}</option>`).join("") + `<option value="">Totals only</option>`;
+  $("rpt-columns").value = rptSpec.columns || "";
+  const months = s.months.slice().reverse(), last = rptLastFull();
+  if (!months.includes(rptSpec.to)) rptSpec.to = months.find(m => m <= last) || months[0] || "";
+  if (!months.includes(rptSpec.from) || rptSpec.from > rptSpec.to) rptSpec.from = months.includes(rptAddMonths(rptSpec.to, -2)) ? rptAddMonths(rptSpec.to, -2) : rptSpec.to;
+  const opts = months.map(m => `<option value="${m}">${rptMonth(m)}</option>`).join("");
+  $("rpt-from").innerHTML = opts; $("rpt-to").innerHTML = opts; $("rpt-from").value = rptSpec.from; $("rpt-to").value = rptSpec.to;
+  $("rpt-offices-f").hidden = !s.offices;
+  rptSpec.offices = rptSpec.offices.filter(o => rptOpts.offices.some(x => x.office === o));
+  $("rpt-offices").querySelectorAll("input").forEach(i => i.checked = rptSpec.offices.includes(i.value));
+  rptSpec.measures = rptSpec.measures.filter(k => s.measures.some(m => m.key === k));
+  if (!rptSpec.measures.length) rptSpec.measures = s.measures.slice(0, 2).map(m => m.key);
+  $("rpt-find").hidden = s.measures.length < 13; $("rpt-find").value = "";
+  $("rpt-measures").innerHTML = s.measures.map(m => `<label><input type="checkbox" value="${m.key}">${esc(m.label)}</label>`).join("");
+  rptMarks();
+  $("rpt-small-f").hidden = !s.small; $("rpt-small").checked = !!rptSpec.hide_small && s.small;
+  rptRun();
+}
+function rptMarks() {
+  $("rpt-measures").querySelectorAll("label").forEach(l => { const i = rptSpec.measures.indexOf(l.firstChild.value);
+    l.firstChild.checked = i >= 0; if (i >= 0 && rptSpec.measures.length > 1) l.dataset.n = i + 1; else delete l.dataset.n; });
+}
+const rptBody = () => JSON.stringify({...rptSpec, hide_small: rptSpec.hide_small && rptSource().small, name: rptNamed ? $("rpt-name").value.trim() : ""});
+function rptRun() {
+  try { localStorage.setItem("rptSpec", JSON.stringify(rptSpec)); } catch {}
+  clearTimeout(rptTimer);
+  rptTimer = setTimeout(async () => {
+    const seq = ++rptSeq, box = $("rpt-table").closest(".rpt-box");
+    box.classList.add("rpt-busy");
+    const slow = setTimeout(() => { if (seq === rptSeq) $("rpt-sub").textContent = "Working it out…" + (rptSpec.source === "calls" ? " Calls take a few seconds for each month the first time." : ""); }, 700);
+    let r;
+    try { r = await api("/api/report", rptBody(), {"Content-Type": "application/json"}); }
+    catch (e) { if (seq === rptSeq) { msg($("rpt-msg"), e.message, false); $("rpt-xlsx").disabled = $("rpt-csv").disabled = true; $("rpt-sub").textContent = ""; box.classList.remove("rpt-busy"); } return; }
+    finally { clearTimeout(slow); }
+    if (seq !== rptSeq) return;
+    box.classList.remove("rpt-busy");
+    if ($("rpt-msg").classList.contains("err")) $("rpt-msg").textContent = "";
+    rptShow(r);
+  }, 200);
+}
+function rptShow(r) {
+  const t = $("rpt-table"), none = !r.n_rows;
+  $("rpt-xlsx").disabled = $("rpt-csv").disabled = none;
+  $("rpt-title").textContent = r.title;
+  if (!rptNamed) $("rpt-name").value = r.name;
+  $("rpt-sub").textContent = r.subtitle.replace(" See the Notes tab.", "") + (r.partial.length ? ` ${r.partial.map(rptMonth).join(", ")} ${r.partial.length > 1 ? "are" : "is"} not complete yet.` : "");
+  const small = new Set(r.small), show = (v, kind) => v == null || v === "" ? "—" : kind === "money" ? `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString()}`
+    : kind === "pct" ? pctText(v) : kind === "count" ? Math.round(v).toLocaleString() : esc(v);
+  const cells = row => row.map((v, i) => r.kinds[i] === "text" ? `<td>${esc(v)}${i === 0 && small.has(v) ? ` <span class="tag" title="Fewer than ${rptOpts.small} patients over these months">small</span>` : ""}</td>`
+    : `<td class="num${v === 0 ? " rpt-zero" : ""}">${v === 0 && r.kinds[i] !== "pct" ? "–" : show(v, r.kinds[i])}</td>`).join("");
+  t.tHead.innerHTML = none ? "" : `<tr>${r.head.map((h, i) => `<th${r.kinds[i] === "text" ? "" : ' class="num"'} scope="col">${esc(h)}</th>`).join("")}</tr>`;
+  t.tBodies[0].innerHTML = none ? `<tr><td class="empty"><b>Nothing for these choices</b>Try other months or offices.</td></tr>` : r.rows.map(row => `<tr>${cells(row)}</tr>`).join("");
+  t.tFoot.innerHTML = none ? "" : `<tr>${cells(r.total)}</tr>`;
+  const notes = [];
+  if (r.n_rows > r.rows.length) notes.push(`Showing the first ${r.rows.length} of ${r.n_rows.toLocaleString()} rows. The download has all of them.`);
+  if (r.small_count) notes.push(`${r.small_count.toLocaleString()} row${r.small_count > 1 ? "s have" : " has"} fewer than ${rptOpts.small} patients.`);
+  // Folding rows doesn't make a file safe to send out: its Data and office tabs still list each month's counts, most of them small.
+  if (rptSource().small) notes.push(`The file's Data and office tabs list every month's counts, many under ${rptOpts.small} patients, so it isn't ready to send outside the group.`);
+  $("rpt-note").textContent = notes.join(" ");
+}
+async function rptDownload(kind) {
+  const b = $(`rpt-${kind}`), was = b.textContent;
+  b.disabled = true; b.textContent = kind === "xlsx" ? "Making the file…" : "Downloading…";
+  msg($("rpt-msg"), kind === "xlsx" ? "Making the Excel file. This takes about 10 to 20 seconds." : "", true);
+  try {
+    const res = await fetch(`/api/report/${kind}`, {method: "POST", body: rptBody(), headers: {"Content-Type": "application/json"}});
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "The download failed.");
+    const name = (/filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "") || [])[1] || `Report.${kind}`;
+    const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(await res.blob()), download: name});
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    msg($("rpt-msg"), `Downloaded ${name}.`, true);
+  } catch (e) { msg($("rpt-msg"), e.message, false); }
+  b.disabled = false; b.textContent = was;
+}
+const rptSummary = s => { const src = rptOpts.sources.find(x => x.key === s.source);
+  return `${src ? src.label : s.source} · ${s.from === s.to ? rptMonth(s.to) : `${rptMonth(s.from)} to ${rptMonth(s.to)}`} · ${s.offices?.length && src?.offices ? `${s.offices.length} office${s.offices.length > 1 ? "s" : ""}` : "all offices"}`; };
+let rptSaved = [];
+function showSavedReports(rows) {
+  rptSaved = rows;
+  $("rpt-saved-none").hidden = rows.length > 0;
+  $("rpt-saved").closest(".rpt-side").classList.toggle("rpt-none", !rows.length);   // on a phone, an empty list sits below the builder
+  $("rpt-saved").innerHTML = rows.map(r => `<li data-id="${r.id}"><button type="button" class="rpt-open" data-act="open">${esc(r.name)}</button>
+    <span class="hint">${esc(rptSummary(r.spec))}</span>
+    <div class="row"><button type="button" data-act="latest" title="Open it with the months moved up to end at last month. A report that starts in January stays year to date.">Update to last month</button><button type="button" data-act="rename">Rename</button><button type="button" data-act="delete">Delete</button></div></li>`).join("");
+}
+async function loadSavedReports() { try { showSavedReports(await api("/api/reports/saved")); } catch {} }
+async function rptSavedPost(body, done) {
+  try { showSavedReports(await api("/api/reports/saved", JSON.stringify(body), {"Content-Type": "application/json"})); if (done) msg($("rpt-msg"), done, true); }
+  catch (e) { msg($("rpt-msg"), e.message, false); }
+}
+function rptOpen(saved, latest) {
+  const s = {...saved.spec};
+  if (latest) { const to = rptLastFull(), ytd = s.from.slice(5) === "01" && s.from.slice(0, 4) === s.to.slice(0, 4);
+    s.from = ytd ? `${to.slice(0, 4)}-01` : rptAddMonths(to, -rptSpan(s.from, s.to)); s.to = to; }
+  Object.assign(rptSpec, {group: "", columns: "", offices: [], measures: [], hide_small: false}, s);
+  delete rptSpec.name;
+  rptNamed = true; $("rpt-name").value = saved.name;
+  rptApply();
+  msg($("rpt-msg"), `Opened “${saved.name}”${latest ? `, for ${rptSpec.from === rptSpec.to ? rptMonth(rptSpec.to) : `${rptMonth(rptSpec.from)} to ${rptMonth(rptSpec.to)}`}` : ""}.`, true);
+}
+$("rpt-saved").onclick = e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const saved = rptSaved.find(r => r.id === +b.closest("li").dataset.id); if (!saved) return;
+  if (b.dataset.act === "open" || b.dataset.act === "latest") return rptOpen(saved, b.dataset.act === "latest");
+  if (b.dataset.act === "delete") { if (confirm(`Delete the saved report “${saved.name}”? Only the saved choices go; no data is removed.`)) rptSavedPost({action: "delete", id: saved.id}, `Deleted “${saved.name}”.`); return; }
+  const name = prompt("New name for this report", saved.name);
+  if (name && name.trim() && name.trim() !== saved.name) rptSavedPost({action: "rename", id: saved.id, name}, "Renamed.");
+};
+$("rpt-save").onclick = () => {
+  const name = $("rpt-name").value.trim();
+  if (!name) return msg($("rpt-msg"), "Give the report a name first.", false);
+  if (rptSaved.some(r => r.name.toLowerCase() === name.toLowerCase()) && !confirm(`Replace the saved report “${name}” with these choices?`)) return;
+  rptSavedPost({action: "save", name, spec: JSON.parse(rptBody())}, `Saved “${name}”.`);
+};
+$("rpt-name").oninput = () => { rptNamed = $("rpt-name").value.trim() !== ""; };
+$("rpt-source").onchange = e => { rptSpec.source = e.target.value; rptSpec.group = ""; rptSpec.columns = "x"; rptSpec.measures = []; rptNamed = false; rptApply(); };
+$("rpt-group").onchange = e => { rptSpec.group = e.target.value; rptSpec.columns = rptSpec.columns || ""; rptNamed = false; rptApply(); };
+$("rpt-columns").onchange = e => { rptSpec.columns = e.target.value; rptRun(); };
+$("rpt-from").onchange = e => { rptSpec.from = e.target.value; if (rptSpec.to < rptSpec.from) { rptSpec.to = rptSpec.from; $("rpt-to").value = rptSpec.to; } rptRun(); };
+$("rpt-to").onchange = e => { rptSpec.to = e.target.value; if (rptSpec.to < rptSpec.from) { rptSpec.from = rptSpec.to; $("rpt-from").value = rptSpec.from; } rptRun(); };
+$("rpt-offices").onchange = () => { rptSpec.offices = [...$("rpt-offices").querySelectorAll("input:checked")].map(i => i.value); rptRun(); };
+$("rpt-all").onclick = () => { rptSpec.offices = rptOpts.offices.map(o => o.office); $("rpt-offices").querySelectorAll("input").forEach(i => i.checked = true); rptRun(); };
+$("rpt-none").onclick = () => { rptSpec.offices = []; $("rpt-offices").querySelectorAll("input").forEach(i => i.checked = false); rptRun(); };
+$("rpt-measures").onchange = e => {
+  const k = e.target.value;
+  if (e.target.checked) { if (rptSpec.measures.length >= 8) { e.target.checked = false; return msg($("rpt-msg"), "A report holds up to 8 numbers. Untick one first.", false); } rptSpec.measures.push(k); }
+  else rptSpec.measures = rptSpec.measures.filter(x => x !== k);
+  rptMarks(); rptRun();
+};
+$("rpt-find").oninput = e => { const q = e.target.value.trim().toLowerCase();
+  $("rpt-measures").querySelectorAll("label").forEach(l => l.hidden = !!q && !l.textContent.toLowerCase().includes(q) && !l.firstChild.checked); };
+$("rpt-small").onchange = e => { rptSpec.hide_small = e.target.checked; rptRun(); };
+$("rpt-xlsx").onclick = () => rptDownload("xlsx");
+$("rpt-csv").onclick = () => rptDownload("csv");
+
 loadLog();   // the Log tab opens first
 </script>
 </body>

@@ -39,6 +39,7 @@ import assistant
 import google_sheets
 import google_drive
 import np_analysis
+import report_xlsx
 from sheet_paste import METRICS, PasteError, candidates, normalize, parse_paste, rows_to_text, title_case
 from summary_parser import parse_new_patient_appts, parse_new_patients_list, calls_upload_kind, ParseError, parse_patient_types, parse_report
 
@@ -61,9 +62,9 @@ VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
 VIEWER_PATHS = {"/", "/index.html", "/preview", "/api/log", "/api/log/days", "/api/days", "/api/benchmarks", "/api/changes", "/api/checks", "/api/maps/trends", "/api/financing/lenders"}
 VIEWER_HTML = """<style>
   body.viewer nav button[data-tab="upload"], body.viewer nav button[data-tab="google"],
-  body.viewer nav button[data-tab="sql"], body.viewer nav button[data-tab="calls"], body.viewer a[href="/api/export.csv"],
+  body.viewer nav button[data-tab="sql"], body.viewer nav button[data-tab="calls"], body.viewer nav button[data-tab="reports"], body.viewer a[href="/api/export.csv"],
   body.viewer #bm-panel .row:has(#bm-save), body.viewer #bm-help, body.viewer #bm-msg,
-  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"], body.viewer nav button[data-tab="whatif"], body.viewer #whatif, body.viewer nav button[data-tab="demo"], body.viewer #demo,
+  body.viewer #bm-panel .hint, body.viewer .bm-table tr > :last-child, body.viewer .chk-act, body.viewer .help-edit, body.viewer nav button[data-tab="audit"], body.viewer nav button[data-tab="whatif"], body.viewer #whatif, body.viewer nav button[data-tab="demo"], body.viewer #demo, body.viewer nav button[data-tab="proc"], body.viewer #proc,
   body.viewer #mp-section, body.viewer #mp-admin { display: none; }
   .viewer-note { margin: 0 0 8px; font-size: 13px; color: var(--muted, #666); }
 </style>
@@ -174,9 +175,21 @@ CREATE TABLE IF NOT EXISTS assistant_cache (
 -- Every day each other one-day report was imported for (an empty day too), so a month's coverage can be checked per report.
 CREATE TABLE IF NOT EXISTS daily_report_imports (
     day         TEXT NOT NULL,
-    report      TEXT NOT NULL,                   -- referral | ortho_journal | ortho_referrals
+    report      TEXT NOT NULL,                   -- referral | ortho_journal | ortho_referrals | procedures
     logged_at   TEXT NOT NULL,
     PRIMARY KEY (day, report)
+);
+
+-- Production by procedure category (Production Analysis Report by Category, one day): what kind of work each
+-- office did. Provider $ added up per office and category; provider and patient names are not kept.
+CREATE TABLE IF NOT EXISTS procedure_daily (
+    office      TEXT NOT NULL,
+    day         TEXT NOT NULL,
+    category    TEXT NOT NULL,                   -- Denticon's category, e.g. RESTORATIVE, IMPLANT SERVICES
+    production  REAL NOT NULL,
+    source_file TEXT,
+    logged_at   TEXT NOT NULL,
+    PRIMARY KEY (office, day, category)
 );
 
 -- The other Denticon reports run for a single day: NP collection, ortho collection, ortho referrals.
@@ -317,6 +330,16 @@ CREATE TABLE IF NOT EXISTS np_patients (
     other        REAL NOT NULL DEFAULT 0,  -- "Other form of payment" on the row (cash etc., may be in $Amt Coll)
     PRIMARY KEY (office, period_from, row)
 );
+-- Each patient on an NP sheet once per month, and whether they count as irrelevant (Medi-Cal, HMO or no SSN/ITIN).
+-- refresh_irrelevant turns this and the referral types into irrelevant_new and np_new_on_sheet.
+CREATE TABLE IF NOT EXISTS np_sheet_flags (
+    office       TEXT NOT NULL,
+    period_from  TEXT NOT NULL,
+    pk           TEXT NOT NULL,
+    day          TEXT NOT NULL,       -- '' = no date found
+    irrelevant   INTEGER NOT NULL,
+    PRIMARY KEY (office, period_from, pk)
+);
 -- New patients' age groups and estimated ethnicity, per office and month: totals only (the estimate is the sum of each
 -- patient's probabilities, from the Census surname table and their neighborhood). No names, birth dates or per-patient rows.
 CREATE TABLE IF NOT EXISTS demo_counts (
@@ -331,6 +354,14 @@ CREATE TABLE IF NOT EXISTS demo_counts (
     kids_home    INTEGER NOT NULL DEFAULT 0,   -- their home has a patient under 18 (themselves included)
     minor_with_adult INTEGER NOT NULL DEFAULT 0,  -- under 18 and their home also has an adult patient (a parent, usually)
     PRIMARY KEY (office, month, age_band)
+);
+-- Reports saved on the Reports page: the choices only (what, offices, months, rows, numbers), never the data.
+CREATE TABLE IF NOT EXISTS saved_reports (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    spec        TEXT NOT NULL,       -- JSON, as the page sends it to /api/report
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
 );
 -- Each office's monthly collection goal, from the % TO GOAL sheet's "Goal" column (for the What-if card).
 CREATE TABLE IF NOT EXISTS office_goals (
@@ -535,6 +566,8 @@ REPORT_METRICS = [
     "no_next_visit",        # New Patient Analysis workbook: "Has an Appointment" = No
     "started_tx",           # New Patient Analysis workbook: paid anything (Denticon, financing or other)
     "collected_over_approved",  # data check: patients with more collected than approved (prime or subprime)
+    "irrelevant_new",     # refresh_irrelevant: Medi-Cal, HMO or no SSN/ITIN patients, once each, without existing-patient referrals
+    "np_new_on_sheet",    # refresh_irrelevant: patients on the NP sheet, once each, without existing-patient referrals
 ]
 METRIC_NAMES = list(METRICS) + REPORT_METRICS
 COUNT_METRICS = {"ortho_referrals", "medi_cal_patients", "hmo_patients", "no_ssn_itin_patients",
@@ -542,7 +575,7 @@ COUNT_METRICS = {"ortho_referrals", "medi_cal_patients", "hmo_patients", "no_ssn
                  "prime_apps_ran", "prime_apps_approved", "prime_funded", "prime_approved_funded",
                  "subprime_applicants", "subprime_approved", "subprime_apps_ran", "subprime_apps_approved",
                  "subprime_funded", "fin_approved", "fin_funded", "fin_approved_funded",
-                 "np_rows", "no_next_visit", "started_tx", "collected_over_approved"}
+                 "np_rows", "no_next_visit", "started_tx", "collected_over_approved", "irrelevant_new", "np_new_on_sheet"}
 DETAIL_METRICS = ["medi_cal_patients", "hmo_patients", "no_ssn_itin_patients", "financing_applicants",
                   "existing_finance_patients", "prime_applicants", "prime_approved", "prime_apps_ran",
                   "prime_apps_approved", "prime_approved_amount", "prime_collected_amount", "prime_funded",
@@ -557,9 +590,8 @@ CALCULATED = {
     "net_collections": "ROUND(s.total_collection - m.refunds, 2)",
     "refund_rate": "ROUND(m.refunds / NULLIF(s.total_collection, 0), 4)",   # fraction, e.g. 0.0045
     "existing_pt_collection": "ROUND(s.total_collection - m.np_collection, 2)",
-    # (Medi-Cal + HMO + no SSN/ITIN patients) / Executive Summary new patients, as a fraction
-    "irrelevant_rate": "ROUND(1.0 * (m.medi_cal_patients + m.hmo_patients + m.no_ssn_itin_patients)"
-                       " / NULLIF(s.new_patients, 0), 4)",
+    # Medi-Cal, HMO or no SSN/ITIN patients / patients on the NP sheet, each once and without existing-patient referrals
+    "irrelevant_rate": "ROUND(1.0 * m.irrelevant_new / NULLIF(m.np_new_on_sheet, 0), 4)",
     # ortho referrals (Treatment Plan Status) / Executive Summary new patients, as a fraction
     "ortho_rate": "ROUND(1.0 * m.ortho_referrals / NULLIF(s.new_patients, 0), 4)",
     # financing applicants (New Patient Analysis) / Executive Summary new patients, as a fraction
@@ -972,11 +1004,7 @@ def save_metrics(payload):
                 if not newer:
                     # A row without a date line above it takes the patient's first visit from the uploaded Denticon
                     # New Patients List (matched by Pat ID, or by its key when only the key came), else the 1st.
-                    first = {}
-                    for r_ in conn.execute("SELECT pat_id, MIN(first_visit) AS fv FROM patient_phones WHERE office = ? AND "
-                                           "first_visit >= ? AND first_visit < date(?, '+2 months') GROUP BY pat_id",
-                                           (office, (date.fromisoformat(period_from) - timedelta(31)).isoformat(), period_from)):
-                        first[str(r_["pat_id"])] = r_["fv"]; first[pat_key(str(r_["pat_id"]))] = r_["fv"]
+                    first = _first_visits(conn, office, period_from)
                     who = {str(p_.get("row")): str(p_.get("pat_id") or p_.get("pk") or "") for p_ in (row.get("details") or {}).get("_patients") or []}
                     merged = {}
                     for rn, info in by_row.items():
@@ -999,6 +1027,9 @@ def save_metrics(payload):
                         "VALUES (?, ?, ?, ?, ?, ?, ?)",
                         [(office, period_from, int(p["row"]), p["pk"], json.dumps(p.get("prime") or {}),
                           float(p.get("subprime") or 0), float(p.get("other") or 0)) for p in scrub_patients(patients) if p.get("pk")])
+                    save_np_flags(conn, office, period_from, patients)
+            if map_rows is not None or patients is not None:
+                refresh_irrelevant(conn, office)
         if review:
             raise NeedsReview(review)   # undoes everything above; nothing is saved until confirmed
     except NeedsReview as e:
@@ -1007,6 +1038,63 @@ def save_metrics(payload):
     write_csv(conn)
     conn.close()
     return counts
+
+
+def _first_visits(conn, office, period_from):
+    """{Pat ID or its key: first visit} from the Denticon New Patients List, around one month."""
+    first = {}
+    for r in conn.execute("SELECT pat_id, MIN(first_visit) AS fv FROM patient_phones WHERE office = ? AND "
+                          "first_visit >= ? AND first_visit < date(?, '+2 months') GROUP BY pat_id",
+                          (office, (date.fromisoformat(period_from) - timedelta(31)).isoformat(), period_from)):
+        first[str(r["pat_id"])] = r["fv"]; first[pat_key(str(r["pat_id"]))] = r["fv"]
+    return first
+
+
+def save_np_flags(conn, office, period_from, patients):
+    """Replace an office-month's list of sheet patients, each once (patients have keys by now, never Pat IDs)."""
+    first = _first_visits(conn, office, period_from)
+    merged = {}
+    for p in patients:
+        if p.get("pk"):
+            day, irr = merged.get(p["pk"], ("", False))
+            merged[p["pk"]] = (day or p.get("day") or first.get(p["pk"], ""), irr or bool(p.get("irrelevant")))
+    conn.execute("DELETE FROM np_sheet_flags WHERE office = ? AND period_from = ?", (office, period_from))
+    conn.executemany("INSERT INTO np_sheet_flags VALUES (?, ?, ?, ?, ?)",
+                     [(office, period_from, pk, day, int(irr)) for pk, (day, irr) in merged.items()])
+
+
+def refresh_irrelevant(conn, office):
+    """Work out irrelevant_new and np_new_on_sheet for an office's months, by month (office_metrics) and day (np_daily).
+    Run after a sheet or a Referral Production Listing is saved: the second can change who is an existing-patient referral."""
+    metrics = ("irrelevant_new", "np_new_on_sheet")
+    referrals = {pat_key(r[0]) for r in conn.execute("SELECT DISTINCT pat_id FROM map_patients WHERE office = ? AND "
+                                                     "UPPER(TRIM(referral_type)) = 'EXISTING PATIENT'", (office,))}
+    src = {r["period_from"]: r for r in conn.execute("SELECT period_from, as_of, source, logged_at FROM office_metrics "
+                                                     "WHERE office = ? AND metric = 'np_rows'", (office,))}
+    month, by_day = {}, {}
+    for r in conn.execute("SELECT * FROM np_sheet_flags WHERE office = ?", (office,)):
+        if r["period_from"] not in src or r["pk"] in referrals:
+            continue
+        month.setdefault((r["period_from"], "irrelevant_new"), 0)
+        month.setdefault((r["period_from"], "np_new_on_sheet"), 0)
+        month[(r["period_from"], "np_new_on_sheet")] += 1
+        month[(r["period_from"], "irrelevant_new")] += r["irrelevant"]
+        key = (r["period_from"], r["day"], "np_new_on_sheet")
+        by_day[key] = by_day.get(key, 0) + 1
+        if r["irrelevant"]:
+            key = (r["period_from"], r["day"], "irrelevant_new")
+            by_day[key] = by_day.get(key, 0) + 1
+    marks = ",".join("?" * len(metrics))
+    have = {(r["period_from"], r["metric"]): r["value"] for r in conn.execute(
+        f"SELECT period_from, metric, value FROM office_metrics WHERE office = ? AND metric IN ({marks})", (office, *metrics))}
+    if have != month:   # unchanged months keep their rows, so the notes sheet isn't rewritten for nothing
+        conn.execute(f"DELETE FROM office_metrics WHERE office = ? AND metric IN ({marks})", (office, *metrics))
+        conn.executemany("INSERT INTO office_metrics (office, period_from, as_of, metric, value, source, logged_at, detail) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+                         [(office, pf, src[pf]["as_of"], m, v, src[pf]["source"], src[pf]["logged_at"]) for (pf, m), v in month.items()])
+    conn.execute(f"DELETE FROM np_daily WHERE office = ? AND metric IN ({marks})", (office, *metrics))
+    conn.executemany("INSERT INTO np_daily VALUES (?, ?, ?, ?, ?, ?)",
+                     [(office, pf, d, m, v, src[pf]["as_of"]) for (pf, d, m), v in by_day.items()])
 
 
 def save_lender_apps(conn, office, period_from, as_of, lenders):
@@ -1056,6 +1144,48 @@ def backfill_lender_apps(since="2026-01"):
             conn.close()
             done.append(f"{office} {key}")
     return done
+
+
+def backfill_np_flags(since="2026-01"):
+    """Read every month tab since `since` from the office sheets and save only who is on them, for % irrelevant
+    patients (no other Log numbers are touched). Months that can't be read are listed, so it can be run again."""
+    conn = db()
+    sources = [dict(r) for r in conn.execute("SELECT * FROM sheet_sources WHERE kind = 'np' ORDER BY office")]
+    conn.close()
+    done, failed = [], []
+    for src in sources:
+        try:
+            wb = google_sheets.SheetsWorkbook(account, src["spreadsheet_id"])
+        except google_sheets.GoogleError as e:
+            failed.append(f"{src['office']}: {e}"); continue
+        office_seen, offices = None, set()
+        for month in np_analysis.dated_months(wb):
+            key = f"{month['year']}-{month['month']:02d}"
+            if key < since:
+                break
+            if date(month["year"], month["month"], 1) > date.today():
+                continue
+            try:
+                parsed = np_analysis.parse_month(wb, month, office_seen or src["office"])
+            except np_analysis.NPAnalysisError:
+                continue
+            except google_sheets.GoogleError as e:
+                failed.append(f"{src['office']} {key}: {e}"); continue
+            o = parsed["offices"][0]
+            office_seen = office_seen or o["office"]
+            conn = db()
+            office = map_office_name(conn, o["office"])
+            with conn:
+                save_np_flags(conn, office, parsed["period"]["from"], scrub_patients(o["details"].get("_patients")) or [])
+            conn.close()
+            offices.add(office)
+            done.append(f"{office} {key}")
+        conn = db()
+        with conn:
+            for office in offices:
+                refresh_irrelevant(conn, office)
+        conn.close()
+    return {"done": done, "failed": failed}
 
 
 def whatif_data():
@@ -1238,6 +1368,25 @@ def save_daily_metrics(payload):
     return counts
 
 
+def save_procedures(day, result, source):
+    """One day's Production Analysis by Category: replaces whatever that day had."""
+    check_not_future(day, "report")
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = db()
+    rows = [(map_office_name(conn, o["office"]), cat, amount) for o in result["offices"] for cat, amount in o["categories"].items()]
+    with conn:
+        before = conn.execute("SELECT COUNT(*) FROM procedure_daily WHERE day = ?", (day,)).fetchone()[0]
+        conn.execute("DELETE FROM procedure_daily WHERE day = ?", (day,))
+        conn.executemany("INSERT INTO procedure_daily (office, day, category, production, source_file, logged_at) VALUES (?, ?, ?, ?, ?, ?) "
+                         "ON CONFLICT (office, day, category) DO UPDATE SET production = production + excluded.production",
+                         [(o, day, c, a, source, now) for o, c, a in rows])
+        conn.execute("INSERT OR REPLACE INTO daily_report_imports (day, report, logged_at) VALUES (?, 'procedures', ?)", (day, now))
+    conn.close()
+    offices = len({o for o, _, _ in rows})
+    return {"daily": True, "day": day, "added": 0 if before else offices, "replaced": offices if before else 0,
+            "unchanged": 0, "skipped": [], "closed": not rows}
+
+
 DAY_REPORT_METRICS = {"referral": "np_collection", "ortho_journal": "ortho_collection", "ortho_referrals": "ortho_referrals"}
 
 
@@ -1304,8 +1453,8 @@ def month_rows_from_days(rows):
             row["net_collections"] = round(tc - ref, 2) if ref is not None else None
             row["refund_rate"] = round(ref / tc, 4) if ref is not None and tc else None
             row["existing_pt_collection"] = round(tc - npc, 2) if npc is not None else None
-            irr = [row.get(k) for k in ("medi_cal_patients", "hmo_patients", "no_ssn_itin_patients")]
-            row["irrelevant_rate"] = round(sum(irr) / np_, 4) if np_ and all(v is not None for v in irr) else None
+            irr, on_sheet = row.get("irrelevant_new"), row.get("np_new_on_sheet")
+            row["irrelevant_rate"] = round(irr / on_sheet, 4) if on_sheet and irr is not None else None
             row["ortho_rate"] = round(row["ortho_referrals"] / np_, 4) if np_ and row.get("ortho_referrals") is not None else None
             row["financing_rate"] = round(row["financing_applicants"] / np_, 4) if np_ and row.get("financing_applicants") is not None else None
     conn.close()
@@ -1506,6 +1655,10 @@ def import_report_file(path, name):
         payload = {"period_from": frm, "period_thru": thru, "source_file": name, "offices": result["offices"],
                    "empty": bool(result.get("empty"))}
         saved = save_daily(payload) if frm == thru else save_rows(payload)
+    elif rtype == "procedures":
+        if frm != thru:
+            raise ValueError("Production Analysis: pull it one day at a time (From = Thru) so the days add up")
+        saved = save_procedures(frm, result, name)
     elif rtype == "lender_journal":
         saved = save_lender_journal({"period_from": frm, "period_thru": thru, "source": name,
                                      "offices": [{"office": o["office"], "by_lender": o.get("by_lender"),
@@ -1664,9 +1817,10 @@ AI_TOOLS = [
      "input_schema": {"type": "object", "properties": {"from_month": {"type": "string"}, "to_month": {"type": "string"},
                                                        "office": {"type": "string"}, "top": {"type": "integer"}}, "additionalProperties": False}},
     {"name": "get_calls", "description": "The Invoca calls funnel for a call month (YYYY-MM): calls, answered, callers who became new patients, started "
-     "treatment and $ collected, in total and grouped by channel, medium, source, location, promo_line, campaign or office.",
+     "treatment and $ collected, in total and grouped by channel, medium, source, location, agent, promo_line, campaign or office. Each row also counts Invoca's "
+     "signals: opps (new-patient opportunities), opp_booked, opp_asked, greeting, helpful, closing, review, biz (business-hours calls), biz_missed, talk (seconds).",
      "input_schema": {"type": "object", "properties": {"month": {"type": "string"}, "group_by": {"type": "string",
-                      "enum": ["channel", "medium", "source", "location", "promo_line", "campaign", "office"]}, "office": {"type": "string"}},
+                      "enum": ["channel", "medium", "source", "location", "agent", "promo_line", "campaign", "office"]}, "office": {"type": "string"}},
                       "additionalProperties": False}},
     {"name": "get_benchmarks", "description": "The benchmark cut-offs (green / yellow) set for Log columns.",
      "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
@@ -1777,6 +1931,8 @@ def ai_get_zip_collections(from_month=None, to_month=None, office=None, top=25):
 
 
 def ai_get_calls(month=None, group_by="channel", office=""):
+    if VIEWER_PASSWORD and group_by == "agent":   # the Calls page is hidden on view-only links: no results by agent name there either
+        return {"note": "Call results by agent are not available on a view-only link."}
     d = calls_funnel(month, office or "")
     if not d.get("month"):
         return {"note": "No calls pulled yet."}
@@ -1883,10 +2039,12 @@ def ai_chat(question, history, who, use_cache=True, file_ids=()):
     if files:   # a question about an attached file: no saved answers, and the file shows it's on topic unless the words say otherwise
         use_cache = False
     qkey, follow_up = _ai_qkey(question), bool(history) or bool(files)
+    # Saved answers are kept apart for view-only links, which may be told less (see ai_get_calls).
+    ckey = ("view-only: " if VIEWER_PASSWORD else "") + qkey
     usage, tools, answer, err, route = {"input": 0, "output": 0, "cache_read": 0}, [], None, None, None
     conn = db()
     fp = _ai_data_fp(conn)
-    cached = conn.execute("SELECT * FROM assistant_cache WHERE qkey = ?", (qkey,)).fetchone() if use_cache else None
+    cached = conn.execute("SELECT * FROM assistant_cache WHERE qkey = ?", (ckey,)).fetchone() if use_cache else None
     verdict = None
     # 1. exact-match cache (a follow-up depends on the chat before it, so only its off-topic verdict is reused)
     if cached and cached["verdict"] == "off":
@@ -1897,7 +2055,7 @@ def ai_chat(question, history, who, use_cache=True, file_ids=()):
         verdict = "on"   # known on-topic; the data changed (or it's a follow-up), so answer again
     if answer:
         with conn:
-            conn.execute("UPDATE assistant_cache SET hits = hits + 1 WHERE qkey = ?", (qkey,))
+            conn.execute("UPDATE assistant_cache SET hits = hits + 1 WHERE qkey = ?", (ckey,))
     if not answer and not verdict:
         # 2. keyword rules
         rule = _ai_rules(conn, qkey, follow_up)
@@ -1921,7 +2079,7 @@ def ai_chat(question, history, who, use_cache=True, file_ids=()):
                 verdict, route = "on", "haiku failed: on-topic"   # let the main model decide
         if verdict == "off" and use_cache:
             with conn:
-                conn.execute("INSERT OR REPLACE INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'off', ?)", (qkey, now))
+                conn.execute("INSERT OR REPLACE INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'off', ?)", (ckey, now))
     # 4. the main model
     if not answer and not err:
         route = (route + " → " if route else "cache: on-topic → ") + "sonnet"
@@ -1933,10 +2091,10 @@ def ai_chat(question, history, who, use_cache=True, file_ids=()):
             if use_cache and not follow_up and complete:   # only answers backed by a lookup are reused
                 with conn:
                     conn.execute("INSERT OR REPLACE INTO assistant_cache (qkey, verdict, answer, data_fp, saved_at) VALUES (?, 'on', ?, ?, ?)",
-                                 (qkey, answer, fp, now))
+                                 (ckey, answer, fp, now))
             elif use_cache:
                 with conn:
-                    conn.execute("INSERT INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'on', ?) ON CONFLICT(qkey) DO NOTHING", (qkey, now))
+                    conn.execute("INSERT INTO assistant_cache (qkey, verdict, saved_at) VALUES (?, 'on', ?) ON CONFLICT(qkey) DO NOTHING", (ckey, now))
         except assistant.AssistantError as e:
             err = str(e)
     if files:
@@ -2012,7 +2170,7 @@ def robot_pull(frm, to, report="exec"):
     Production Listing) or both. It opens its own Chrome window on this computer; when Denticon asks for a login,
     the user logs in there and the robot carries on. Files land in data/inbox."""
     frm, to = to_iso(frm), to_iso(to)
-    if report not in ("exec", "referral", "ortho", "txplan", "newpts", "both", "all"):
+    if report not in ("exec", "referral", "ortho", "txplan", "proc", "newpts", "both", "all"):
         raise ValueError("Pick which report to pull")
     if frm > to:
         raise ValueError("'From' is after 'To'")
@@ -2184,6 +2342,7 @@ def delete_rows(keys):
                              (office, period_from)).rowcount
             b = conn.execute("DELETE FROM office_metrics WHERE office = ? AND period_from = ?",
                              (office, period_from)).rowcount
+            conn.execute("DELETE FROM np_sheet_flags WHERE office = ? AND period_from = ?", (office, period_from))
             n += 1 if (a or b) else 0
     write_csv(conn)
     conn.close()
@@ -2993,6 +3152,13 @@ def pull_invoca_month(month):
     return {**r, "month": month, "calls": sum(r["days"].values()), "day_count": len(r["days"])}
 
 
+# Invoca's signals counted per call for the Agents and Locations tabs. "Good Call" and "Needs Improvement" are left out:
+# Invoca sets both on the same calls.
+CALL_SIGNALS = {"opps": "New Opportunity", "greeting": "Proper Greeting (Scorecard)", "helpful": "Helpful Agent (Scorecard)",
+                "closing": "Closing the Call (Scorecard)", "review": "Manager Review Required", "biz": "During Business Hours Call"}
+CALL_COUNTS = (*CALL_SIGNALS, "talk", "opp_booked", "opp_asked", "biz_missed")
+
+
 def calls_funnel(month=None, office="", location="", agent=""):
     """Calls in a month -> callers who became new patients (a loaded patient list says their first visit was on or
     after the call) -> who started treatment (paid anything in their first-visit month) -> $ collected. Each
@@ -3051,15 +3217,15 @@ def calls_funnel(month=None, office="", location="", agent=""):
         for r in conn.execute(f"SELECT fp, office, appt_date FROM np_appts WHERE fp IN ({q})" + (" AND office = ?" if office else ""), chunk + ([office] if office else [])):
             appts.setdefault(r["fp"], []).append(dict(r))
     conn.close()
-    seen_pat, seen_booked = set(), set()
+    seen_pat, seen_ids, seen_booked = set(), set(), set()   # seen_ids: the Pat IDs in seen_pat
     GROUPS = ("promo_line", "campaign", "office", "channel", "medium", "source", "location", "agent")
     groups = {g: {} for g in GROUPS}
     def bump(c, key, **inc):
         for g in GROUPS:
-            d = groups[g].setdefault(c[g] or "(none)", {"calls": 0, "answered": 0, "patients": 0, "started": 0, "collected": 0.0, "booked": 0})
+            d = groups[g].setdefault(c[g] or "(none)", {"calls": 0, "answered": 0, "patients": 0, "started": 0, "collected": 0.0, "booked": 0, **dict.fromkeys(CALL_COUNTS, 0)})
             for k, v in inc.items():
                 d[k] += v
-    total = {"calls": 0, "answered": 0, "callers": len({c["caller_fp"] for c in calls if c["caller_fp"] and shown(c)}), "patients": 0, "started": 0, "collected": 0.0, "booked": 0}
+    total = {"calls": 0, "answered": 0, "callers": len({c["caller_fp"] for c in calls if c["caller_fp"] and shown(c)}), "patients": 0, "started": 0, "collected": 0.0, "booked": 0, **dict.fromkeys(CALL_COUNTS, 0)}
     agent_known = 0
     for c in calls:
         keep = shown(c)
@@ -3067,7 +3233,15 @@ def calls_funnel(month=None, office="", location="", agent=""):
         if keep:
             total["calls"] += 1; total["answered"] += answered
             agent_known += 1 if answered and c["agent"] != "(not set)" else 0
-            bump(c, None, calls=1, answered=answered)
+            sig = set(c["signals"])
+            counts = {k: 1 if name in sig else 0 for k, name in CALL_SIGNALS.items()}
+            counts["talk"] = (c.get("connect_duration") or 0) if answered else 0
+            counts["opp_booked"] = 1 if counts["opps"] and "Appointment Booked" in sig else 0
+            counts["opp_asked"] = 1 if counts["opps"] and "Ask for Appointment (Scorecard)" in sig else 0
+            counts["biz_missed"] = 1 if counts["biz"] and not answered else 0
+            for k, v in counts.items():
+                total[k] += v
+            bump(c, None, calls=1, answered=answered, **counts)
         fp = c["caller_fp"]
         if not fp:
             continue
@@ -3075,12 +3249,12 @@ def calls_funnel(month=None, office="", location="", agent=""):
             key = (p["pat_id"], p["office"])
             if key in seen_pat or not p["first_visit"] or p["first_visit"] < c["call_date"]:
                 continue
-            seen_pat.add(key)
+            seen_pat.add(key); seen_ids.add(key[0])
             started = 1 if (p["collected"] or 0) > 0 else 0
             if keep:
                 total["patients"] += 1; total["started"] += started; total["collected"] += p["collected"] or 0
                 bump(c, None, patients=1, started=started, collected=p["collected"] or 0)
-        if fp not in {k for k, _ in seen_pat} and fp not in seen_booked:
+        if fp not in seen_ids and fp not in seen_booked:
             if any(a["appt_date"] and a["appt_date"] >= c["call_date"] for a in appts.get(fp, [])) and not any(p["first_visit"] and p["first_visit"] >= c["call_date"] for p in pats.get(fp, [])):
                 seen_booked.add(fp)
                 if keep:
@@ -4073,6 +4247,62 @@ def _area_lang_asian(zcta, zs):
     return {"lang": lang, "asian": asian}
 
 
+# Denticon's procedure categories (the CDT code ranges), in code order, with plain names for the page.
+PROC_CATEGORIES = [("DIAGNOSTIC", "Exams and x-rays", "D0"), ("PREVENTIVE", "Cleanings and preventive", "D1"),
+                   ("RESTORATIVE", "Fillings and crowns", "D2"), ("ENDODONTICS", "Root canals", "D3"),
+                   ("PERIODONTICS", "Gum treatment", "D4"), ("PROSTHODONTICS (REMOVABLE)", "Dentures and partials", "D50-D58"),
+                   ("MAXILLOFACIAL PROSTHETICS", "Maxillofacial prosthetics", "D59"), ("IMPLANT SERVICES", "Implants", "D60-D61"),
+                   ("PROSTHODONTICS (FIXED)", "Bridges", "D62-D69"), ("ORAL AND MAXILOFACIAL SURGERY", "Extractions and surgery", "D7"),
+                   ("ORTHODONTICS", "Ortho", "D8"), ("ADJUNCT GENERAL SERVICES", "Sedation and other services", "D9"),
+                   ("OTHER", "Office codes (Z)", "Z")]
+
+
+def procedures_info(frm=None, to=None):
+    """Production by procedure category for From..To (default: the latest month with any): per office and for the
+    group, each category's $ and share, by month for trends, and the Executive Summary's production to compare."""
+    conn = db()
+    months = [r[0] for r in conn.execute("SELECT DISTINCT substr(day, 1, 7) FROM procedure_daily ORDER BY 1")]
+    if not months:
+        conn.close()
+        return {"months": [], "categories": [], "offices": {}, "days": 0}
+    frm = to_iso(frm) if frm else months[-1] + "-01"
+    to = to_iso(to) if to else ((date.fromisoformat(months[-1] + "-01") + timedelta(days=31)).replace(day=1) - timedelta(days=1)).isoformat()
+    if frm > to:
+        conn.close()
+        raise ValueError("'From' is after 'To'")
+    rows = conn.execute("SELECT office, substr(day, 1, 7) AS month, category, SUM(production) AS amount FROM procedure_daily "
+                        "WHERE day BETWEEN ? AND ? GROUP BY office, month, category", (frm, to)).fetchall()
+    days = conn.execute("SELECT COUNT(*) FROM daily_report_imports WHERE report = 'procedures' AND day BETWEEN ? AND ?", (frm, to)).fetchone()[0]
+    exec_prod = {r["office"]: r["p"] for r in conn.execute(   # the same days only, so the two totals compare
+        "SELECT office, SUM(total_production) AS p FROM office_daily WHERE day IN "
+        "(SELECT day FROM daily_report_imports WHERE report = 'procedures' AND day BETWEEN ? AND ?) GROUP BY office", (frm, to))}
+    short = office_short_names(conn)
+    conn.close()
+    known = [c for c, _, _ in PROC_CATEGORIES]
+    names = {c: n for c, n, _ in PROC_CATEGORIES}
+    offices, by_month = {}, {}
+    for r in rows:
+        o = offices.setdefault(r["office"], {"short": short.get(r["office"], r["office"]), "total": 0.0, "by_cat": {}})
+        o["by_cat"][r["category"]] = o["by_cat"].get(r["category"], 0.0) + r["amount"]
+        o["total"] += r["amount"]
+        m = by_month.setdefault(r["month"], {}).setdefault(r["office"], {})
+        m[r["category"]] = round(m.get(r["category"], 0.0) + r["amount"], 2)
+    seen = {c for o in offices.values() for c in o["by_cat"]}
+    cats = [c for c in known if c in seen] + sorted(seen - set(known))
+    group = {c: round(sum(o["by_cat"].get(c, 0.0) for o in offices.values()), 2) for c in cats}
+    total = sum(group.values())
+    for name, o in offices.items():
+        o["by_cat"] = {c: round(v, 2) for c, v in o["by_cat"].items()}
+        o["share"] = {c: round(v / o["total"], 4) for c, v in o["by_cat"].items()} if o["total"] else {}
+        o["total"] = round(o["total"], 2)
+        o["exec_production"] = round(exec_prod[name], 2) if exec_prod.get(name) is not None else None
+    return {"from": frm, "to": to, "days": days, "months": months, "total": round(total, 2),
+            "categories": [{"key": c, "name": names.get(c, c.title()), "codes": next((k for x, _, k in PROC_CATEGORIES if x == c), ""),
+                            "total": group[c], "share": round(group[c] / total, 4) if total else 0} for c in cats],
+            "offices": offices, "by_month": by_month,
+            "exec_production": round(sum(v for k, v in exec_prod.items() if k in offices), 2)}
+
+
 def demographics_info(frm=None, to=None):
     """Per office: its new patients by age group and estimated ethnicity (months frm..to), and the residents within
     OFFICE_AREA_MILES of it by the same groups."""
@@ -4118,6 +4348,235 @@ def demographics_info(frm=None, to=None):
                 "households": sum((zcta[z].get("hh") or [0, 0])[0] for z in allz), "households_kids": sum((zcta[z].get("hh") or [0, 0])[1] for z in allz),
                 **_area_lang_asian(zcta, allz)} if allz else None
     return {"offices": out, "all_area": all_area, "lang_labels": {k: l for k, l, _, _ in LANGS}, "asian_labels": {k: l for k, l, _ in ASIAN}, "months": months, "short": short, "area_error": area_error, "bands": AGE_BANDS, "groups": ETHNIC}
+
+
+# A printable Demographics report for one office (or all of them): the tab's figures plus where new patients live,
+# as a standalone page the browser prints or saves as PDF. Totals only; no names, addresses or phone numbers.
+DM_AGE_LABELS = {"0-12": "Kids 0–12", "13-17": "Teens 13–17", "18-34": "18–34", "35-54": "35–54", "55-64": "55–64", "65+": "65+"}
+DM_ETH_LABELS = {"hispanic": "Hispanic", "white": "White", "asian": "Asian / Pacific Islander", "black": "Black", "other": "Other / mixed"}
+_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+
+def demographics_report(office=None, frm=None, to=None):
+    from html import escape as e
+    d = demographics_info(frm, to)
+    offices, bands, groups = d["offices"], d["bands"], d["groups"]
+    frm = frm or (d["months"][0] if d["months"] else "")
+    to = to or (d["months"][-1] if d["months"] else "")
+    if office and office not in offices:
+        raise ValueError(f"No demographics for {office}.")
+    if office:
+        pat, area = offices[office], offices[office]["area"]
+    else:
+        pat = {"n": 0, "age": {b: 0 for b in bands}, "eth": {g: 0.0 for g in groups}, "with_family": 0, "kids_home": 0, "minor_with_adult": 0, "surname_found": 0}
+        for o in offices.values():
+            for f in ("n", "with_family", "kids_home", "minor_with_adult", "surname_found"):
+                pat[f] += o[f]
+            for b in bands:
+                pat["age"][b] += o["age"][b]
+            for g in groups:
+                pat["eth"][g] += o["eth"][g]
+        area = d["all_area"]
+    n = pat["n"]
+    if not n:
+        raise ValueError("No new patients with ages and names in those months yet.")
+    name = office or "All offices"
+    short = d["short"].get(office, office) if office else "the offices"
+    share = lambda obj, keys: {k: (obj.get(k, 0) / t if (t := sum(obj.get(x, 0) for x in keys)) else None) for k in keys}
+    pa, pe = share(pat["age"], bands), share(pat["eth"], groups)
+    aa, ae = (share(area["age"], bands), share(area["eth"], groups)) if area else ({}, {})
+    pct = lambda v: "—" if v is None else f"{100 * v:.0f}%"
+    num = lambda v: f"{round(v):,}"
+    mname = lambda m: f"{_MONTHS[int(m[5:7]) - 1]} {m[:4]}" if m else ""
+    span = mname(frm) if frm == to else f"{mname(frm)} – {mname(to)}"
+
+    conn = db()
+    rng = [frm or "0000-00", to or "9999-99"]
+    thru = conn.execute("SELECT MAX(as_of) FROM map_patients WHERE substr(period_from, 1, 7) BETWEEN ? AND ?" + (" AND office = ?" if office else ""),
+                        rng + ([office] if office else [])).fetchone()[0]
+    pts = dict(conn.execute("SELECT zip, COUNT(DISTINCT pat_id) FROM map_patients WHERE office = ? AND substr(period_from, 1, 7) BETWEEN ? AND ? GROUP BY zip",
+                            [office] + rng)) if office else {}
+    pin = conn.execute("SELECT lat, lon FROM office_locations WHERE office = ?", (office,)).fetchone() if office else None
+    conn.close()
+
+    def pairs(keys, labels, p, a):
+        top = max([v for v in list(p.values()) + list(a.values()) if v] or [1])
+        rows = []
+        for k in keys:
+            gap = round(100 * (p[k] - a[k])) if p.get(k) is not None and a.get(k) is not None else None
+            cls = "lo" if gap is not None and gap <= -4 else "hi" if gap is not None and gap >= 4 else ""
+            gap_txt = "" if gap is None else f"{'+' if gap > 0 else '−' if gap < 0 else '±'}{abs(gap)} {'pt' if abs(gap) == 1 else 'pts'}"
+            rows.append(f'<div class="pr"><div class="pl">{e(labels[k])}</div>'
+                        f'<div class="pb"><span class="bar p" style="width:{100 * (p[k] or 0) / top:.1f}%"></span><b>{pct(p[k])}</b></div>'
+                        f'<div class="pb"><span class="bar a" style="width:{100 * (a.get(k) or 0) / top:.1f}%"></span><b>{pct(a.get(k))}</b></div>'
+                        f'<div class="pg {cls}">{gap_txt}</div></div>')
+        return "\n".join(rows)
+
+    # Findings and suggestions come from the biggest gaps, so every office gets its own.
+    finds, todo = [], []
+    minors = pat["age"]["0-12"] + pat["age"]["13-17"]
+    lang = (area or {}).get("lang") or {}
+    asian = (area or {}).get("asian") or {}
+    al, ll = d["asian_labels"], d["lang_labels"]
+    if area:
+        eg = sorted(groups, key=lambda g: pe[g] - ae[g])
+        low = eg[0]
+        if ae[low] - pe[low] >= 0.04:
+            extra = ""
+            if low == "asian" and asian:
+                big = sorted(((k, v) for k, v in asian.items() if k != "other"), key=lambda kv: -kv[1])[:2]
+                extra = " The biggest communities nearby are " + " and ".join(f"{al[k]} ({num(v)})" for k, v in big) + "."
+            finds.append(f"<b>{e(DM_ETH_LABELS[low])} residents are the group we reach least.</b> They are {pct(ae[low])} of the area but about "
+                         f"{pct(pe[low])} of new patients, roughly {num(n * (ae[low] - pe[low]))} people short over these months.{extra}")
+        high = eg[-1]
+        if pe[high] - ae[high] >= 0.04:
+            finds.append(f"<b>{e(DM_ETH_LABELS[high])} patients are a strength.</b> They are {pct(pe[high])} of new patients vs {pct(ae[high])} of residents.")
+        work = (pa["18-34"] or 0) + (pa["35-54"] or 0)
+        kids_gap, old_gap = (aa["0-12"] or 0) - (pa["0-12"] or 0), (aa["55-64"] or 0) + (aa["65+"] or 0) - (pa["55-64"] or 0) - (pa["65+"] or 0)
+        finds.append(f"<b>Age:</b> 18–54 year-olds are {pct(work)} of new patients vs {pct((aa['18-34'] or 0) + (aa['35-54'] or 0))} of residents; "
+                     f"kids 0–12 are {pct(pa['0-12'])} vs {pct(aa['0-12'])}, and people 55 and older {pct((pa['55-64'] or 0) + (pa['65+'] or 0))} vs "
+                     f"{pct((aa['55-64'] or 0) + (aa['65+'] or 0))}.")
+        need = sorted(((k, v) for k, v in lang.items() if k not in ("english", "other", "other_indo", "other_asian") and v[1] > 0), key=lambda kv: -kv[1][1])[:3]
+        non_es = [(k, v) for k, v in need if k != "spanish"]
+        if low == "asian" or non_es:
+            if non_es:
+                todo.append("<b>Reach neighbors who speak " + " and ".join(e(ll[k].split(" (")[0]) for k, _ in non_es[:2]) + ".</b> "
+                            + "; ".join(f"{pct(v[1] / v[0])} of {e(ll[k].split(' (')[0])} speakers nearby have limited English" for k, v in non_es[:2])
+                            + ". Hire front-desk or call-center staff for that language skill, translate forms, and run ads in those languages aimed at the ZIPs where they live.")
+        if kids_gap >= 0.04:
+            todo.append(f"<b>Market to parents.</b> {pct(pat['minor_with_adult'] / minors if minors else None)} of our young patients already share a home with an adult patient. "
+                        "Family appointments, a kids' first-visit offer and school-season reminders can close the 0–12 gap.")
+        if old_gap >= 0.05:
+            todo.append(f"<b>Invite people 55 and older.</b> They are {pct((aa['55-64'] or 0) + (aa['65+'] or 0))} of residents but "
+                        f"{pct((pa['55-64'] or 0) + (pa['65+'] or 0))} of new patients; dentures, implants and senior plans are the natural message.")
+        if lang.get("spanish") and lang["spanish"][0]:
+            todo.append(f"<b>{'Keep' if pe['hispanic'] >= ae['hispanic'] else 'Grow'} Spanish outreach.</b> {num(lang['spanish'][0])} Spanish speakers live nearby, "
+                        f"{num(lang['spanish'][1])} with limited English.")
+
+    # Where new patients live (one office): ZIPs within reach plus any ZIP with a real share of the patients.
+    zip_html = ""
+    if office and pin:
+        zcta, shapes, cents = acs_zcta(), zip_shapes(), zip_centroids()
+        where = city_names().get("where", {})
+        center = lambda z: (shapes.get(z) or {}).get("c") or cents.get(z)
+        floor = max(5, round(n * 0.015))
+        near = lambda z: bool(center(z)) and _miles(pin, center(z)) <= OFFICE_AREA_MILES
+        zs = [z for z in zcta if (pts.get(z, 0) >= floor and center(z)) or near(z)]
+        zrows = []
+        for z in zs:
+            race = zcta[z]["race"]; pop = sum(race)
+            if pop >= 500:
+                zrows.append((z, where.get(z, ""), _miles(pin, center(z)), pop, pts.get(z, 0), race[0] / pop, race[2] / pop))
+        zrows.sort(key=lambda r: (-r[4], r[2]))
+        rate = sum(r[4] for r in zrows) / max(1, sum(r[3] for r in zrows)) * 1000
+        lows = [r for r in zrows if r[3] >= 20000 and r[4] / r[3] * 1000 < rate / 2]
+        if zrows:
+            top = zrows[0]
+            finds.append(f"<b>Where patients live:</b> ZIP {top[0]}{' (' + e(top[1]) + ')' if top[1] else ''} gives the most new patients, {top[4]:,} "
+                         f"({top[4] / top[3] * 1000:.1f} per 1,000 residents)." + (" Large nearby ZIPs where we reach under half the usual rate: "
+                         + ", ".join(f"{r[0]}{' ' + e(r[1]) if r[1] else ''}" for r in lows[:4]) + "." if lows else ""))
+        if lows:
+            todo.append("<b>Look beyond the home ZIP.</b> " + ", ".join(f"{r[0]}{' ' + e(r[1]) if r[1] else ''} ({num(r[3])} residents)" for r in lows[:3])
+                        + " are large and close, but we see few patients from them.")
+        body = "\n".join(f"<tr{' class=gap' if r in lows else ''}><td>{r[0]}</td><td>{e(r[1])}</td><td class=n>{r[2]:.1f}</td><td class=n>{num(r[3])}</td>"
+                         f"<td class=n>{r[4]:,}</td><td class=n>{r[4] / r[3] * 1000:.1f}</td><td class=n>{pct(r[5])}</td><td class=n>{pct(r[6])}</td></tr>" for r in zrows)
+        zip_html = f"""<section class="card"><h2>Where new patients live</h2>
+  <p class="note">ZIPs within {OFFICE_AREA_MILES} miles plus any other ZIP with {floor} or more new patients. Highlighted: large ZIPs (20,000+ residents)
+    where we see under half the usual rate of new patients per 1,000 residents ({rate:.1f}).</p>
+  <div class="tbl"><table><thead><tr><th>ZIP</th><th>City</th><th class=n>Miles</th><th class=n>Residents</th><th class=n>New patients</th>
+    <th class=n>Per 1,000</th><th class=n>Hispanic</th><th class=n>Asian</th></tr></thead><tbody>{body}</tbody></table></div></section>"""
+    if area:
+        todo.append("Ad platforms don't allow targeting by ethnicity, so target by language and location instead.")
+
+    lang_rows = sorted(((k, *v) for k, v in lang.items() if k != "english" and v[0] >= 500), key=lambda r: -r[1])
+    asian_tot = sum(asian.values())
+    lang_html = "".join(f"<tr><td>{e(ll[k])}</td><td class=n>{num(s)}</td><td class=n>{num(l)}</td><td class=n>{pct(l / s)}</td></tr>" for k, s, l in lang_rows)
+    asian_html = "".join(f"<tr><td>{e(al[k])}</td><td class=n>{num(v)}</td><td class=n>{pct(v / asian_tot)}</td></tr>"
+                         for k, v in sorted(asian.items(), key=lambda kv: (kv[0] == "other", -kv[1])) if v >= 500)
+    legend = f'<div class="legend"><span><i style="background:var(--accent)"></i>New patients</span><span><i style="background:var(--area)"></i>Residents within {OFFICE_AREA_MILES} mi</span></div><div class="heads"><span></span><span>New patients</span><span>Residents</span><span>Gap</span></div>'
+    area_pop = sum(area["eth"].values()) if area else 0
+    tile = lambda v, t: f'<div class="tile"><b>{v}</b><span>{t}</span></div>'
+    months_n = len([m for m in d["months"] if frm <= m <= to]) or 1
+    title = f"{e(name)}: who we see and who lives nearby"
+    sub = (f"New patients, {span} ({n:,} people{', lists through ' + _MONTHS[int(thru[5:7]) - 1] + ' ' + str(int(thru[8:10])) if thru else ''}), compared with the {num(area_pop)} residents living within "
+           f"{OFFICE_AREA_MILES} miles of {'the office' if office else 'any office'} ({area['zips']} ZIP codes). Ethnicity is an estimate; see the notes at the end."
+           if area else f"New patients, {span} ({n:,} people). {e(d['area_error'] or 'This office has no map pin yet, so the area around it is not measured.')}")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(short if office else 'All offices')} demographics</title>
+<style>
+:root {{ --bg:#f4f6f9; --surface:#fff; --text:#1a1f36; --muted:#5b6678; --faint:#687283; --border:#e2e7ee; --accent:#3b5bdb; --accent-hover:#3350c4;
+  --area:#9aa5b6; --good:#177245; --warn:#a24e0b; --warn-soft:#fcf0e2; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --bg:#0f141b; --surface:#171d27; --text:#e7ebf2; --muted:#9aa5b6; --faint:#8d98aa; --border:#28313e;
+  --accent:#7f93ff; --accent-hover:#93a4ff; --area:#55607a; --good:#4ade80; --warn:#fbbf24; --warn-soft:#3a2a0c; }} }}
+* {{ box-sizing:border-box }}
+body {{ margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-variant-numeric:tabular-nums; -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+main {{ max-width:960px; margin:0 auto; padding:24px 16px 48px; }}
+.bar-top {{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:16px }}
+.bar-top button {{ height:32px; padding:0 12px; border-radius:6px; font:600 13px/1 inherit; font-family:inherit; cursor:pointer; border:1px solid transparent; background:var(--accent); color:#fff; }}
+.bar-top button:hover {{ background:var(--accent-hover) }}
+h1 {{ font-size:24px; line-height:1.2; margin:0 0 4px; letter-spacing:-.01em }}
+h2 {{ font-size:16px; margin:0 0 4px; letter-spacing:-.01em }}
+.sub {{ color:var(--muted); margin:0 0 20px }}
+.card {{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px }}
+.note {{ color:var(--muted); margin:0 0 12px; font-size:13px }}
+.tiles {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px }}
+.tile {{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px }}
+.tile b {{ display:block; font-size:24px; line-height:1.2; letter-spacing:-.01em }} .tile span {{ color:var(--muted); font-size:13px }}
+ul {{ margin:0; padding-left:20px }} li {{ margin:6px 0 }}
+.legend {{ display:flex; gap:16px; font-size:12px; color:var(--muted); margin-bottom:8px }}
+.legend i {{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px }}
+.pr, .heads {{ display:grid; grid-template-columns:150px 1fr 1fr 64px; gap:12px; align-items:center }}
+.pr {{ padding:6px 0; border-top:1px solid var(--border) }}
+.heads {{ font-size:12px; color:var(--faint) }} .heads span:last-child {{ text-align:right }}
+.pl {{ font-weight:500 }} .pb {{ display:flex; align-items:center; gap:8px }} .pb b {{ font-weight:500; font-size:13px }}
+.bar {{ height:12px; border-radius:3px; min-width:2px }} .bar.p {{ background:var(--accent) }} .bar.a {{ background:var(--area) }}
+.pg {{ text-align:right; font-size:13px; color:var(--muted) }} .pg.lo {{ color:var(--warn); font-weight:600 }} .pg.hi {{ color:var(--good); font-weight:600 }}
+table {{ width:100%; border-collapse:collapse }}
+th {{ text-align:left; font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid var(--border) }}
+td {{ padding:6px 8px; border-bottom:1px solid var(--border); font-size:13px }} th.n, td.n {{ text-align:right }}
+tr.gap td {{ background:var(--warn-soft) }}
+.two {{ display:grid; grid-template-columns:1.4fr 1fr; gap:16px }}
+.method {{ font-size:12px; color:var(--muted) }} .method p {{ margin:4px 0 }}
+@media (max-width:700px) {{ .two {{ grid-template-columns:1fr }} .pr, .heads {{ grid-template-columns:90px 1fr 1fr 54px; gap:8px }} .tbl {{ overflow-x:auto }} }}
+@media print {{ body {{ background:#fff; color:#1a1f36 }} main {{ padding:0; max-width:none }} .bar-top {{ display:none }}
+  .card, .tile {{ break-inside:avoid; border-color:#d5dbe3 }} @page {{ margin:14mm }} }}
+</style></head><body><main>
+<div class="bar-top"><button type="button" onclick="print()">Print or save as PDF</button></div>
+<h1>{title}</h1>
+<p class="sub">{sub}</p>
+<div class="tiles">
+  {tile(f"{n:,}", f"new patients, about {n / months_n:.0f} a month")}
+  {tile(pct(pe['hispanic']), f"Hispanic (estimated), vs {pct(ae.get('hispanic'))} of residents")}
+  {tile(pct(pe['asian']), f"Asian / Pacific Islander (estimated), vs {pct(ae.get('asian'))} of residents")}
+  {tile(pct(pa['0-12']), f"kids 0–12, vs {pct(aa.get('0-12'))} of residents")}
+</div>
+{f'<section class="card"><h2>What stands out</h2><ul>{"".join(f"<li>{x}</li>" for x in finds)}</ul></section>' if finds else ""}
+<section class="card"><h2>Age at first visit</h2><p class="note">Share of new patients in each age group, next to the share of residents in that group.</p>{legend}{pairs(bands, DM_AGE_LABELS, pa, aa)}</section>
+<section class="card"><h2>Ethnicity (estimated)</h2><p class="note">Estimated from surname and neighborhood, the method the Census Bureau and lenders use for groups of people.
+  Good for totals like these, never for any one person.</p>{legend}{pairs(groups, DM_ETH_LABELS, pe, ae)}</section>
+<section class="card"><h2>Families</h2><p class="note">From home addresses on the office's patient lists (same street address and ZIP); addresses are only compared, never kept.</p>
+  <div class="tiles" style="margin:0">
+  {tile(pct(pat['with_family'] / n), f"of new patients share a home with another patient ({pat['with_family']:,})")}
+  {tile(pct(pat['kids_home'] / n), "live in a home with a patient under 18")}
+  {tile(pct(pat['minor_with_adult'] / minors if minors else None), f"of new patients under 18 have an adult patient at the same home ({pat['minor_with_adult']:,} of {minors:,})")}
+  {tile(pct(area['households_kids'] / area['households'] if area and area['households'] else None), "of nearby households have children under 18")}
+  </div></section>
+{f'''<section class="two"><div class="card"><h2>Languages spoken at home nearby</h2><p class="note">Residents 5 and older. "Limited English" means they speak English less than very well.</p>
+  <div class="tbl"><table><thead><tr><th>Language</th><th class=n>Speakers</th><th class=n>Limited English</th><th class=n>Share</th></tr></thead><tbody>{lang_html}</tbody></table></div></div>
+  <div class="card"><h2>Asian residents by group</h2><p class="note">Within {OFFICE_AREA_MILES} miles; {num(asian_tot)} in all.</p>
+  <div class="tbl"><table><thead><tr><th>Group</th><th class=n>Residents</th><th class=n>Share</th></tr></thead><tbody>{asian_html}</tbody></table></div></div></section>''' if lang else ""}
+{zip_html}
+{f'<section class="card"><h2>What we could do</h2><ul>{"".join(f"<li>{x}</li>" for x in todo)}</ul></section>' if todo else ""}
+<section class="card method"><h2 style="font-size:14px">Notes on the data</h2>
+  <p><b>Patients:</b> new patients on the offices' Patient Lists, {span}. Counts only; no names, addresses or contact details are in this report.</p>
+  <p><b>Ethnicity estimate:</b> each patient's surname (2010 Census surname table; {pat['surname_found']:,} of {n:,} found) combined with the make-up of
+    their Census block group (BISG). Results are probabilities added up, so group totals are estimates.</p>
+  <p><b>Residents:</b> US Census American Community Survey {ACS_YEAR - 4}–{ACS_YEAR} 5-year estimates, by ZIP, for ZIPs whose center is within
+    {OFFICE_AREA_MILES} miles of {'the office' if office else 'an office'}. "Other / mixed" includes Native American and multiracial.</p>
+  <p>Made {datetime.now().strftime('%B %-d, %Y')}.</p>
+</section>
+</main></body></html>"""
 
 
 def maps_blocks(zipc, month=None, frm=None, to=None):
@@ -4519,6 +4978,298 @@ def run_sql(query):
     }
 
 
+# ------------------------------------------------------------------ report builder (the Reports page)
+
+REPORT_SMALL = 11   # a row with fewer patients than this can be folded into "Other", so a file can leave the group
+REPORT_SOURCES = {   # what a report can be about -> what its rows can be
+    "log": {"label": "Log numbers", "groups": {"office": "Office", "month": "Month"}},
+    "zip": {"label": "New patients by ZIP code", "groups": {"zip": "ZIP code", "city": "City"}},
+    "referral": {"label": "New patients by referral source", "groups": {"referral": "Referral source"}},
+    "calls": {"label": "Calls", "groups": {"channel": "Marketing channel", "medium": "Marketing medium", "source": "Marketing source",
+                                           "campaign": "Campaign", "promo_line": "Promo line", "location": "Location (Invoca)",
+                                           "agent": "Agent"}},
+    "lenders": {"label": "Financing by lender", "groups": {"lender": "Lender"}},
+}
+# (key, label, kind, ratio) like log_sheet_columns(): ratio = (top keys, bottom key) for rates and averages.
+REPORT_MEASURES = {
+    "zip": [("collection", "Collection", "money", None), ("new_patients", "New patients", "count", None),
+            ("production", "Production", "money", None),
+            ("collection_per_np", "Collection per new patient", "money", (["collection"], "new_patients"))],
+    "calls": [("calls", "Calls", "count", None), ("answered", "Answered", "count", None),
+              ("answer_rate", "% answered", "pct", (["answered"], "calls")), ("patients", "New patients", "count", None),
+              ("started", "Started treatment", "count", None), ("collected", "Collected", "money", None)],
+    "lenders": [("apps", "Applications", "count", None), ("approved", "Approved", "count", None),
+                ("approval_rate", "% approved", "pct", (["approved"], "apps")), ("approved_amount", "Amount approved", "money", None),
+                ("collected_amount", "Amount collected", "money", None), ("funded", "Patients funded", "count", None)],
+}
+REPORT_MEASURES["referral"] = REPORT_MEASURES["zip"]
+REPORT_NOTES = {
+    "log": "Source: the Log, the same numbers as the Log page for these months.",
+    "zip": "Source: Denticon Referral Production Listing. New patients, and what they were charged and paid in their first month, "
+           "by the ZIP code on their Denticon address. These are new patient numbers only: Denticon doesn't split an office's total by ZIP code.",
+    "referral": "Source: Denticon Referral Production Listing. New patients, and what they were charged and paid in their first "
+                "month, by the referral type entered in Denticon.",
+    "calls": "Source: Invoca calls joined to Denticon's New Patients List. Calls are for the whole group (Invoca doesn't split them "
+             "by office); a new patient is credited to their first call on or before the first visit.",
+    "lenders": "Source: the offices' New Patient sheets. Applications, approvals and amounts per lender, as the offices entered them.",
+}
+
+
+def report_measures(source):
+    return log_sheet_columns() if source == "log" else REPORT_MEASURES[source]
+
+
+def report_columns(source, group):
+    """What the columns of a report can be, besides totals only."""
+    if source == "calls":
+        return ["month"]
+    if source == "log":
+        return ["month"] if group == "office" else ["office"]
+    return ["office", "month"]
+
+
+def report_options():
+    """What the Reports page can offer: sources, their rows and numbers, offices and the months that have data."""
+    conn = db()
+    q = lambda sql: [r[0] for r in conn.execute(sql) if r[0]]
+    # The Log's months and offices straight from its tables: asking the monthly_log view takes a second.
+    months = {"log": q("SELECT substr(period_from, 1, 7) FROM office_summary UNION SELECT substr(period_from, 1, 7) FROM office_metrics "
+                       "UNION SELECT substr(day, 1, 7) FROM office_daily ORDER BY 1"),
+              "zip": q("SELECT DISTINCT substr(period_from, 1, 7) FROM map_patients ORDER BY 1"),
+              "calls": q("SELECT DISTINCT substr(call_date, 1, 7) FROM invoca_calls ORDER BY 1"),
+              "lenders": q("SELECT DISTINCT substr(period_from, 1, 7) FROM lender_apps ORDER BY 1")}
+    months["referral"] = months["zip"]
+    short = office_short_names(conn)
+    have = set(q("SELECT office FROM office_summary UNION SELECT office FROM office_metrics UNION SELECT office FROM office_daily"))
+    conn.close()
+    return {"small": REPORT_SMALL,
+            "offices": sorted(({"office": o, "short": s} for o, s in short.items() if o in have), key=lambda o: o["short"]),
+            "sources": [{"key": k, "label": v["label"], "months": months[k], "offices": k != "calls", "small": k in ("zip", "referral"),
+                         "groups": [{"key": g, "label": lab, "columns": report_columns(k, g)} for g, lab in v["groups"].items()],
+                         "measures": [{"key": m[0], "label": m[1], "kind": m[2]} for m in report_measures(k)]}
+                        for k, v in REPORT_SOURCES.items()]}
+
+
+_report_calls_memo, _report_calls_lock = {}, threading.Lock()
+
+
+def _report_calls(month):
+    """calls_funnel(month)'s groups, or None when no calls were pulled for the month. A month takes seconds to work
+    out, so the answer is kept until the calls, patient lists, promo lines or collections change."""
+    conn = db()
+    fp = tuple(tuple(conn.execute(f"SELECT COUNT(*), MAX(rowid) FROM {t}").fetchone())
+               for t in ("invoca_calls", "patient_phones", "promo_lines", "np_appts", "map_patients"))
+    conn.close()
+    with _report_calls_lock:
+        hit = _report_calls_memo.get(month)
+        if hit and hit[0] == fp:
+            return hit[1]
+    d = calls_funnel(month)
+    by = d["by"] if d.get("month") == month else None
+    with _report_calls_lock:
+        _report_calls_memo[month] = (fp, by)
+    return by
+
+
+def _report_range(months):
+    a, b = months[0], months[-1]
+    if a == b:
+        return report_xlsx.month_label(a)
+    return f"{report_xlsx.month_label(a, a[:4] != b[:4])}–{report_xlsx.month_label(b)}"
+
+
+def report_data(spec):
+    """A report for the Reports page (see report_xlsx): totals per office, month and row. Never anything per patient."""
+    source = spec.get("source")
+    src = REPORT_SOURCES.get(source)
+    if not src:
+        raise ValueError("Pick what the report is about.")
+    group = spec.get("group") if spec.get("group") in src["groups"] else next(iter(src["groups"]))
+    frm, to = str(spec.get("from") or "")[:7], str(spec.get("to") or "")[:7]
+    if not (re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", frm) and re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", to)):
+        raise ValueError("Pick the first and last month.")
+    if frm > to:
+        raise ValueError("The first month is after the last month.")
+    months = [f"{y:04d}-{m:02d}" for y in range(int(frm[:4]), int(to[:4]) + 1) for m in range(1, 13) if frm <= f"{y:04d}-{m:02d}" <= to]
+    if len(months) > 24:
+        raise ValueError("Pick two years or less.")
+    known = {m[0]: m for m in report_measures(source)}
+    picked = [known[k] for k in dict.fromkeys(spec.get("measures") or []) if k in known][:8]
+    if not picked:
+        raise ValueError("Pick at least one number to show.")
+    columns = spec.get("columns") if spec.get("columns") in report_columns(source, group) else None
+    hide_small = bool(spec.get("hide_small")) and source in ("zip", "referral")
+
+    conn = db()
+    short = office_short_names(conn)
+    chosen = [o for o in spec.get("offices") or [] if o in short] if source != "calls" else []
+    raw, extra, order, notes, partial = {}, {}, None, [REPORT_NOTES[source]], {}
+    today_month = date.today().isoformat()[:7]
+
+    def put(office, month, name, values, second=""):
+        name = report_xlsx.safe_label(name)
+        slot = raw.setdefault((office, month, name), {})
+        for k, v in values.items():
+            if v is not None:
+                slot[k] = slot.get(k, 0) + v
+        extra.setdefault(name, second)
+
+    if source == "log":
+        need = {k for m in picked for k in ([m[0]] if not m[3] else [*m[3][0], m[3][1]])}
+        for r in log_rows(conn):
+            month = r["period_from"][:7]
+            if month in months and (not chosen or r["office"] in chosen):
+                office = short.get(r["office"], r["office"])
+                put(office, month, office if group == "office" else report_xlsx.month_label(month), {k: r.get(k) for k in need})
+                last = (date.fromisoformat(month + "-28") + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+                if (r.get("period_thru") or "") < last.isoformat():
+                    partial[month] = max(partial.get(month, ""), r.get("period_thru") or "")
+        if group == "month":
+            order = [report_xlsx.month_label(m) for m in months]
+    elif source in ("zip", "referral"):
+        where = city_names().get("where", {})
+        key = "zip" if source == "zip" else "UPPER(TRIM(referral_type))"
+        for r in conn.execute(f"SELECT office, substr(period_from, 1, 7) AS month, {key} AS name, COUNT(DISTINCT pat_id) AS new_patients, "
+                              "SUM(production) AS production, SUM(collection) AS collection, MAX(as_of) AS thru FROM map_patients "
+                              "WHERE substr(period_from, 1, 7) BETWEEN ? AND ? GROUP BY office, month, name", (frm, to)):
+            if chosen and r["office"] not in chosen:
+                continue
+            name, second = r["name"] or "(not set)", ""
+            if group == "city":
+                name = where.get(name) or "(outside the map area)"
+            elif source == "zip":
+                second = where.get(name, "")
+            put(short.get(r["office"], r["office"]), r["month"], name,
+                {"new_patients": r["new_patients"], "production": r["production"], "collection": r["collection"]}, second)
+            last = (date.fromisoformat(r["month"] + "-28") + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+            if r["thru"] < last.isoformat():
+                partial[r["month"]] = max(partial.get(r["month"], ""), r["thru"])
+        notes.append("New patients = patients on the report in that month, every referral type included (existing-patient referrals too). "
+                     "Patients without a valid ZIP code on file aren't in the report.")
+        if source == "zip":
+            notes.append("City names come from US Census ZIP areas; a ZIP code outside the app's map area has no city.")
+    elif source == "lenders":
+        kinds = {}
+        got = [dict(r) for r in conn.execute("SELECT substr(period_from, 1, 7) AS month, office, kind, lender, apps, approved, approved_amount, "
+                                             "collected_amount, funded FROM lender_apps WHERE substr(period_from, 1, 7) BETWEEN ? AND ?", (frm, to))]
+        for r in got:
+            kinds.setdefault(r["lender"], set()).add(r["kind"])
+        for r in got:
+            if chosen and r["office"] not in chosen:
+                continue
+            name = r["lender"] if len(kinds[r["lender"]]) == 1 else f"{r['lender']} ({r['kind']})"
+            put(short.get(r["office"], r["office"]), r["month"], name,
+                {k: r[k] for k in ("apps", "approved", "approved_amount", "collected_amount", "funded")}, r["kind"].title())
+    conn.close()
+    if source == "calls":
+        for month in months:
+            by = _report_calls(month)
+            for r in (by or {}).get(group, []):
+                put("All offices", month, r["name"], {k: r.get(k) for k in ("calls", "answered", "patients", "started", "collected")})
+        if today_month in months:
+            partial[today_month] = date.today().isoformat()
+
+    small = []
+    if source in ("zip", "referral"):
+        per = {}
+        for (_, _, name), v in raw.items():
+            per[name] = per.get(name, 0) + (v.get("new_patients") or 0)
+        small = sorted(n for n, c in per.items() if c < REPORT_SMALL)
+        if hide_small and small:
+            other, keep = f"Other (fewer than {REPORT_SMALL} patients each)", dict(raw)
+            raw.clear()
+            for (office, month, name), v in keep.items():
+                put(office, month, other if name in small else name, v)
+            extra[other] = ""
+            notes.append(f"{len(small)} rows with fewer than {REPORT_SMALL} new patients over these months are added together as "
+                         f'"{other}", so no small group is shown on its own. A single month of a larger row can still be a small number.')
+            small = []
+
+    fields, measures = [], []
+    for key, label, kind, ratio in picked:
+        if ratio:
+            fields += [{"key": key + "__n", "label": f"{label}: top number", "kind": "money" if kind == "money" else "count"},
+                       {"key": key + "__d", "label": f"{label}: bottom number", "kind": "count"}]
+            measures.append({"key": key, "label": label, "kind": kind, "num": [key + "__n"], "den": key + "__d"})
+        else:
+            fields.append({"key": key, "label": label, "kind": kind})
+            measures.append({"key": key, "label": label, "kind": kind, "num": None, "den": None})
+    data = []
+    for (office, month, name), v in sorted(raw.items()):
+        row = {"office": office, "month": month, "group": name, "extra": extra.get(name, "")}
+        for key, _, _, ratio in picked:
+            if not ratio:
+                row[key] = round(v[key], 2) if v.get(key) is not None else None
+            elif v.get(ratio[1]) and all(v.get(k) is not None for k in ratio[0]):   # as the Log's Total row: whole rows only
+                row[key + "__n"], row[key + "__d"] = round(sum(v[k] for k in ratio[0]), 2), v[ratio[1]]
+        data.append(row)
+
+    offices = sorted({r["office"] for r in data})
+    have_months = [m for m in months if any(r["month"] == m for r in data)]
+    if source != "calls":
+        notes.append("Offices: " + (", ".join(offices) if chosen else "all offices") + ".")
+    for m, thru in sorted(partial.items()):
+        notes.append(f"{report_xlsx.month_label(m)} is a partial month (data through {thru}).")
+    row_name = src["groups"][group]
+    what = src["label"] if " by " in src["label"] and group == next(iter(src["groups"])) else \
+        f"{src['label'].split(' by ')[0]} by {row_name if row_name[1:2].isupper() else row_name[0].lower() + row_name[1:]}"
+    title = f"{what}, {_report_range(months)}"
+    return {"title": title, "subtitle": ("All offices" if not chosen else ", ".join(offices)) + ". "
+                     + ("" if order else f"Biggest {measures[0]['label'].lower()} first. ") + "See the Notes tab.",
+            "notes": notes, "row_label": src["groups"][group], "extra_label": {"zip": "City", "lender": "Type"}.get(group),
+            "columns": columns, "offices": offices, "months": have_months, "fields": fields, "measures": measures, "data": data,
+            "order": order, "small": small, "office_tabs": source in ("zip", "referral", "lenders"),
+            "partial": sorted(partial), "name": " ".join(str(spec.get("name") or "").split())[:80] or title}
+
+
+def report_preview(spec):
+    rep = report_data(spec)
+    out = report_xlsx.table(rep, limit=50)
+    out.update({k: rep[k] for k in ("title", "subtitle", "notes", "partial", "name")})
+    out["small_count"] = len(rep["small"])
+    return out
+
+
+def report_file_name(rep, ext):
+    name = re.sub(r"[^A-Za-z0-9 ,().-]+", "-", rep["name"].replace("–", "-")).strip(" -.") or "Report"
+    return f"{name}.{ext}"
+
+
+def saved_reports():
+    conn = db()
+    rows = [{"id": r["id"], "name": r["name"], "spec": json.loads(r["spec"]), "updated_at": r["updated_at"]}
+            for r in conn.execute("SELECT * FROM saved_reports ORDER BY name COLLATE NOCASE")]
+    conn.close()
+    return rows
+
+
+def save_report(b):
+    """Save, rename or delete a report on the Reports page: {action, id, name, spec}."""
+    action, now = b.get("action") or "save", datetime.now().isoformat(timespec="seconds")
+    name = " ".join(str(b.get("name") or "").split())[:80]
+    conn = db()
+    try:
+        with conn:
+            if action == "delete":
+                conn.execute("DELETE FROM saved_reports WHERE id = ?", (b.get("id"),))
+            elif not name:
+                raise ValueError("Give the report a name.")
+            elif action == "rename":
+                conn.execute("UPDATE saved_reports SET name = ?, updated_at = ? WHERE id = ?", (name, now, b.get("id")))
+            else:
+                spec = b.get("spec") or {}
+                if spec.get("source") not in REPORT_SOURCES:
+                    raise ValueError("Pick what the report is about.")
+                conn.execute("INSERT INTO saved_reports (name, spec, created_at, updated_at) VALUES (?, ?, ?, ?) "
+                             "ON CONFLICT(name) DO UPDATE SET spec = excluded.spec, updated_at = excluded.updated_at",
+                             (name, json.dumps({**spec, "name": name}, separators=(",", ":")), now, now))
+    except sqlite3.IntegrityError:
+        raise ValueError(f'There is already a report named "{name}".')
+    finally:
+        conn.close()
+    return saved_reports()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f"{self.command} {self.path} -> {args[1] if len(args) > 1 else ''}")
@@ -4638,11 +5389,25 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, zip_shapes_geojson(), extra={"ETag": tag, "Cache-Control": "no-cache"})
         elif self.path == "/api/maps/trends":
             self._send(200, maps_trends())
+        elif self.path.startswith("/api/demographics/report"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                page = demographics_report((q.get("office") or [None])[0], (q.get("from") or [None])[0], (q.get("to") or [None])[0])
+            except ValueError as e:
+                page = f'<!doctype html><meta charset="utf-8"><title>Demographics report</title><p style="font:14px system-ui;margin:24px">{e}</p>'
+            self._send(200, page.encode(), "text/html; charset=utf-8")
+        elif self.path.startswith("/api/procedures"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._send(200, procedures_info((q.get("from") or [None])[0], (q.get("to") or [None])[0]))
         elif self.path.startswith("/api/demographics"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, demographics_info((q.get("from") or [None])[0], (q.get("to") or [None])[0]))
         elif self.path == "/api/whatif":
             self._send(200, whatif_data())
+        elif self.path == "/api/report/options":
+            self._send(200, report_options())
+        elif self.path == "/api/reports/saved":
+            self._send(200, saved_reports())
         elif self.path == "/api/financing/lenders":
             self._send(200, financing_lenders())
         elif self.path.startswith("/api/maps/blocks"):
@@ -4813,6 +5578,18 @@ class Handler(BaseHTTPRequestHandler):
                     conn.execute("DELETE FROM benchmarks WHERE metric = ?", (json.loads(self._body()).get("metric"),))
                 conn.close()
                 self._send(200, {"ok": True})
+            elif self.path == "/api/report":
+                self._send(200, report_preview(json.loads(self._body())))
+            elif self.path in ("/api/report/xlsx", "/api/report/csv"):
+                rep = report_data(json.loads(self._body()))
+                if self.path.endswith("csv"):
+                    body, ctype, ext = report_xlsx.to_csv(rep), "text/csv", "csv"
+                else:
+                    body, ext = report_xlsx.to_xlsx(rep, DATA_DIR / "libreoffice-profile"), "xlsx"
+                    ctype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="{report_file_name(rep, ext)}"'})
+            elif self.path == "/api/reports/saved":
+                self._send(200, save_report(json.loads(self._body())))
             elif self.path == "/api/checks/ok":
                 self._send(200, mark_check_ok(json.loads(self._body())))
             elif self.path == "/api/checks/ok/delete":
@@ -4840,7 +5617,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(404, {"error": "Not found"})
         except (ParseError, PasteError, ValueError, KeyError, sqlite3.Error, denticon_api.DenticonError, invoca_api.InvocaError,
-                google_sheets.GoogleError, np_analysis.NPAnalysisError) as e:
+                google_sheets.GoogleError, np_analysis.NPAnalysisError, report_xlsx.ReportError) as e:
             self._send(400, {"error": str(e)})
         except Exception as e:  # keep the server up, report the problem
             self._send(500, {"error": f"{type(e).__name__}: {e}"})

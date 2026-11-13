@@ -141,18 +141,30 @@ def _col_index(ref):
 
 
 def xlsx_rows(path):
+    z, sheet_paths, shared = _xlsx_workbook(path)
+    rows = []
+    for cells in _xlsx_cells(z, sheet_paths, shared):
+        if cells is None:
+            rows.append(("", []))  # sheet boundary
+            continue
+        label = " ".join(v for _, v in cells if isinstance(v, str) and v.strip())
+        nums = [v for _, v in cells if isinstance(v, float)]
+        if label or nums:
+            rows.append((clean_label(label), nums))
+    return rows, {}
+
+
+def _xlsx_workbook(path):
+    """(zip, sheet paths in workbook order, shared strings) for an .xlsx."""
     try:
         z = zipfile.ZipFile(path)
     except zipfile.BadZipFile:
         raise ParseError("Not a valid .xlsx file")
-
     shared = []
     if "xl/sharedStrings.xml" in z.namelist():
         root = ET.fromstring(z.read("xl/sharedStrings.xml"))
         for si in root.findall("m:si", NS):
             shared.append("".join(t.text or "" for t in si.iter(f"{{{NS['m']}}}t")))
-
-    # Sheets in workbook order.
     wb = ET.fromstring(z.read("xl/workbook.xml"))
     rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
     targets = {r.get("Id"): r.get("Target") for r in rels}
@@ -161,8 +173,11 @@ def xlsx_rows(path):
     for s in wb.find("m:sheets", NS):
         target = targets[s.get(rid_attr)].lstrip("/")
         sheet_paths.append(target if target.startswith("xl/") else "xl/" + target)
+    return z, sheet_paths, shared
 
-    rows = []
+
+def _xlsx_cells(z, sheet_paths, shared):
+    """Each row's [(column number, value)], sorted; None between sheets."""
     for sp in sheet_paths:
         root = ET.fromstring(z.read(sp))
         for row in root.iter(f"{{{NS['m']}}}row"):
@@ -183,12 +198,8 @@ def xlsx_rows(path):
                         val = text
                 cells.append((_col_index(c.get("r")), val))
             cells.sort()
-            label = " ".join(v for _, v in cells if isinstance(v, str) and v.strip())
-            nums = [v for _, v in cells if isinstance(v, float)]
-            if label or nums:
-                rows.append((clean_label(label), nums))
-        rows.append(("", []))  # sheet boundary
-    return rows, {}
+            yield cells
+        yield None
 
 
 # ---------------------------------------------------------------- extraction
@@ -309,9 +320,11 @@ def _referral_patients(rows):
             office, referral, zip_code = m.group(1).strip(), None, None
         elif (m := re.match(r"Referral Type\s*:\s*(.+)$", label)):
             referral, zip_code = m.group(1).strip(), None
-        elif (m := re.match(r"Zip Code\s*:\s*(\d{5})", label)):
-            zip_code = m.group(1)
-        elif office and zip_code and not label.startswith("Total") and \
+        elif (m := re.match(r"Zip Code\s*:\s*(\S*)", label)):
+            # A mistyped ZIP (e.g. "9006") still starts its own group: its patients count toward the office's total
+            # but get no ZIP, so they stay off the map instead of landing in the ZIP before it.
+            zip_code = m.group(1)[:5] if re.match(r"\d{5}", m.group(1)) else ""
+        elif office and zip_code is not None and not label.startswith("Total") and \
                 (len(nums) in (6, 7) or (len(nums) == 5 and re.match(r"\d{6,9}\b", label))):
             # In a PDF the Pat ID is at the start of the line's text: "90228259 <name>" [visits, proc, ...]
             n = nums[-6:] if len(nums) != 5 else [float(re.match(r"\d{6,9}", label).group()), *nums]
@@ -623,6 +636,43 @@ def parse_tx_plan_status(rows):
             "filter_confirmed": proc_filter is not None}
 
 
+def parse_prod_analysis(path):
+    """Production by procedure category per office: Daily Reports › Production Analysis Report by Category, as
+    Excel. Rows are office × category × provider; the provider $ are added up per office and category (provider
+    names are not kept). Categories follow the CDT code ranges (D0100-D0999 diagnostic, D1000 preventive, ...)."""
+    z, sheet_paths, shared = _xlsx_workbook(path)
+    col, totals, starts, grand = None, {}, {}, None
+    for cells in _xlsx_cells(z, sheet_paths, shared):
+        if not cells:
+            continue
+        by_col = dict(cells)
+        text = [str(v).strip() for _, v in cells]
+        if col is None:
+            if "Office Name" in text and "Provider $" in text:
+                col = {str(v).strip(): c for c, v in cells}
+            continue
+        office = str(by_col.get(col["Office Name"], "")).strip()
+        if office.startswith("Total"):
+            grand = by_col.get(col["Provider $"])
+            grand = grand if isinstance(grand, float) else None   # blank on a day with no production (a Sunday)
+            break
+        cat, amount = str(by_col.get(col["Category Description"], "")).strip(), by_col.get(col["Provider $"])
+        if not office or not cat or not isinstance(amount, float):
+            continue
+        key = (office, cat)
+        totals[key] = totals.get(key, 0.0) + amount
+        starts[cat] = str(by_col.get(col.get("Start Code"), "")).strip()
+    if col is None:
+        raise ParseError("This Production Analysis has no 'Office Name … Provider $' header row")
+    if grand is not None and abs(sum(totals.values()) - grand) > 1:
+        raise ParseError(f"The categories add up to {sum(totals.values()):,.2f} but the report's total is {grand:,.2f}")
+    offices = {}
+    for (office, cat), amount in totals.items():
+        offices.setdefault(office, {})[cat] = round(amount, 2)
+    return {"report_type": "procedures", "offices": [{"office": o, "categories": c} for o, c in offices.items()],
+            "skipped": [], "grand_total": grand, "start_codes": starts, "empty": not offices}
+
+
 def parse_report(path, filename=None):
     """Return {"report_type", "period", "offices", "skipped"} for a supported report."""
     name = (filename or str(path)).lower()
@@ -641,6 +691,10 @@ def parse_report(path, filename=None):
         raise ParseError("Upload a .pdf, .xlsx or Word (.doc, .docx) report")
 
     heading = [label for label, _ in rows[:20]]
+    if "Production Analysis by Category" in heading:
+        result = parse_prod_analysis(path)
+        result["period"] = period
+        return result
     if "Referral Production Listing" in heading:
         try:
             result = parse_referral(rows)
