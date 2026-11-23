@@ -605,6 +605,10 @@
     border-radius: 999px; background: var(--accent); color: var(--accent-text); }
   #rpt-find { width: 200px; height: 28px; margin-bottom: 6px; }
   .rpt-small { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text); margin: 0 0 14px; cursor: pointer; }
+  #rpt-share-f { align-items: flex-start; } #rpt-share-f input { margin-top: 3px; }
+  #rpt-share-f b { font-weight: 500; } #rpt-share-f .hint { display: block; margin-top: 2px; }
+  #rpt-share-f:has(input:disabled) { cursor: default; } #rpt-share-f:has(input:disabled) b { color: var(--muted); }
+  .rpt-warn { color: var(--warn); }
   .rpt-actions { align-items: end; }
   .rpt-actions label { flex: 1 1 220px; max-width: 360px; } .rpt-actions label input { width: 100%; }
   .rpt-saved { list-style: none; margin: 0; padding: 0; }
@@ -634,6 +638,26 @@
   .cl-top { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(min(100%, 22rem), 1.4fr); gap: 12px 24px; align-items: start; margin-bottom: 12px; }
   @media (max-width: 760px) { .cl-top { grid-template-columns: 1fr; } }
   .cl-geo .pt { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
+  .pcz-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 20px; margin-top: 18px; align-items: start; }
+  @media (max-width: 900px) { .pcz-grid { grid-template-columns: 1fr; } }
+  .mp-map.pcz-map { height: 440px; background: var(--surface-2, #f3f4f6); }
+  .pcz-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pcz-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.08); }
+  .pcz-rank { list-style: none; margin: 0; padding: 0; }
+  .pcz-rank button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 2px 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+  .pcz-rank button:hover { background: var(--hover); } .pcz-rank button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .pcz-rank button[aria-pressed="true"] { background: var(--hover); box-shadow: inset 3px 0 0 var(--accent); }
+  .pcz-rank .n { grid-row: span 2; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .pcz-rank .z { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .pcz-rank .z span { font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .pcz-rank .v { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .pcz-rank .bar { grid-column: 2; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; } .pcz-rank .bar span { display: block; height: 100%; background: var(--series); }
+  .pcz-rank .s { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .pcz-detail { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .pcz-detail h3 { margin: 0 0 4px; font-size: 15px; } .pcz-detail .hint { margin: 0 0 14px; }
+  .pcz-detail .dm-pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+  @media (max-width: 700px) { .pcz-detail .dm-pairs { grid-template-columns: 1fr; } }
+  .pcz-all { margin-top: 18px; } .pcz-all summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--accent-ink); }
+  .pcz-all .table-wrap { margin-top: 10px; }
   .cl-mapbox { height: 340px; }
   .cl-geo .hint { margin: 6px 0 0; }
   .leaflet-tooltip.cl-city { background: none; border: 0; box-shadow: none; padding: 0; font: 600 11px/1.1 system-ui, sans-serif; color: #1f2937; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 4px #fff; pointer-events: none; }
@@ -1305,6 +1329,7 @@
           <div class="rpt-picks" id="rpt-measures"></div>
         </fieldset>
         <label class="rpt-small" id="rpt-small-f"><input type="checkbox" id="rpt-small"> <span id="rpt-small-text">Add small rows together</span></label>
+        <label class="rpt-small" id="rpt-share-f"><input type="checkbox" id="rpt-share"> <span><b>Make a share copy</b> <span class="hint" id="rpt-share-hint"></span></span></label>
         <div class="row rpt-actions">
           <label>Report name <input type="text" id="rpt-name" maxlength="80" autocomplete="off"></label>
           <button type="button" class="btn primary" id="rpt-xlsx">Download Excel</button>
@@ -1317,6 +1342,11 @@
         <h2 class="card-title">Saved reports</h2>
         <ul class="rpt-saved" id="rpt-saved"></ul>
         <p class="hint" id="rpt-saved-none" style="margin:0">None yet. Set up a report, name it and choose Save report to run it again later.</p>
+        <div id="rpt-shares-box" hidden>
+          <h2 class="card-title" style="margin-top:18px">Share copies made</h2>
+          <p class="hint" style="margin:0 0 4px">A new share copy is checked against these, because two copies of the same months and offices in different layouts can be subtracted from each other.</p>
+          <ul class="rpt-saved" id="rpt-shares"></ul>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1380,7 +1410,7 @@
       <div><h1>Procedures</h1><p class="page-sub">What kind of work each office does: production by procedure category (exams, cleanings, fillings and crowns, implants, surgery, ortho…), next to the group as a whole.</p></div>
     </div>
     <div class="cl-tabs" id="pc-tabs" role="tablist" aria-label="Procedures views">
-      <button type="button" role="tab" id="pctab-mix" aria-controls="pcp-mix" data-sub="mix">Mix</button><button type="button" role="tab" id="pctab-offices" aria-controls="pcp-offices" data-sub="offices">Every office</button><button type="button" role="tab" id="pctab-months" aria-controls="pcp-months" data-sub="months">Month by month</button>
+      <button type="button" role="tab" id="pctab-mix" aria-controls="pcp-mix" data-sub="mix">Mix</button><button type="button" role="tab" id="pctab-offices" aria-controls="pcp-offices" data-sub="offices">Every office</button><button type="button" role="tab" id="pctab-months" aria-controls="pcp-months" data-sub="months">Month by month</button><button type="button" role="tab" id="pctab-zips" aria-controls="pcp-zips" data-sub="zips">By ZIP code</button>
     </div>
     <div class="row tr-controls toolbar" role="group" aria-label="Procedures filters">
       <label id="pc-office-f">Office <select id="pc-office"></select></label>
@@ -1410,6 +1440,21 @@
       <div class="table-wrap"><table class="dm-table"><thead id="pc-mhead"></thead><tbody id="pc-mrows"></tbody></table></div>
     </div>
     <p class="hint" id="pc-note"></p>
+    </div>
+    <div class="cl-panel" id="pcp-zips" role="tabpanel" aria-labelledby="pctab-zips" hidden>
+    <div class="card">
+      <div class="row tr-controls toolbar" role="group" aria-label="ZIP code filters"><label>Procedure <select id="pcz-cat"></select></label></div>
+      <div class="wi-answer dm-answer"><div><p class="wi-headline" id="pcz-headline">Loading…</p><p class="wi-sentence" id="pcz-sentence"></p></div></div>
+      <div class="pcz-grid" id="pcz-grid">
+        <div><div id="pcz-map" class="mp-map pcz-map" role="region" aria-label="Map of production by patient ZIP code"></div><div class="pcz-legend" id="pcz-legend"></div></div>
+        <div><h2 class="wi-h">Top ZIP codes</h2><ol class="pcz-rank" id="pcz-rank"></ol></div>
+      </div>
+      <div class="pcz-detail" id="pcz-detail" hidden></div>
+      <details class="pcz-all" id="pcz-all"><summary id="pcz-all-sum">All ZIP codes</summary>
+        <div class="table-wrap"><table class="dm-table"><thead id="pcz-head"></thead><tbody id="pcz-rows"></tbody></table></div>
+      </details>
+    </div>
+    <p class="hint" id="pcz-note"></p>
     </div>
   </section>
 
@@ -3648,7 +3693,7 @@ function wireSubTabs(list, key, onShow) {
 }
 const upTabs = wireSubTabs($("up-tabs"), "uploadTab");
 const audTabs = wireSubTabs($("au-tabs"), "auditTab");
-const pcTabs = wireSubTabs($("pc-tabs"), "procTab", tab => { $("pc-office-f").hidden = tab === "offices"; });
+const pcTabs = wireSubTabs($("pc-tabs"), "procTab", tab => { $("pc-office-f").hidden = tab === "offices"; if (tab === "zips") setTimeout(() => pcData && loadProcZips()); });   // later: on page load this runs before pcData exists
 upTabs.show(upTabs.current); audTabs.show(audTabs.current); pcTabs.show(pcTabs.current);
 let ztData = null;
 // Charts page layout, per browser: card order, which are half width, which are hidden. {order, half, hidden} in localStorage.
@@ -3997,9 +4042,10 @@ async function loadProcedures() {
   $("pc-office").innerHTML = opt("", "All offices") + Object.keys(pcData.offices).sort().map(o => opt(o, o)).join("");
   $("pc-office").value = pcSel.office; $("pc-from").value = pcSel.from; $("pc-to").value = pcSel.to;
   renderProcedures();
+  if (pcTabs.current === "zips") loadProcZips();
 }
 ["pc-from", "pc-to"].forEach(id => $(id).onchange = () => { pcSel[id.slice(3)] = $(id).value; if (pcSel.from > pcSel.to) [pcSel.from, pcSel.to] = [pcSel.to, pcSel.from]; loadProcedures(); });
-$("pc-office").onchange = () => { pcSel.office = $("pc-office").value; renderProcedures(); };
+$("pc-office").onchange = () => { pcSel.office = $("pc-office").value; renderProcedures(); if (pcTabs.current === "zips") loadProcZips(); };
 function renderProcedures() {
   const d = pcData;
   if (!d || !d.months.length) {
@@ -4059,6 +4105,116 @@ function renderProcedures() {
     + `Categories are the ADA code ranges, so "Fillings and crowns" is every restorative code (D2000–D2999) and "Office codes (Z)" are the office's own codes. `
     + `It counts procedure fees as charted, so its total runs a little above the Executive Summary's production, which nets some adjustments; read it for the mix of work, and the Log for production itself. Only totals per office, day and category are kept.`;
 }
+// By ZIP code: procedures by the patient's ZIP, from a Denticon data dump (procedure_zips), for the office and months
+// picked: a map shaded by production, the top ZIPs ranked, and the procedure mix of the ZIP picked.
+let pczData = null, pczCat = "", pczZip = null, pczMap = null, pczLayers = [], pczShapes = null;
+async function loadProcZips() {
+  const q = new URLSearchParams({from: pcSel.from, to: pcSel.to, office: pcSel.office, category: pczCat});
+  try { pczData = await api(`/api/procedures/zips?${q}`); }
+  catch (e) { $("pcz-headline").textContent = e.message; return; }
+  pczZip = pczData.zips[0]?.zip || null;
+  renderProcZips();
+}
+$("pcz-cat").onchange = () => { pczCat = $("pcz-cat").value; loadProcZips(); };
+const pczName = k => ((pcData?.categories || []).find(c => c.key === k) || {}).name || k;
+function renderProcZips() {
+  const d = pczData, cats = pcData?.categories || [];
+  $("pcz-cat").innerHTML = `<option value="">All procedures</option>` + cats.map(c => `<option value="${esc(c.key)}">${esc(c.name)}</option>`).join("");
+  $("pcz-cat").value = pczCat;
+  const what = pczCat ? pczName(pczCat).toLowerCase() : "production", who = pcSel.office ? pcSel.office.replace(/^Dentists? Of /, "") : "the group";
+  const when = `${monthName(pcSel.from)}${pcSel.to !== pcSel.from ? " – " + monthName(pcSel.to) : ""}`;
+  const empty = !d || !d.zips.length;
+  ["pcz-grid", "pcz-all"].forEach(id => $(id).hidden = empty); $("pcz-detail").hidden = true;
+  if (empty) {
+    $("pcz-headline").textContent = d && !d.months.length ? "No procedures by ZIP code yet." : `No ${what} by ZIP code for ${who} in ${when}.`;
+    $("pcz-sentence").textContent = d && !d.months.length ? "They come from a Denticon data dump: unzip it into data/denticon-dump/x and run tools/dump_procedure_zips.py." : "";
+    $("pcz-note").textContent = ""; return;
+  }
+  const z = d.zips, top = z[0], pct = v => d.total ? `${Math.round(v / d.total * 100)}%` : "—", place = x => x.city ? `${x.zip} (${x.city})` : x.zip;
+  let cum = 0, half = 0; for (const x of z) { cum += x.production; half++; if (cum >= d.total / 2) break; }
+  $("pcz-headline").innerHTML = `<em>${esc(place(top))}</em> brings ${esc(who)} the most ${esc(what)}: <em>${rpCompact(top.production)}</em>, ${pct(top.production)} of it.`;
+  $("pcz-sentence").textContent = `Half of it comes from ${half} of ${z.length} ZIP code${z.length === 1 ? "" : "s"}. ${when}.`;
+  // Ranked list: the top 12, bar = share of the top ZIP.
+  $("pcz-rank").innerHTML = z.slice(0, 12).map((x, i) => `<li><button type="button" data-zip="${esc(x.zip)}" aria-pressed="${x.zip === pczZip}">`
+    + `<span class="n">${i + 1}</span><span class="z">${esc(x.zip)}<span>${esc(x.city || "")}</span></span><span class="v">${rpCompact(x.production)}</span>`
+    + `<span class="bar"><span style="width:${(x.production / top.production * 100).toFixed(1)}%"></span></span>`
+    + `<span class="s">${x.patients.toLocaleString()} patient${x.patients === 1 ? "" : "s"}</span></button></li>`).join("");
+  $("pcz-rank").querySelectorAll("button").forEach(b => b.onclick = () => pczPick(b.dataset.zip));
+  // Every ZIP, in the collapsed table.
+  $("pcz-all-sum").textContent = `All ${z.length} ZIP codes`;
+  $("pcz-head").innerHTML = `<tr><th>ZIP code</th><th>City</th><th class="num">Patients</th><th class="num">Procedures</th><th class="num">${pczCat ? esc(pczName(pczCat)) : "Production"}</th><th class="num">Share</th>${pczCat ? "" : "<th>Biggest category</th>"}</tr>`;
+  $("pcz-rows").innerHTML = z.map(x => `<tr data-zip="${esc(x.zip)}" tabindex="0"><td>${esc(x.zip)}</td><td>${esc(x.city || "")}</td><td class="num">${x.patients.toLocaleString()}</td><td class="num">${x.procedures.toLocaleString()}</td>`
+    + `<td class="num">${rpCompact(x.production)}</td><td class="num">${pct(x.production)}</td>${pczCat ? "" : `<td>${esc(pczName(x.top))}</td>`}</tr>`).join("");
+  $("pcz-rows").querySelectorAll("tr").forEach(tr => tr.onclick = tr.onkeydown = e => { if (e.type === "keydown" && e.key !== "Enter") return; pczPick(tr.dataset.zip, true); });
+  $("pcz-note").textContent = `From a Denticon data dump made ${d.as_of} (not the daily pulls): every charted procedure in the month it was done, `
+    + `under the patient's current ZIP code. Patients are counted once per month, so a patient seen in two months counts twice over a longer range. `
+    + `Patients without a valid ZIP are left out. Only totals per office, month, ZIP and category are kept.`;
+  pczDetail();
+  pczDrawMap();
+}
+function pczPick(zip, scroll) {
+  pczZip = zip;
+  $("pcz-rank").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.zip === zip));
+  pczDetail(); pczStyle();
+  if (scroll) $("pcz-detail").scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+// The ZIP picked: its procedure mix next to the whole selection's.
+function pczDetail() {
+  const d = pczData, x = d?.zips.find(v => v.zip === pczZip);
+  if (!x) { $("pcz-detail").hidden = true; return; }
+  const zt = Object.values(x.by_cat).reduce((a, v) => a + v, 0), at = Object.values(d.mix).reduce((a, v) => a + v, 0);
+  const keys = (pcData?.categories || []).map(c => c.key).filter(k => (x.by_cat[k] || 0) > 0 || (d.mix[k] || 0) / at >= 0.01);
+  const pct = v => `${Math.round(v * 100)}%`, who = pcSel.office ? pcSel.office.replace(/^Dentists? Of /, "") : "all offices";
+  $("pcz-detail").hidden = false;
+  $("pcz-detail").innerHTML = `<h3>${esc(x.zip)}${x.city ? " · " + esc(x.city) : ""}</h3>`
+    + `<p class="hint">${rpCompact(zt)} of procedures for ${x.patients.toLocaleString()} patient${x.patients === 1 ? "" : "s"} (${x.procedures.toLocaleString()} procedures). The mix of work, next to ${esc(who)} overall:</p>`
+    + `<div class="dm-pairs">${keys.map(k => { const a = zt ? (x.by_cat[k] || 0) / zt : 0, b = at ? (d.mix[k] || 0) / at : 0, g = Math.round((a - b) * 100);
+        return `<div class="g"><div class="t"><span>${esc(pczName(k))}</span>${Math.abs(g) >= 1 ? `<span class="gap">${g > 0 ? "+" : "−"}${Math.abs(g)} pts</span>` : ""}</div>`
+          + `<div class="b p"><span style="width:${a * 100}%"></span><em>${pct(a)}</em></div><div class="b a"><span style="width:${b * 100}%"></span><em>${pct(b)}</em></div></div>`; }).join("")}</div>`
+    + `<div class="dm-keys"><span><i style="background:var(--series)"></i>${esc(x.zip)}</span><span><i style="background:var(--series-dim)"></i>${esc(who[0].toUpperCase() + who.slice(1))}</span></div>`;
+}
+// The map: ZIP outlines shaded by production (5 classes), the office pin(s), the picked ZIP outlined.
+let pczShade = () => "transparent", pczBy = {};
+async function pczDrawMap() {
+  try { await loadLeaflet(); } catch (e) { $("pcz-legend").textContent = e.message; return; }
+  if (!mapShapes) { try { mapShapes = await api("/api/maps/shapes"); } catch { mapShapes = null; } }
+  if (!pczMap) {
+    pczMap = L.map("pcz-map", {scrollWheelZoom: false, maxZoom: 13, minZoom: 6, attributionControl: false}).setView([34.0, -118.2], 9);
+    pczMap.createPane("labels").style.zIndex = 450;
+    esriTiles("Canvas/World_Light_Gray_Base").addTo(pczMap);   // land, water and roads for orientation
+    esriTiles("Reference/World_Boundaries_and_Places", {pane: "labels", opacity: 0.9}).addTo(pczMap);   // city names
+  }
+  await new Promise(r => { const t = setTimeout(r, 150); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); r(); })); });
+  pczMap.invalidateSize();
+  pczLayers.forEach(l => l.remove()); pczLayers = [];
+  const d = pczData; pczBy = Object.fromEntries(d.zips.map(x => [x.zip, x]));
+  const breaks = classBreaks(d.zips.map(x => x.production).filter(v => v > 0).sort((a, b) => a - b), true);
+  pczShade = v => { const i = breaks.findIndex(b => v <= b); return RAMP[breaks.length < 2 ? 2 : Math.round((i < 0 ? breaks.length - 1 : i) * (RAMP.length - 1) / (breaks.length - 1))]; };
+  if (mapShapes?.features?.length) {
+    pczShapes = L.geoJSON(mapShapes, {style: pczFeatureStyle, onEachFeature: (f, l) => {
+      const x = pczBy[f.properties.zip]; if (!x) return;
+      l.bindTooltip(`<b>${esc(x.zip)}</b>${x.city ? " · " + esc(x.city) : ""}<br>${rpCompact(x.production)} · ${x.patients} patient${x.patients === 1 ? "" : "s"}`, {sticky: true});
+      l.on("click", () => pczPick(x.zip, true));
+    }}).addTo(pczMap);
+    pczLayers.push(pczShapes);
+  }
+  Object.entries(d.offices || {}).forEach(([o, p]) => pczLayers.push(L.circleMarker(p, {radius: 6, color: "#fff", weight: 2, fillColor: "#111827", fillOpacity: 1, pane: "labels"})
+    .bindTooltip(esc(o), {direction: "top", offset: [0, -6]}).addTo(pczMap)));
+  // Fit to the ZIPs that make up 70% of production, so far-away patients don't zoom the map out.
+  const shown = []; let cum = 0; for (const x of d.zips) { shown.push(x.zip); cum += x.production; if (cum >= d.total * 0.7) break; }
+  const bounds = L.latLngBounds([]);
+  pczShapes?.eachLayer(l => { if (shown.includes(l.feature.properties.zip)) bounds.extend(l.getBounds()); });
+  Object.values(d.offices || {}).forEach(p => bounds.extend(p));
+  if (bounds.isValid()) pczMap.fitBounds(bounds, {padding: [16, 16], maxZoom: 12});
+  $("pcz-legend").innerHTML = breaks.map((b, i) => `<span><i style="background:${pczShade(b)}"></i>${i === 0 ? `Up to ${rpCompact(b)}` : i === breaks.length - 1 ? `${rpCompact(breaks[i - 1])}+` : `${rpCompact(breaks[i - 1])}–${rpCompact(b)}`}</span>`).join("")
+    + `<span><i style="background:#111827;border-radius:50%"></i>Office</span>`;
+}
+function pczFeatureStyle(f) {
+  const x = pczBy[f.properties.zip], on = x && x.zip === pczZip;
+  return x ? {color: on ? "#111827" : "#ffffff", weight: on ? 2.5 : 0.6, fillColor: pczShade(x.production), fillOpacity: 0.85}
+           : {color: "#d1d5db", weight: 0.4, fillOpacity: 0};
+}
+function pczStyle() { pczShapes?.setStyle(pczFeatureStyle); pczShapes?.eachLayer(l => { if (l.feature.properties.zip === pczZip) l.bringToFront(); }); }
 async function loadCharts() {
   if (!ztData) $("rp-tiles").innerHTML = skelTiles(4, "rp-tile");
   if (!flData) $("fl-tiles").innerHTML = skelTiles(4, "rp-tile");
@@ -5548,11 +5704,12 @@ $("mp-typefile").onchange = async e => {   // one or many offices' patient lists
 };
 
 // Report builder
-let rptOpts = null, rptSeq = 0, rptTimer = 0, rptNamed = false;
+let rptOpts = null, rptSeq = 0, rptTimer = 0, rptNamed = false, rptClash = [];   // rptClash: earlier share copies this one shouldn't travel with
 // Asked for once, when the page opens: a view-only link is refused, and then the page isn't offered at all.
 const rptReady = api("/api/report/options").catch(() => { document.querySelector('nav button[data-tab="reports"]').hidden = true; return null; });
 // The choices on screen: what /api/report takes. measures keep the order they were picked in.
-const rptSpec = {source: "zip", group: "zip", columns: "office", from: "", to: "", offices: [], measures: [], hide_small: false};
+// share = a share copy, the version that may leave the group. It isn't remembered between visits; a saved report keeps it.
+const rptSpec = {source: "zip", group: "zip", columns: "office", from: "", to: "", offices: [], measures: [], hide_small: false, share: false};
 const rptSource = () => rptOpts.sources.find(s => s.key === rptSpec.source);
 const rptMonth = m => new Date(m + "-15").toLocaleDateString(undefined, {month: "short", year: "numeric"});
 const rptLastFull = () => { const d = new Date(); d.setDate(0); return d.toLocaleDateString("en-CA").slice(0, 7); };
@@ -5566,8 +5723,9 @@ async function loadReports() {
   $("rpt-offices").innerHTML = rptOpts.offices.map(o => `<label title="${esc(o.office)}"><input type="checkbox" value="${esc(o.office)}">${esc(o.short)}</label>`).join("");
   $("rpt-small-text").textContent = `Add rows with fewer than ${rptOpts.small} patients together as one "Other" row`;
   try { Object.assign(rptSpec, JSON.parse(localStorage.getItem("rptSpec")) || {}); } catch {}
+  rptSpec.share = false;
   rptApply();
-  loadSavedReports();
+  loadSavedReports(); loadShares();
 }
 // Put rptSpec on the controls, fixing anything the chosen data doesn't offer.
 function rptApply() {
@@ -5594,17 +5752,27 @@ function rptApply() {
   $("rpt-find").hidden = s.measures.length < 13; $("rpt-find").value = "";
   $("rpt-measures").innerHTML = s.measures.map(m => `<label><input type="checkbox" value="${m.key}">${esc(m.label)}</label>`).join("");
   rptMarks();
-  $("rpt-small-f").hidden = !s.small; $("rpt-small").checked = !!rptSpec.hide_small && s.small;
+  if (!s.share) rptSpec.share = false;
+  $("rpt-share").disabled = !s.share; $("rpt-share").checked = rptSpec.share;
+  $("rpt-share-hint").textContent = s.share
+    ? `For sending outside the group: one table, where a number that covers 1 to ${rptOpts.small - 1} patients is not shown (*) and is counted in Other.`
+    : "Share copies are made for the two new patient reports, by ZIP code and by referral source. Check this report for small numbers yourself before it leaves the group.";
+  $("rpt-small-f").hidden = !s.small || rptSpec.share;   // a share copy already adds small rows together
+  $("rpt-small").checked = !!rptSpec.hide_small && s.small;
+  $("rpt-xlsx").textContent = rptSpec.share ? "Download share copy (Excel)" : "Download Excel";
+  $("rpt-csv").textContent = rptSpec.share ? "Download share copy (CSV)" : "Download CSV";
   rptRun();
 }
 function rptMarks() {
   $("rpt-measures").querySelectorAll("label").forEach(l => { const i = rptSpec.measures.indexOf(l.firstChild.value);
     l.firstChild.checked = i >= 0; if (i >= 0 && rptSpec.measures.length > 1) l.dataset.n = i + 1; else delete l.dataset.n; });
 }
-const rptBody = () => JSON.stringify({...rptSpec, hide_small: rptSpec.hide_small && rptSource().small, name: rptNamed ? $("rpt-name").value.trim() : ""});
+const rptBody = () => JSON.stringify({...rptSpec, hide_small: rptSpec.hide_small && rptSource().small, share: rptSpec.share && rptSource().share,
+  name: rptNamed ? $("rpt-name").value.trim() : ""});
 function rptRun() {
-  try { localStorage.setItem("rptSpec", JSON.stringify(rptSpec)); } catch {}
+  try { localStorage.setItem("rptSpec", JSON.stringify({...rptSpec, share: false})); } catch {}
   clearTimeout(rptTimer);
+  $("rpt-xlsx").disabled = $("rpt-csv").disabled = true;   // until the preview for these choices is back (rptShow)
   rptTimer = setTimeout(async () => {
     const seq = ++rptSeq, box = $("rpt-table").closest(".rpt-box");
     box.classList.add("rpt-busy");
@@ -5628,33 +5796,68 @@ function rptShow(r) {
   const small = new Set(r.small), show = (v, kind) => v == null || v === "" ? "—" : kind === "money" ? `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString()}`
     : kind === "pct" ? pctText(v) : kind === "count" ? Math.round(v).toLocaleString() : esc(v);
   const cells = row => row.map((v, i) => r.kinds[i] === "text" ? `<td>${esc(v)}${i === 0 && small.has(v) ? ` <span class="tag" title="Fewer than ${rptOpts.small} patients over these months">small</span>` : ""}</td>`
+    : typeof v === "string" ? `<td class="num" title="Not shown, to protect patient privacy. Counted in Other.">${esc(v)}</td>`   // a share copy's mark
     : `<td class="num${v === 0 ? " rpt-zero" : ""}">${v === 0 && r.kinds[i] !== "pct" ? "–" : show(v, r.kinds[i])}</td>`).join("");
   t.tHead.innerHTML = none ? "" : `<tr>${r.head.map((h, i) => `<th${r.kinds[i] === "text" ? "" : ' class="num"'} scope="col">${esc(h)}</th>`).join("")}</tr>`;
-  t.tBodies[0].innerHTML = none ? `<tr><td class="empty"><b>Nothing for these choices</b>Try other months or offices.</td></tr>` : r.rows.map(row => `<tr>${cells(row)}</tr>`).join("");
+  t.tBodies[0].innerHTML = !none ? r.rows.map(row => `<tr>${cells(row)}</tr>`).join("")
+    : r.share ? `<tr><td class="empty"><b>Nothing to show in a share copy</b>Every number for these choices covers fewer than ${rptOpts.small} patients. Try more months or offices, or Totals only.</td></tr>`
+    : `<tr><td class="empty"><b>Nothing for these choices</b>Try other months or offices.</td></tr>`;
   t.tFoot.innerHTML = none ? "" : `<tr>${cells(r.total)}</tr>`;
   const notes = [];
   if (r.n_rows > r.rows.length) notes.push(`Showing the first ${r.rows.length} of ${r.n_rows.toLocaleString()} rows. The download has all of them.`);
   if (r.small_count) notes.push(`${r.small_count.toLocaleString()} row${r.small_count > 1 ? "s have" : " has"} fewer than ${rptOpts.small} patients.`);
   // Folding rows doesn't make a file safe to send out: its Data and office tabs still list each month's counts, most of them small.
-  if (rptSource().small) notes.push(`The file's Data and office tabs list every month's counts, many under ${rptOpts.small} patients, so it isn't ready to send outside the group.`);
-  $("rpt-note").textContent = notes.join(" ");
+  if (rptSource().small && !r.share) notes.push(`The file's Data and office tabs list every month's counts, many under ${rptOpts.small} patients, so it isn't made for sending outside the group. Tick Make a share copy for a version that is.`);
+  rptClash = r.share ? r.share.conflicts : [];
+  if (!r.share) { $("rpt-note").textContent = notes.join(" "); return; }
+  $("rpt-note").innerHTML = notes.concat(rptShareNotes(r.share)).map(esc).join("<br>")
+    + rptClash.map(c => `<br><span class="rpt-warn">${esc(`Check before sending: on ${c.made} you made the share copy “${c.what}”. ${c.why}`)}</span>`).join("");
+}
+// What the sender should know about a share copy. None of this is written into the file.
+function rptShareNotes(s) {
+  const n = rptOpts.small, cols = !!rptSpec.columns, out = [], many = (k, one, more) => `${k.toLocaleString()} ${k === 1 ? one : more}`;
+  if (!s.listed) return [`Every number for these choices covers fewer than ${n} patients, so a share copy has nothing to list. Pick more months or offices, or choose Totals only in Columns.`];
+  out.push("Share copy: the file is this table and a Notes tab." + (!s.marks && !s.gone ? ` Nothing is hidden: every number covers ${n} or more patients, or none.` : ""));
+  if (cols && s.marks) out.push(`${many(s.marks, "number in this table is", "numbers in this table are")} not shown: ${s.marks === 1 ? "it shows" : "they show"} * and ${s.marks === 1 ? "is" : "are"} counted in Other.`
+    + (s.extra ? "" : ` ${s.marks === 1 ? "It covers" : "Each covers"} fewer than ${n} patients.`));
+  if (cols && s.short) out.push(`A row's totals add up what is shown, so ${many(s.short, "row has", "rows have")} lower totals here than in the full report. Column totals and the Total row are complete.`);
+  if (cols && s.gone) out.push(`${s.gone.toLocaleString()} of ${s.rows.toLocaleString()} rows ${s.gone === 1 ? "is" : "are"} not listed, because every number in ${s.gone === 1 ? "it" : "them"} covers fewer than ${n} patients.`
+    + (s.gone_big ? ` ${many(s.gone_big, "of them has", "of them have")} ${n} or more patients in all and would be listed with Totals only.` : ""));
+  if (!cols && s.gone) out.push(`${many(s.gone, "row has", "rows have")} fewer than ${n} patients and ${s.gone === 1 ? "is" : "are"} added together as Other. Every other row and the total are the same as in the full report.`);
+  if (s.extra) out.push(`${many(s.extra, "of the numbers not shown covers", "of the numbers not shown cover")} ${n} or more patients. ${s.extra === 1 ? "It is" : "They are"} held back so that Other can't give a small number away.`);
+  if (s.left_out.length) out.push(`Left out, because the numbers are too small to show: ${s.left_out.join(", ")}.`);
+  if (s.other_pct >= 1) out.push(`Other holds ${s.other_pct}% of the new patients in this report.` + (cols && s.gone_big && s.other_pct >= 25 ? " Totals only keeps more of them in their own rows." : ""));
+  out.push(`Send one version of a report. Two share copies that cover some of the same months and offices in different layouts can be subtracted from each other to find a number under ${n}. For a regular send, use months that don't overlap, such as one quarter at a time.`);
+  return out;
 }
 async function rptDownload(kind) {
-  const b = $(`rpt-${kind}`), was = b.textContent;
+  const b = $(`rpt-${kind}`), was = b.textContent, share = rptSpec.share, body = rptBody();
+  const send = extra => fetch(`/api/report/${kind}`, {method: "POST", body: extra ? JSON.stringify({...JSON.parse(body), ...extra}) : body, headers: {"Content-Type": "application/json"}});
   b.disabled = true; b.textContent = kind === "xlsx" ? "Making the file…" : "Downloading…";
   msg($("rpt-msg"), kind === "xlsx" ? "Making the Excel file. This takes about 10 to 20 seconds." : "", true);
   try {
-    const res = await fetch(`/api/report/${kind}`, {method: "POST", body: rptBody(), headers: {"Content-Type": "application/json"}});
+    let res = await send();
+    if (res.status === 409) {   // it clashes with a share copy made earlier: the sender decides
+      const clash = (await res.json()).clash || [];
+      if (!confirm(`This share copy should not be sent together with ${clash.length === 1 ? "one" : clash.length} you made earlier:\n\n`
+          + clash.slice(0, 4).map(c => `${c.what}, made ${c.made}\n${c.why}`).join("\n\n")
+          + `\n\nThat way a reader can find numbers that cover fewer than ${rptOpts.small} patients. Download this one anyway?`)) {
+        msg($("rpt-msg"), "Not downloaded.", true); b.disabled = false; b.textContent = was; return;
+      }
+      res = await send({ok_clash: true});
+    }
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "The download failed.");
     const name = (/filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "") || [])[1] || `Report.${kind}`;
     const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(await res.blob()), download: name});
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    msg($("rpt-msg"), `Downloaded ${name}.`, true);
+    msg($("rpt-msg"), `Downloaded ${name}.` + (!share ? "" : kind === "xlsx" ? " It is the table below and a Notes tab."
+      : " It is the table below. A CSV has no Notes tab, so tell the reader that * marks a number that is not shown and is counted in Other."), true);
   } catch (e) { msg($("rpt-msg"), e.message, false); }
   b.disabled = false; b.textContent = was;
+  if (share) { loadShares(); rptRun(); }   // the list of share copies made, and any warning it now brings
 }
 const rptSummary = s => { const src = rptOpts.sources.find(x => x.key === s.source);
-  return `${src ? src.label : s.source} · ${s.from === s.to ? rptMonth(s.to) : `${rptMonth(s.from)} to ${rptMonth(s.to)}`} · ${s.offices?.length && src?.offices ? `${s.offices.length} office${s.offices.length > 1 ? "s" : ""}` : "all offices"}`; };
+  return `${src ? src.label : s.source} · ${s.from === s.to ? rptMonth(s.to) : `${rptMonth(s.from)} to ${rptMonth(s.to)}`} · ${s.offices?.length && src?.offices ? `${s.offices.length} office${s.offices.length > 1 ? "s" : ""}` : "all offices"}${s.share ? " · share copy" : ""}`; };
 let rptSaved = [];
 function showSavedReports(rows) {
   rptSaved = rows;
@@ -5665,6 +5868,20 @@ function showSavedReports(rows) {
     <div class="row"><button type="button" data-act="latest" title="Open it with the months moved up to end at last month. A report that starts in January stays year to date.">Update to last month</button><button type="button" data-act="rename">Rename</button><button type="button" data-act="delete">Delete</button></div></li>`).join("");
 }
 async function loadSavedReports() { try { showSavedReports(await api("/api/reports/saved")); } catch {} }
+// Share copies made: what a new one is checked against. Remove one only if its file was never sent.
+function showShares(rows) {
+  $("rpt-shares-box").hidden = !rows.length;
+  $("rpt-shares").innerHTML = rows.map(r => `<li data-id="${r.id}"><span>${esc(r.what)}</span>
+    <span class="hint">Made ${esc(r.made)} · ${r.format === "csv" ? "CSV" : "Excel"}</span>
+    <div class="row"><button type="button" data-what="${esc(r.what)}" title="Take it off this list if the file was never sent. Later share copies are then not checked against it.">Remove</button></div></li>`).join("");
+}
+async function loadShares() { try { showShares(await api("/api/reports/shares")); } catch {} }
+$("rpt-shares").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (!confirm(`Take “${b.dataset.what}” off the list? Do this only if the file was never sent: later share copies will no longer be checked against it.`)) return;
+  try { showShares(await api("/api/reports/shares", JSON.stringify({id: +b.closest("li").dataset.id}), {"Content-Type": "application/json"})); rptRun(); }
+  catch (err) { msg($("rpt-msg"), err.message, false); }
+};
 async function rptSavedPost(body, done) {
   try { showSavedReports(await api("/api/reports/saved", JSON.stringify(body), {"Content-Type": "application/json"})); if (done) msg($("rpt-msg"), done, true); }
   catch (e) { msg($("rpt-msg"), e.message, false); }
@@ -5673,7 +5890,7 @@ function rptOpen(saved, latest) {
   const s = {...saved.spec};
   if (latest) { const to = rptLastFull(), ytd = s.from.slice(5) === "01" && s.from.slice(0, 4) === s.to.slice(0, 4);
     s.from = ytd ? `${to.slice(0, 4)}-01` : rptAddMonths(to, -rptSpan(s.from, s.to)); s.to = to; }
-  Object.assign(rptSpec, {group: "", columns: "", offices: [], measures: [], hide_small: false}, s);
+  Object.assign(rptSpec, {group: "", columns: "", offices: [], measures: [], hide_small: false, share: false}, s);
   delete rptSpec.name;
   rptNamed = true; $("rpt-name").value = saved.name;
   rptApply();
@@ -5711,6 +5928,7 @@ $("rpt-measures").onchange = e => {
 $("rpt-find").oninput = e => { const q = e.target.value.trim().toLowerCase();
   $("rpt-measures").querySelectorAll("label").forEach(l => l.hidden = !!q && !l.textContent.toLowerCase().includes(q) && !l.firstChild.checked); };
 $("rpt-small").onchange = e => { rptSpec.hide_small = e.target.checked; rptRun(); };
+$("rpt-share").onchange = e => { rptSpec.share = e.target.checked; rptApply(); };
 $("rpt-xlsx").onclick = () => rptDownload("xlsx");
 $("rpt-csv").onclick = () => rptDownload("csv");
 

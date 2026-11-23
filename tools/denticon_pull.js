@@ -399,8 +399,13 @@ async function needsLogin(page) {
   if ((await page.locator("input[type=password]").count()) > 0) return true;
   const title = await page.title().catch(() => "");
   if (/Welcome,\s*::/.test(title)) return true;
-  const text = await page.locator("body").innerText().catch(() => "");
-  return /Session Timeout|login session has expired/i.test(text);
+  // Denticon can keep the main login but stop accepting it on the report screens ("Page Unavailable ... Error with
+  // authentication"), on the page itself or inside its report frame; only logging in again fixes that.
+  for (const f of page.frames()) {
+    const text = await f.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+    if (/Session Timeout|login session has expired|Error with authentication/i.test(text)) return true;
+  }
+  return false;
 }
 
 // Show the login page and wait for the user to log in (the window is theirs; no password passes through here).

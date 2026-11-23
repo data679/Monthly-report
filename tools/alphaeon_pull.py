@@ -18,6 +18,7 @@ Funnel: total applications, net (approved + declined), approved, declined, accou
 """
 
 import argparse
+import base64
 import csv
 import datetime as dt
 import json
@@ -55,7 +56,8 @@ def settings():
                 k, v = line.split("=", 1)
                 s[k.strip()] = v.strip()
     s.update({k: v for k, v in os.environ.items() if k.startswith("ALPHAEON_")})
-    missing = [k for k in ("ALPHAEON_CLIENT_ID", "ALPHAEON_CLIENT_SECRET") if not s.get(k)]
+    missing = [] if s.get("ALPHAEON_TOKEN") else \
+        [k for k in ("ALPHAEON_CLIENT_ID", "ALPHAEON_CLIENT_SECRET") if not s.get(k)]
     if missing:
         print(f"Missing {', '.join(missing)}: set them as environment variables or in {ENV_FILE.relative_to(ROOT)}.")
         sys.exit(3)
@@ -90,8 +92,25 @@ def error_text(detail, s):
     return msg.replace(s["ALPHAEON_CLIENT_ID"], "<client id>").replace(s["ALPHAEON_CLIENT_SECRET"], "<secret>")
 
 
+def jwt_expiry(tok):
+    """The exp time inside a JWT (read only, not verified), or None."""
+    try:
+        part = tok.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("exp")
+    except (IndexError, ValueError, AttributeError):
+        return None
+
+
 def token(s, fresh=False):
-    """A bearer token: the cached one while it has more than 5 minutes left, otherwise a new one."""
+    """A bearer token: one given in ALPHAEON_TOKEN (a JWT from Alphaeon), else the cached one while it has more than
+    5 minutes left, otherwise a new one from the Client ID and Secret."""
+    given = s.get("ALPHAEON_TOKEN")
+    if given:
+        exp = jwt_expiry(given)
+        if exp and exp < time.time():
+            raise Refused(f"the token in ALPHAEON_TOKEN expired {(time.time() - exp) / 3600:.1f} h ago; ask Alphaeon for a new one")
+        return given, "given in ALPHAEON_TOKEN" + (f", {(exp - time.time()) / 3600:.1f} h left" if exp else "")
+    s.setdefault("ALPHAEON_CLIENT_ID", "")
     if not fresh and TOKEN_FILE.exists():
         try:
             t = json.loads(TOKEN_FILE.read_text())

@@ -386,8 +386,47 @@ View-only links don't get it (none of its routes are in `VIEWER_PATHS`; the nav 
   marked "small" in the preview; `hide_small` adds them together as one "Other" row (totals unchanged). **This does not
   make a file safe to send outside the group:** the Data tab and the office tabs still list every office x month x row
   count, and most of those are under 11 (for a January-October ZIP report with small rows folded, 92% of Data lines; about
-  half are a single patient). The page says so under the preview. A share-safe copy (Data rolled up to what the Summary
-  shows, values only, no office tabs) is not built yet.
+  half are a single patient). The page says so under the preview and points to the share copy (next item).
+- **Share copy** (2026-11-16; spec key `share`, sources `zip` and `referral` only, `REPORT_SHARE_SOURCES`): the version of a
+  report that may leave the group. House rule: no published number covers 1 to 10 patients, and none can be worked out
+  from the published ones. `_share_cells` in app.py builds it from patient-level rows (never from the folded report):
+  1. A cell is one row label under one column (office or month; with Totals only, the whole row). A cell covering
+     1 to 10 different Pat IDs is not shown: it shows `REPORT_MARK` ("*") and everything in it is added into the row
+     `REPORT_SHARE_OTHER` of the same column.
+  2. A column's Other must itself be safe: 11 or more patients; at least 9 more than the number of marks a reader can
+     count in that column (else the marks could be counted against it: 12 marks beside an Other of 13 would say eleven
+     cells are single patients); and not zero dollars where shown cells have dollars. While it isn't, the column's
+     smallest shown cell goes into Other too, with the same mark, so a mark does not always mean "under 11" and the
+     file's wording doesn't say it does. A column that still can't be made safe is left out and named in the Notes.
+  3. A row with no shown cell is not listed. Every total is added up from shown cells and Other only, so a row's totals
+     can be lower than in the full report (headings say "(numbers shown)"), while column totals and the Total row are
+     complete. Dollars are rounded to whole dollars in the file; Other takes up the rounding.
+  4. Rows are ordered by their published total, Other last (`rep["last"]`), so the order gives nothing away.
+  So each hidden cell is counted in exactly one published number (its column's Other, 11+ patients). The file
+  (`_fods_share`) is the Summary as plain values plus a Notes tab written for an outside reader (`_share_notes`: no system
+  names, no count of what was hidden). No Data tab, office tabs or formulas; the CSV is the same table. After LibreOffice
+  converts it, `_scrub_share` refuses any file with a formula, an extra part, other tabs or text that wasn't written, and
+  replaces LibreOffice's document properties (they name the exact build and the server's system). Row labels go through
+  `safe_label(..., strict=True)` (no leading + - @ either, for the CSV). The tick is not remembered between visits (a saved
+  report keeps it).
+  **Refused:** a month that isn't complete (`as_of` before month end), and an office in the copy with no rows for a month
+  in the range (not loaded yet, or the range runs past the data): a later copy with the rest would differ from this one.
+  **What one file can't stop:** two share copies that cover some of the same offices and months in different cells can be
+  subtracted from each other (a year-to-date copy sent each month gives away each new month; totals only plus by office
+  gives away the hidden cells). So every share copy downloaded is recorded in `report_shares` (choices, a fingerprint of
+  each office-month's rows, and how many office-months are under 11 patients; never numbers), listed on the page ("Share
+  copies made", removable if never sent), and `share_conflicts` gives each clash with its reason. The preview shows them
+  and the download routes answer 409 with the list unless the request carries `ok_clash` (the page asks, then resends).
+  Safe together: no office-month in common, or the same cells (both by office over the same months, both by month for
+  the same offices, or identical Totals only) made from unchanged numbers. ZIP and city rows never go together. A ZIP
+  report and a referral report can only be compared by their totals, which gives whole office-months: that is checked
+  with the same layout rule, but only when an office-month under 11 patients is in play (none today: the smallest is 72).
+  Known and accepted: a shown dollar figure can come from fewer than 11 patients who paid (the test counts patients in
+  the cell, not payers); a mark shows that something is there; a copy made before this log existed, or an ordinary
+  (non-share) file sent out, is not checked against.
+  `tools/check_share_copy.py` rechecks hundreds of layouts against its own query (every shown number 11+ patients, Other
+  safe, totals add up, order rebuildable from the file). Not covered: Log, Calls and lender reports (no patient count
+  per cell is defined for them; the tick box is disabled there with a hint).
 - **Workbook** (`report_xlsx.to_xlsx`): Summary, one tab per office by month (zip, referral, lenders with 2+ offices),
   Data (one row per office, month and row label) and Notes. Every number outside Data is a SUMIFS formula over Data.
   Python has no Excel writer here, so the file is written as flat ODF and converted with `soffice --headless`
@@ -396,7 +435,8 @@ View-only links don't get it (none of its routes are in `VIEWER_PATHS`; the nav 
   check that formulas and answers agree. Row labels go through `safe_label` (no wildcards or leading = < >) and the file
   sets Excel-style matching, because LibreOffice otherwise reads "(…)" in a label as a pattern.
 - **Routes**: `GET /api/report/options`, `POST /api/report` (preview, first 50 rows), `POST /api/report/xlsx`,
-  `POST /api/report/csv`, `GET`/`POST /api/reports/saved` (table `saved_reports`: name + spec, never data).
+  `POST /api/report/csv`, `GET`/`POST /api/reports/saved` (table `saved_reports`: name + spec, never data),
+  `GET`/`POST /api/reports/shares` (the share copies made; POST `{id}` takes one off the list).
 - **Calls are slow**: `calls_funnel` takes about 3 s a month, so `_report_calls` keeps each month's groups until the
   calls, patient lists, promo lines or collections change.
 - ZIP and referral reports use the monthly Referral Production Listing (`map_patients`). The Log's NP collection can
@@ -409,6 +449,18 @@ View-only links don't get it (none of its routes are in `VIEWER_PATHS`; the nav 
   hard-codes a1: `denticon_pull.js` remembers the server the last login landed on in `data/denticon-robot.host` and
   builds every report URL from it (`appUrl`, `REPORT_PAGE()` etc.); the "logged in?" check accepts any `aN.denticon.com`.
   Symptom before the fix: status stuck on "Log into Denticon in the robot window" while the window showed "Welcome, …".
+
+## 9f. Denticon data dump; Procedures by ZIP code (2026-11-19)
+
+- A Denticon data dump (Denticon's full database export, a ~1 GB zip of CSV tables) was saved to `data/denticon-dump/`
+  (git-ignored, owner-only). Only the tables in use are unzipped into `data/denticon-dump/x/`; never unzip the clinical ones.
+- Checked against October 2026: the dump rebuilds every daily pull (Executive Summary production = plain `LTYPE C`
+  charges by TRANDATE; collection = `P` + `I`; ortho patients = `PATIENT.ISORTHO`; ortho referrals = TREATPLAN code
+  ZREFORTH by PROPDATE; categories = CDT ranges). Daily gaps are later edits in Denticon, not different rules.
+- November 1–16 `map_patients` were loaded from the dump (as_of 2026-11-16); a later Referral Production month pull replaces them.
+- `procedure_zips` (office, month, ZIP, category totals, plus `*` all-category rows; no patient IDs) is filled by
+  `tools/dump_procedure_zips.py` and shown on Procedures › By ZIP code (`/api/procedures/zips`), live since 2026-11-20.
+- The live page was swapped from /preview on 2026-11-19 (backup of the old one in `data/index.before-swap-*.html`).
 
 ## 10. Google Sheets sync
 

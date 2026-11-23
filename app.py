@@ -191,6 +191,19 @@ CREATE TABLE IF NOT EXISTS procedure_daily (
     logged_at   TEXT NOT NULL,
     PRIMARY KEY (office, day, category)
 );
+-- Procedures by the patient's ZIP code, built from a Denticon data dump (tools/dump_procedure_zips.py): totals per
+-- office, month, ZIP and category only, never patient IDs. patients = distinct patients in that month.
+CREATE TABLE IF NOT EXISTS procedure_zips (
+    office      TEXT NOT NULL,
+    month       TEXT NOT NULL,                   -- YYYY-MM, by date of service
+    zip         TEXT NOT NULL,
+    category    TEXT NOT NULL,                   -- as in procedure_daily
+    production  REAL NOT NULL,
+    procedures  INTEGER NOT NULL,
+    patients    INTEGER NOT NULL,
+    as_of       TEXT NOT NULL,                   -- when the dump was made
+    PRIMARY KEY (office, month, zip, category)
+);
 
 -- The other Denticon reports run for a single day: NP collection, ortho collection, ortho referrals.
 CREATE TABLE IF NOT EXISTS daily_metrics (
@@ -362,6 +375,23 @@ CREATE TABLE IF NOT EXISTS saved_reports (
     spec        TEXT NOT NULL,       -- JSON, as the page sends it to /api/report
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
+);
+-- Share copies made on the Reports page (files meant to leave the group): the choices only, never the numbers. Kept so
+-- that a later copy covering some of the same offices and months in another layout can be warned about (the two
+-- could be subtracted from each other).
+CREATE TABLE IF NOT EXISTS report_shares (
+    id          INTEGER PRIMARY KEY,
+    made_at     TEXT NOT NULL,
+    title       TEXT NOT NULL,       -- "New patients by ZIP code, Jan–Oct 2026"
+    format      TEXT NOT NULL,       -- xlsx | csv
+    source      TEXT NOT NULL,       -- zip | referral
+    row_kind    TEXT NOT NULL,       -- zip | city | referral
+    columns     TEXT NOT NULL,       -- office | month | '' (totals only)
+    offices     TEXT NOT NULL,       -- JSON list of the offices covered
+    from_month  TEXT NOT NULL,
+    to_month    TEXT NOT NULL,
+    data_fp     TEXT NOT NULL,       -- JSON {"office|YYYY-MM": fingerprint of that office's rows}: has the data changed since?
+    small_blocks INTEGER NOT NULL    -- how many office-months in it cover 1 to 10 patients (then even totals can clash)
 );
 -- Each office's monthly collection goal, from the % TO GOAL sheet's "Goal" column (for the What-if card).
 CREATE TABLE IF NOT EXISTS office_goals (
@@ -4304,6 +4334,43 @@ def procedures_info(frm=None, to=None):
             "exec_production": round(sum(v for k, v in exec_prod.items() if k in offices), 2)}
 
 
+def procedure_zips_info(frm=None, to=None, office="", category=""):
+    """Procedures by patient ZIP for months frm..to (YYYY-MM), one office or all, one category or all ("*" rows hold
+    each ZIP's all-category totals): per ZIP the production, procedures, patients (summed over months and offices)
+    and the biggest category."""
+    conn = db()
+    months = [r[0] for r in conn.execute("SELECT DISTINCT month FROM procedure_zips ORDER BY 1")]
+    if not months:
+        conn.close()
+        return {"months": [], "zips": []}
+    frm, to = (frm or months[-1])[:7], (to or frm or months[-1])[:7]
+    where, args = "month BETWEEN ? AND ?", [frm, to]
+    if office:
+        where += " AND office = ?"; args.append(office)
+    zips = {}
+    for r in conn.execute(f"SELECT zip, category, SUM(production) AS p, SUM(procedures) AS n, SUM(patients) AS pts "
+                          f"FROM procedure_zips WHERE {where} GROUP BY zip, category", args):
+        z = zips.setdefault(r["zip"], {"zip": r["zip"], "production": 0.0, "procedures": 0, "patients": 0, "by_cat": {}})
+        if r["category"] != "*":
+            z["by_cat"][r["category"]] = round(r["p"], 2)
+        if r["category"] == (category or "*"):
+            z.update(production=round(r["p"], 2), procedures=r["n"], patients=r["pts"])
+    as_of = conn.execute(f"SELECT MAX(as_of) FROM procedure_zips WHERE {where}", args).fetchone()[0]
+    pins = {r["office"]: [r["lat"], r["lon"]] for r in conn.execute("SELECT office, lat, lon FROM office_locations")
+            if r["lat"] is not None and (not office or r["office"] == office)}
+    conn.close()
+    city = (city_names() or {}).get("where") or {}   # ZIP (its center point) -> the city it falls in
+    out = [dict(z, city=city.get(z["zip"]), top=max(z["by_cat"], key=z["by_cat"].get) if z["by_cat"] else None)
+           for z in zips.values() if z["procedures"]]
+    out.sort(key=lambda z: -z["production"])
+    mix = {}
+    for z in out:
+        for c, v in z["by_cat"].items():
+            mix[c] = round(mix.get(c, 0.0) + v, 2)
+    return {"months": months, "from": frm, "to": to, "as_of": as_of, "zips": out, "offices": pins, "mix": mix,
+            "total": round(sum(z["production"] for z in out), 2)}
+
+
 def demographics_info(frm=None, to=None):
     """Per office: its new patients by age group and estimated ethnicity (months frm..to), and the residents within
     OFFICE_AREA_MILES of it by the same groups."""
@@ -4981,7 +5048,10 @@ def run_sql(query):
 
 # ------------------------------------------------------------------ report builder (the Reports page)
 
-REPORT_SMALL = 11   # a row with fewer patients than this can be folded into "Other", so a file can leave the group
+REPORT_SMALL = 11   # a number covering fewer patients than this is "small": never shown on its own in a share copy
+REPORT_MARK = "*"                                                  # what a share copy shows in place of a number it holds back
+REPORT_SHARE_OTHER = "Other (numbers not shown, added together)"   # the row a share copy adds them into
+REPORT_SHARE_SOURCES = ("zip", "referral")                         # the reports that count patients, so the rule can be applied
 REPORT_SOURCES = {   # what a report can be about -> what its rows can be
     "log": {"label": "Log numbers", "groups": {"office": "Office", "month": "Month"}},
     "zip": {"label": "New patients by ZIP code", "groups": {"zip": "ZIP code", "city": "City"}},
@@ -5046,6 +5116,7 @@ def report_options():
     return {"small": REPORT_SMALL,
             "offices": sorted(({"office": o, "short": s} for o, s in short.items() if o in have), key=lambda o: o["short"]),
             "sources": [{"key": k, "label": v["label"], "months": months[k], "offices": k != "calls", "small": k in ("zip", "referral"),
+                         "share": k in REPORT_SHARE_SOURCES,
                          "groups": [{"key": g, "label": lab, "columns": report_columns(k, g)} for g, lab in v["groups"].items()],
                          "measures": [{"key": m[0], "label": m[1], "kind": m[2]} for m in report_measures(k)]}
                         for k, v in REPORT_SOURCES.items()]}
@@ -5070,6 +5141,248 @@ def _report_calls(month):
     with _report_calls_lock:
         _report_calls_memo[month] = (fp, by)
     return by
+
+
+def _share_cells(conn, source, group, months, chosen, short, columns):
+    """The numbers of a share copy: a report that may leave the group (HANDOFF 9e, "Share copy").
+    A cell is one row label under one column (an office or a month; with no columns, the whole row). The rule:
+    1. A cell covering 1 to 10 patients is never shown. Everything in it is added into the Other row of its column.
+    2. A column's Other must itself be safe: 11 or more patients; large enough that counting the marks in the column
+       against it can't narrow a marked cell below "1 to 10" (Other >= marks + 9); and not zero dollars where shown
+       cells have dollars (that would say every marked cell is zero). While it isn't, the column's smallest shown
+       cell goes into Other as well. A column that still can't be made safe is left out of the file.
+    3. A row with no shown cell isn't listed. Every total is added up from shown cells and Other, nothing else.
+    So each hidden cell is counted in exactly one published number, its column's Other; nothing in the file can be
+    subtracted to get a small number back. Patients are counted as different Pat IDs (a patient new in two months is
+    one patient for this test, but two in the number shown, as in every report).
+    Returns ({(office, month, row label): numbers}, {row label: second label}, info): the office or month of a key is
+    "" unless it is the column; dollars are rounded to what is shown; info is what the page tells the sender, plus what
+    share_conflicts needs (a fingerprint of each office-month's rows, and how many office-months are small)."""
+    where = city_names().get("where", {}) if source == "zip" else {}
+    key = "zip" if source == "zip" else "UPPER(TRIM(referral_type))"
+    cells, extra, offices, partial, blocks = {}, {}, set(), set(), {}
+    for r in conn.execute(f"SELECT office, substr(period_from, 1, 7) AS month, {key} AS name, pat_id, production, collection, as_of "
+                          "FROM map_patients WHERE substr(period_from, 1, 7) BETWEEN ? AND ?", (months[0], months[-1])):
+        if chosen and r["office"] not in chosen:
+            continue
+        name, second = r["name"] or "(not set)", ""
+        if group == "city":
+            name = where.get(name) or "(outside the map area)"
+        elif source == "zip":
+            second = where.get(name, "")
+        name, office = report_xlsx.safe_label(name, strict=True), short.get(r["office"], r["office"])
+        col = office if columns == "office" else r["month"] if columns == "month" else ""
+        c = cells.setdefault((name, col), {"ids": set(), "rows": set(), "production": 0.0, "collection": 0.0})
+        c["ids"].add(r["pat_id"]); c["rows"].add((r["office"], r["month"], r["pat_id"]))
+        c["production"] += r["production"] or 0; c["collection"] += r["collection"] or 0
+        extra.setdefault(name, second); offices.add(office)
+        last = (date.fromisoformat(r["month"] + "-28") + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        if r["as_of"] < last.isoformat():
+            partial.add(r["month"])
+        blk = blocks.setdefault((r["office"], r["month"]), [set(), 0])   # this office-month: its patients and a fingerprint
+        blk[0].add(r["pat_id"])   # the fingerprint adds up a hash per row, so the order rows are stored in doesn't matter
+        row = f"{r['pat_id']}|{r['name']}|{r['production']}|{r['collection']}".encode()
+        blk[1] = (blk[1] + int(hashlib.sha256(row).hexdigest()[:15], 16)) % (1 << 60)
+    full_offices = sorted({o for o, _ in blocks})
+    # Every office in the copy needs every month: an office-month loaded later would make a second, different copy of
+    # the same choices, and the two could be subtracted.
+    missing = [(short.get(o, o), m) for o in (chosen or full_offices) for m in months if (o, m) not in blocks]
+
+    cols = sorted({col for _, col in cells})
+    by_col = {col: {name: c for (name, cc), c in cells.items() if cc == col} for col in cols}
+    pool = {col: {n for n, c in mine.items() if len(c["ids"]) < REPORT_SMALL} for col, mine in by_col.items()}   # counted in Other
+    left_out, folds = set(), dict.fromkeys(cols, 0)
+    while True:   # marks depend on which rows are listed, and that depends on every column: repeat until nothing changes
+        listed = {n for col in cols if col not in left_out for n in by_col[col] if n not in pool[col]}
+        changed = False
+        for col in cols:
+            mine, hid = by_col[col], pool[col]
+            if col in left_out or not hid:
+                continue
+            shown = sorted((n for n in mine if n not in hid), key=lambda n: (len(mine[n]["ids"]), n))   # smallest first
+            marks = sum(1 for n in hid if n in listed)
+            patients = len(set().union(*(mine[n]["ids"] for n in hid)))
+            counted = sum(len(mine[n]["rows"]) for n in hid)   # the count the file shows for Other
+            no_dollars = marks and any(not any(mine[n][f] for n in hid) and any(mine[n][f] for n in shown)
+                                       for f in ("production", "collection"))
+            if patients >= REPORT_SMALL and (not marks or counted >= marks + REPORT_SMALL - 2) and not no_dollars:
+                continue
+            changed = True
+            if shown:
+                hid.add(shown[0]); folds[col] += 1
+            else:
+                left_out.add(col)
+        if not changed:
+            break
+    pooled = {col: pool[col] for col in cols if col not in left_out}
+    extra_folds = sum(folds[col] for col in pooled)
+
+    listed = {name for (name, col) in cells if col in pooled and name not in pooled[col]}
+    marks = {(name, col) for col, hid in pooled.items() for name in hid if name in listed}
+    at = lambda name, col: (col if columns == "office" else "", col if columns == "month" else "", name)
+    raw, covers = {}, {}
+    for (name, col), c in cells.items():
+        if col not in pooled:
+            continue
+        k = at(REPORT_SHARE_OTHER if name in pooled[col] else name, col)
+        slot = raw.setdefault(k, {"new_patients": 0, "production": 0.0, "collection": 0.0})
+        slot["new_patients"] += len(c["rows"]); slot["production"] += c["production"]; slot["collection"] += c["collection"]
+        covers.setdefault(k, set()).update(c["ids"])
+    for k in raw:
+        if len(covers[k]) < REPORT_SMALL:   # the rule above makes this impossible; never publish if it is ever wrong
+            raise RuntimeError("share copy: a number would cover fewer patients than the limit")
+    # Dollars are kept only as exact as they are shown. A column's Other takes up the rounding, so the column total
+    # is still the full report's total to the dollar.
+    for col in pooled:
+        mine = {k: v for k, v in raw.items() if k[:2] == at("", col)[:2]}
+        for f in ("production", "collection"):
+            total, rest = round(sum(v[f] for v in mine.values())), at(REPORT_SHARE_OTHER, col)
+            for k, v in mine.items():
+                v[f] = round(v[f])
+            if rest in mine:
+                mine[rest][f] = total - sum(v[f] for k, v in mine.items() if k != rest)
+    extra[REPORT_SHARE_OTHER] = ""
+
+    whole = {}   # row label -> its patients over the whole report, to tell the sender what a column layout costs
+    for (name, _), c in cells.items():
+        whole.setdefault(name, set()).update(c["ids"])
+    gone = set(whole) - listed
+    total_n = sum(len(c["rows"]) for c in cells.values())
+    other_n = sum(v["new_patients"] for k, v in raw.items() if k[2] == REPORT_SHARE_OTHER)
+    head = (lambda c: report_xlsx.month_label(c)) if columns == "month" else (lambda c: c)
+    info = {"listed": len(listed), "marks": len(marks), "short": len({n for n, _ in marks}), "rows": len(whole), "gone": len(gone),
+            "gone_big": sum(1 for n in gone if len(whole[n]) >= REPORT_SMALL), "extra": extra_folds,
+            "other_pct": round(100 * other_n / total_n) if total_n else 0, "left_out": [head(c) for c in sorted(left_out)],
+            "cols": sorted(pooled), "offices": sorted(offices), "full_offices": full_offices,
+            "months": sorted({m for _, m in blocks}), "partial": sorted(partial), "missing": missing, "marks_at": marks,
+            "data_fp": {f"{o}|{m}": format(v[1], "x") for (o, m), v in blocks.items()},
+            "small_blocks": sum(1 for v in blocks.values() if len(v[0]) < REPORT_SMALL)}
+    return (raw if listed else {}), extra, info
+
+
+def _share_notes(group, columns, office_text, left_out):
+    """The Notes tab of a share copy, written for a reader outside the group: the rule in plain words, no system names
+    and no count of what was hidden (a count would help to work hidden numbers out)."""
+    few = f"1 to {REPORT_SMALL - 1}"
+    what = {"zip": "by the ZIP code of their home address", "city": "by the city of their home address",
+            "referral": "by how they heard about the office"}[group]
+    if columns:
+        notes = [f"To protect patient privacy, a number that covers {few} new patients is not shown on its own. Its cell shows "
+                 f"{REPORT_MARK}, in dollar columns too. A dash or 0 means none.",
+                 "Each number that is not shown is added into the Other row of the same column. A row with nothing left to show is not listed.",
+                 "Now and then one larger number in a column is held back in the same way, so that Other cannot give a small number away.",
+                 "A row's own totals add up only the numbers shown on that row, so they can be lower than that row's full figure. "
+                 "The Total row is complete: it adds the rows shown and Other."]
+    else:
+        notes = [f"To protect patient privacy, a row that covers {few} new patients is not shown on its own. "
+                 "Those rows are added together as the Other row.",
+                 "Now and then one larger row is added to Other as well, so that Other cannot give a small number away.",
+                 "The Total row is complete: it adds the rows shown and Other."]
+    notes += [f"Source: the group's patient records. New patients, and what they were charged and paid in their first month, {what}.",
+              "New patients include those referred by existing patients. Patients with no valid ZIP code on file are not counted.",
+              f"Offices: {office_text}."]
+    if left_out:
+        notes.append("Not in this file, because the numbers are too small to show: " + ", ".join(left_out) + ".")
+    return notes + [f"Share copy made {date.today().isoformat()}."]
+
+
+def _share_layout(columns, offices, short):
+    """'by office, Carson, Long Beach' for the list of share copies made."""
+    names = sorted(short.get(o, o) for o in offices)
+    return ("by office" if columns == "office" else "by month" if columns == "month" else "totals only") + ", " \
+        + (", ".join(names) if len(names) <= 4 else f"{len(names)} offices")
+
+
+SHARE_CLASH = {   # why two share copies must not travel together, said to the sender
+    "changed": "The numbers for some of the same months and offices have changed since then, so subtracting the two files shows the change.",
+    "rows": "It lists some of the same new patients by {other} instead, so one file can be subtracted from the other.",
+    "columns": "It covers some of the same months and offices in other columns, so one file can be subtracted from the other.",
+    "months": "It covers other months for some of the same offices, so subtracting the two files gives the months they don't share.",
+    "offices": "It covers other offices for some of the same months, so subtracting the two files gives the offices they don't share.",
+    "small": f"It counts some of the same new patients another way, and an office has fewer than {REPORT_SMALL} of them in one of "
+             "these months, so the totals of the two files can be subtracted.",
+}
+
+
+def share_conflicts(conn, scope):
+    """Earlier share copies that must not travel with this one, each with the reason. Two copies of the same report are
+    safe together only when they share no office and month, or cut the shared ones into the same cells: both by office
+    over the same months, both by month for the same offices, or the same offices and months with totals only.
+    Otherwise one file can be subtracted from the other and gives numbers under the limit (a year-to-date copy sent
+    each month gives away each new month). ZIP code rows and city rows of the same patients never go together.
+    The same cells are only the same if the numbers behind them are: each copy keeps a fingerprint per office-month, and
+    a changed one clashes too (a corrected upload, or a copy made again later).
+    A ZIP report and a referral report cut the patients differently, so only their totals can be compared: that gives
+    whole office-months, which is harmless unless one of them covers fewer than 11 patients."""
+    out, mine, short = [], set(scope["offices"]), office_short_names(conn)
+    for r in conn.execute("SELECT * FROM report_shares ORDER BY made_at DESC, id DESC"):
+        theirs = set(json.loads(r["offices"]))
+        both, lo, hi = theirs & mine, max(r["from_month"], scope["from"]), min(r["to_month"], scope["to"])
+        if not both or lo > hi:
+            continue
+        same_months = (r["from_month"], r["to_month"]) == (scope["from"], scope["to"])
+        a, b = r["columns"], scope["columns"]
+        by_office = lambda c, n: c == "office" or (c == "" and n == 1)          # one cell per row and office
+        by_month = lambda c, one: c == "month" or (c == "" and one)             # one cell per row and month
+        same_cells = (a == b == "" and same_months and theirs == mine) \
+            or (by_office(a, len(theirs)) and by_office(b, len(mine)) and same_months) \
+            or (by_month(a, r["from_month"] == r["to_month"]) and by_month(b, scope["from"] == scope["to"]) and theirs == mine)
+        was, now = json.loads(r["data_fp"]), scope["data_fp"]
+        shared = lambda k: k.split("|")[0] in both and lo <= k.split("|")[1] <= hi
+        if r["source"] != scope["source"]:
+            why = "small" if (r["small_blocks"] or scope["small_blocks"]) and not same_cells else None
+        elif any(was.get(k) != now.get(k) for k in set(was) | set(now) if shared(k)):
+            why = "changed"
+        elif r["row_kind"] != scope["rows"]:
+            why = "rows"
+        elif not same_cells:
+            why = "columns" if a != b else "offices" if same_months else "months"
+        else:
+            why = None
+        if why:
+            other = {"zip": "ZIP code", "city": "city", "referral": "referral source"}[r["row_kind"]]
+            out.append({"id": r["id"], "made": r["made_at"][:10], "what": f"{r['title']} ({_share_layout(a, theirs, short)})",
+                        "why": SHARE_CLASH[why].format(other=other)})
+    return out
+
+
+def share_log():
+    """The share copies made, newest first, for the Reports page."""
+    conn = db()
+    short = office_short_names(conn)
+    rows = [{"id": r["id"], "made": r["made_at"][:10], "format": r["format"],
+             "what": f"{r['title']} ({_share_layout(r['columns'], json.loads(r['offices']), short)})"}
+            for r in conn.execute("SELECT * FROM report_shares ORDER BY made_at DESC, id DESC LIMIT 100")]
+    conn.close()
+    return rows
+
+
+def share_log_add(rep, fmt):
+    """Note a share copy that was just downloaded. The same report in the same layout is one line, with its latest date
+    and the fingerprint of the numbers it was last made from."""
+    s, now = rep["scope"], datetime.now().isoformat(timespec="seconds")
+    key = (s["source"], s["rows"], s["columns"], json.dumps(s["offices"]), s["from"], s["to"])
+    fp = json.dumps(s["data_fp"], separators=(",", ":"), sort_keys=True)
+    conn = db()
+    with conn:
+        had = conn.execute("SELECT id FROM report_shares WHERE source = ? AND row_kind = ? AND columns = ? AND offices = ? "
+                           "AND from_month = ? AND to_month = ?", key).fetchone()
+        if had:
+            conn.execute("UPDATE report_shares SET made_at = ?, title = ?, format = ?, data_fp = ?, small_blocks = ? WHERE id = ?",
+                         (now, rep["title"], fmt, fp, s["small_blocks"], had["id"]))
+        else:
+            conn.execute("INSERT INTO report_shares (made_at, title, format, source, row_kind, columns, offices, from_month, to_month, "
+                         "data_fp, small_blocks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (now, rep["title"], fmt, *key, fp, s["small_blocks"]))
+    conn.close()
+
+
+def share_log_delete(b):
+    """Take a share copy off the list (it was never sent, so later copies needn't be checked against it)."""
+    conn = db()
+    with conn:
+        conn.execute("DELETE FROM report_shares WHERE id = ?", (b.get("id"),))
+    conn.close()
+    return share_log()
 
 
 def _report_range(months):
@@ -5100,6 +5413,9 @@ def report_data(spec):
         raise ValueError("Pick at least one number to show.")
     columns = spec.get("columns") if spec.get("columns") in report_columns(source, group) else None
     hide_small = bool(spec.get("hide_small")) and source in ("zip", "referral")
+    share, info = bool(spec.get("share")), None
+    if share and source not in REPORT_SHARE_SOURCES:
+        raise ValueError("A share copy can only be made for the two new patient reports, by ZIP code and by referral source.")
 
     conn = db()
     short = office_short_names(conn)
@@ -5127,6 +5443,19 @@ def report_data(spec):
                     partial[month] = max(partial.get(month, ""), r.get("period_thru") or "")
         if group == "month":
             order = [report_xlsx.month_label(m) for m in months]
+    elif share:
+        raw, extra, info = _share_cells(conn, source, group, months, chosen, short, columns)
+        if info["partial"] or info["missing"]:   # a later copy with the rest of the numbers could be compared with this one
+            conn.close()
+            if info["partial"]:
+                raise ValueError(f"{report_xlsx.month_label(info['partial'][0])} isn't complete yet. A share copy needs every month "
+                                 "in it to be finished, because a later copy of the full month could be compared with this one.")
+            office, month = info["missing"][0]
+            more = len(info["missing"]) - 1
+            raise ValueError(f"{office} has no new patient numbers for {report_xlsx.month_label(month)}"
+                             + (f" (and {more} more office-month{'s' if more > 1 else ''} are missing)" if more else "")
+                             + ". A share copy needs every month for every office in it, because a later copy with the missing "
+                             "numbers could be compared with this one. Pick other months or offices.")
     elif source in ("zip", "referral"):
         where = city_names().get("where", {})
         key = "zip" if source == "zip" else "UPPER(TRIM(referral_type))"
@@ -5171,7 +5500,7 @@ def report_data(spec):
             partial[today_month] = date.today().isoformat()
 
     small = []
-    if source in ("zip", "referral"):
+    if source in ("zip", "referral") and not share:
         per = {}
         for (_, _, name), v in raw.items():
             per[name] = per.get(name, 0) + (v.get("new_patients") or 0)
@@ -5207,7 +5536,14 @@ def report_data(spec):
 
     offices = sorted({r["office"] for r in data})
     have_months = [m for m in months if any(r["month"] == m for r in data)]
-    if source != "calls":
+    office_text = "All offices" if not chosen else ", ".join(offices)
+    if share:   # a share copy's rows carry only their column, so the offices and months come from what was read
+        offices = info["cols"] if columns == "office" else info["offices"]
+        have_months = info["cols"] if columns == "month" else info["months"]
+        office_text = ", ".join(offices) if chosen or (columns == "office" and info["left_out"]) else "All offices"
+        notes = _share_notes(group, columns, office_text[0].lower() + office_text[1:] if office_text == "All offices" else office_text,
+                             info["left_out"])
+    elif source != "calls":
         notes.append("Offices: " + (", ".join(offices) if chosen else "all offices") + ".")
     for m, thru in sorted(partial.items()):
         notes.append(f"{report_xlsx.month_label(m)} is a partial month (data through {thru}).")
@@ -5215,12 +5551,23 @@ def report_data(spec):
     what = src["label"] if " by " in src["label"] and group == next(iter(src["groups"])) else \
         f"{src['label'].split(' by ')[0]} by {row_name if row_name[1:2].isupper() else row_name[0].lower() + row_name[1:]}"
     title = f"{what}, {_report_range(months)}"
-    return {"title": title, "subtitle": ("All offices" if not chosen else ", ".join(offices)) + ". "
-                     + ("" if order else f"Biggest {measures[0]['label'].lower()} first. ") + "See the Notes tab.",
-            "notes": notes, "row_label": src["groups"][group], "extra_label": {"zip": "City", "lender": "Type"}.get(group),
-            "columns": columns, "offices": offices, "months": have_months, "fields": fields, "measures": measures, "data": data,
-            "order": order, "small": small, "office_tabs": source in ("zip", "referral", "lenders"),
-            "partial": sorted(partial), "name": " ".join(str(spec.get("name") or "").split())[:80] or title}
+    rep = {"title": title, "subtitle": office_text + ". " + ("" if order else f"Biggest {measures[0]['label'].lower()} first. ") + "See the Notes tab.",
+           "notes": notes, "row_label": src["groups"][group], "extra_label": {"zip": "City", "lender": "Type"}.get(group),
+           "columns": columns, "offices": offices, "months": have_months, "fields": fields, "measures": measures, "data": data,
+           "order": order, "small": small, "office_tabs": source in ("zip", "referral", "lenders"),
+           "partial": sorted(partial), "name": " ".join(str(spec.get("name") or "").split())[:80] or title}
+    if hide_small and not share:
+        rep["last"] = f"Other (fewer than {REPORT_SMALL} patients each)"
+    if share:
+        rep.update({
+            "share": True, "office_tabs": False, "last": REPORT_SHARE_OTHER, "mark": REPORT_MARK, "marks": info["marks_at"],
+            "small_limit": REPORT_SMALL, "info": info,
+            "subtitle": f"Share copy. {office_text}. " + (
+                f"{REPORT_MARK} = not shown, to protect patient privacy. Counted in Other. " if columns
+                else f"Rows with fewer than {REPORT_SMALL} new patients are added together as Other. ") + "See the Notes tab.",
+            "scope": {"source": source, "rows": group, "columns": columns or "", "offices": info["full_offices"], "from": frm, "to": to,
+                      "data_fp": info["data_fp"], "small_blocks": info["small_blocks"]}})
+    return rep
 
 
 def report_preview(spec):
@@ -5228,12 +5575,17 @@ def report_preview(spec):
     out = report_xlsx.table(rep, limit=50)
     out.update({k: rep[k] for k in ("title", "subtitle", "notes", "partial", "name")})
     out["small_count"] = len(rep["small"])
+    if rep.get("share"):   # what the page tells the sender about this copy (never written into the file)
+        conn = db()
+        out["share"] = {**{k: rep["info"][k] for k in ("listed", "marks", "short", "rows", "gone", "gone_big", "extra", "other_pct", "left_out")},
+                        "conflicts": share_conflicts(conn, rep["scope"])}
+        conn.close()
     return out
 
 
 def report_file_name(rep, ext):
     name = re.sub(r"[^A-Za-z0-9 ,().-]+", "-", rep["name"].replace("–", "-")).strip(" -.") or "Report"
-    return f"{name}.{ext}"
+    return f"{name}{' (share copy)' if rep.get('share') else ''}.{ext}"   # so the copy for outside can't be mistaken for the full file
 
 
 def saved_reports():
@@ -5397,6 +5749,10 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 page = f'<!doctype html><meta charset="utf-8"><title>Demographics report</title><p style="font:14px system-ui;margin:24px">{e}</p>'
             self._send(200, page.encode(), "text/html; charset=utf-8")
+        elif self.path.startswith("/api/procedures/zips"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            g = lambda k: (q.get(k) or [""])[0]
+            self._send(200, procedure_zips_info(g("from") or None, g("to") or None, g("office"), g("category")))
         elif self.path.startswith("/api/procedures"):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             self._send(200, procedures_info((q.get("from") or [None])[0], (q.get("to") or [None])[0]))
@@ -5409,6 +5765,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, report_options())
         elif self.path == "/api/reports/saved":
             self._send(200, saved_reports())
+        elif self.path == "/api/reports/shares":
+            self._send(200, share_log())
         elif self.path == "/api/financing/lenders":
             self._send(200, financing_lenders())
         elif self.path.startswith("/api/maps/blocks"):
@@ -5582,15 +5940,28 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/report":
                 self._send(200, report_preview(json.loads(self._body())))
             elif self.path in ("/api/report/xlsx", "/api/report/csv"):
-                rep = report_data(json.loads(self._body()))
+                spec = json.loads(self._body())
+                rep = report_data(spec)
+                if not rep["data"]:
+                    raise report_xlsx.ReportError("Nothing to download: no data for these choices.")
+                if rep.get("share") and not spec.get("ok_clash"):   # checked here, not only in the page: its list can be stale
+                    conn = db()
+                    clash = share_conflicts(conn, rep["scope"])
+                    conn.close()
+                    if clash:
+                        return self._send(409, {"error": "This share copy clashes with one made earlier.", "clash": clash})
                 if self.path.endswith("csv"):
                     body, ctype, ext = report_xlsx.to_csv(rep), "text/csv", "csv"
                 else:
                     body, ext = report_xlsx.to_xlsx(rep, DATA_DIR / "libreoffice-profile"), "xlsx"
                     ctype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                if rep.get("share"):
+                    share_log_add(rep, ext)
                 self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="{report_file_name(rep, ext)}"'})
             elif self.path == "/api/reports/saved":
                 self._send(200, save_report(json.loads(self._body())))
+            elif self.path == "/api/reports/shares":
+                self._send(200, share_log_delete(json.loads(self._body())))
             elif self.path == "/api/checks/ok":
                 self._send(200, mark_check_ok(json.loads(self._body())))
             elif self.path == "/api/checks/ok/delete":
