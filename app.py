@@ -1689,7 +1689,8 @@ def inbox_scan():
             frm, thru = (found + [None, None])[:2]
             try:
                 saved = save_patient_phones(path)
-                status, note = "imported", f"{saved['patients']} patients, {saved['with_phone']} with a phone, {len(saved['offices'])} offices"
+                status, note = "imported", (f"{saved['patients']} patients, {saved['with_phone']} with a phone, {len(saved['offices'])} offices" if saved["patients"]
+                                            else "no new patients in this date range (offices closed)")
             except Exception as e:
                 status, note = "failed", (str(e) or type(e).__name__) + " (pull it again; the file was not kept)"
             path.unlink(missing_ok=True)

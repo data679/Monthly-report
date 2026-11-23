@@ -486,7 +486,8 @@ def parse_new_patients_list(path):
     """Denticon's "New Patients List": Pat ID, phone digits, first visit, created-on and General/Ortho for each new
     patient. Two layouts: one office per file (a "Phone#" cell "(H) : … (C) : … (W) : …", the office in the title), or
     the Excel the robot pulls (every office in one sheet, an Office Name column, Home/Work/CellPhone columns). Names,
-    dates of birth and emails are never read into the result; the caller keeps only phone fingerprints."""
+    dates of birth and emails are never read into the result; the caller keeps only phone fingerprints. A list with no
+    patients (a day the offices were closed) is a valid report and gives an empty list."""
     if not str(path).lower().endswith((".xlsx", ".xlsm")):
         raise ParseError("Upload the New Patients List as an Excel file (.xlsx)")
     wb = np_analysis.Workbook(path)
@@ -523,8 +524,6 @@ def parse_new_patients_list(path):
         t = row.get(type_c, "").strip().lower() if type_c else ""
         patients.append({"pat_id": pid, "office": row.get(office_c, "").strip() if office_c else office, "phones": phones, "first_visit": excel_date(row.get(fv_c)) if fv_c else None,
                          "created_on": excel_date(row.get(cr_c)) if cr_c else None, "type": "Ortho" if t.startswith("ortho") else "General" if t.startswith("gen") else ""})
-    if not patients:
-        raise ParseError("No patients found in this New Patients List")
     return {"report_type": "new_patients_list", "office": office, "patients": patients}
 
 
